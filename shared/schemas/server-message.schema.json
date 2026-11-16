@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ServerMessage",
+  "description": "Every message the server may send to a client.",
+  "oneOf": [{ "$ref": "#/definitions/Welcome" }, { "$ref": "#/definitions/ServerError" }],
+  "definitions": {
+    "Welcome": {
+      "title": "Welcome",
+      "description": "Reply to hello: who you are and which world to load.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "protocol", "playerId", "region", "seed"],
+      "properties": {
+        "type": { "type": "string", "const": "welcome" },
+        "protocol": { "type": "integer", "minimum": 1 },
+        "playerId": { "type": "string", "minLength": 1 },
+        "region": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
+        "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+      }
+    },
+    "ServerError": {
+      "title": "ServerError",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code", "message"],
+      "properties": {
+        "type": { "type": "string", "const": "error" },
+        "code": { "type": "string", "enum": ["bad_message", "protocol_mismatch"] },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClientMessage",
+  "description": "Every message a client may send to the server.",
+  "oneOf": [{ "$ref": "#/definitions/Hello" }],
+  "definitions": {
+    "Hello": {
+      "title": "Hello",
+      "description": "First message on a new connection.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "protocol"],
+      "properties": {
+        "type": { "type": "string", "const": "hello" },
+        "protocol": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
