@@ -5,6 +5,10 @@ import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
 import { serveFile } from './static';
+import { WorldState } from './world';
+
+/** Seconds between world updates sent to every client. */
+const WORLD_INTERVAL = 2;
 
 export interface GameServer {
   http: Server;
@@ -34,12 +38,22 @@ export function createGameServer(config: ServerConfig): GameServer {
   // ws re-emits the HTTP server's errors (such as a port already in use); listen() reports those.
   wss.on('error', () => {});
   let nextPlayer = 1;
+  const world = new WorldState(config);
+  const joined = new Set<WebSocket>();
+  let ticks = 0;
+  const timer = setInterval(() => {
+    world.step();
+    if (++ticks % WORLD_INTERVAL !== 0 || joined.size === 0) return;
+    const update = JSON.stringify(world.message());
+    for (const ws of joined) ws.send(update);
+  }, 1000);
 
   const send = (ws: WebSocket, msg: ServerMessage): void => ws.send(JSON.stringify(msg));
 
   wss.on('connection', (ws) => {
     const playerId = `p${nextPlayer++}`;
     ws.on('error', (err) => console.error(`socket error ${playerId}`, err));
+    ws.on('close', () => joined.delete(ws));
     ws.on('message', (data, isBinary) => {
       let msg: unknown;
       try {
@@ -65,6 +79,8 @@ export function createGameServer(config: ServerConfig): GameServer {
             return;
           }
           send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId, region: config.region, seed: config.seed });
+          send(ws, world.message());
+          joined.add(ws);
           break;
       }
     });
@@ -82,6 +98,7 @@ export function createGameServer(config: ServerConfig): GameServer {
       }),
     close: () =>
       new Promise((resolve, reject) => {
+        clearInterval(timer);
         for (const ws of wss.clients) ws.terminate();
         wss.close();
         http.close((err) => (err ? reject(err) : resolve()));

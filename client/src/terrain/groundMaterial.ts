@@ -65,6 +65,8 @@ const colors = (classes: Classes, table: Record<string, number>): THREE.Vector3[
 export class GroundShading {
   /** Index into GROUND_VIEWS. */
   readonly view = uniform(0);
+  /** How rain-soaked the ground is, 0 dry to 1: wet ground is darker and shinier. */
+  readonly wet = uniform(0);
 
   private readonly biomeColors;
   private readonly surfaceColors;
@@ -127,8 +129,8 @@ export class GroundShading {
       color.assign(mix(color, deepForest, select(biome.equal(int(this.forestId)), clamp(canopy.div(22), 0, 1).mul(0.3), 0)));
       color.mulAssign(select(isWater, 1, float(1).sub(wet.mul(0.4))));
       color.assign(mix(color, rockColor, select(isWater, 0, rock)));
-      color.mulAssign(select(isWater, 1, tint));
-      return vec4(color, select(isWater, 0.75, 1)); // a slight sheen on water until the sky arrives
+      color.mulAssign(select(isWater, 1, tint.mul(float(1).sub(this.wet.mul(0.28)))));
+      return vec4(color, select(isWater, 0.3, float(1).sub(this.wet.mul(0.3))));
     });
 
     /** Road colour times coverage (rgb) and coverage (a) of one mask texel. */
@@ -166,8 +168,9 @@ export class GroundShading {
       r.f.y,
     );
     const onRoad = smoothstep(0.4, 0.6, road.w);
-    const roadColor = road.xyz.div(road.w.max(0.001)).mul(tint.mul(0.6).add(0.4));
-    const shaded = vec4(mix(natural.xyz, roadColor, onRoad), mix(natural.w, 1, onRoad));
+    const roadColor = road.xyz.div(road.w.max(0.001)).mul(tint.mul(0.6).add(0.4)).mul(float(1).sub(this.wet.mul(0.35)));
+    // A wet road shines far more than wet moss.
+    const shaded = vec4(mix(natural.xyz, roadColor, onRoad), mix(natural.w, float(1).sub(this.wet.mul(0.6)), onRoad));
 
     // Raw mask views use the nearest texel, unblended.
     const t00 = r.t00;

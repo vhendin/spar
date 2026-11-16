@@ -3,9 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { PROTOCOL_VERSION } from '@spar/shared';
+import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
 import { isServerMessage } from '@spar/shared/validate';
 import { createGameServer, type GameServer } from './server';
+
+type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
 
 let dir: string;
 let server: GameServer;
@@ -26,6 +28,10 @@ beforeAll(async () => {
     seed: 42,
     clientDist: join(dir, 'client'),
     regionsDir: join(dir, 'regions'),
+    startUtc: Date.UTC(2026, 11, 21, 13, 0),
+    utcOffset: 1,
+    dayLengthMinutes: 30,
+    weather: 'rain',
   });
   port = (await server.listen()).port;
 });
@@ -92,6 +98,31 @@ describe('websocket', () => {
     expect(isServerMessage(msg)).toBe(true);
     expect(msg).toMatchObject({ type: 'welcome', region: 'demo', seed: 42, protocol: PROTOCOL_VERSION });
   });
+
+  it('follows the welcome with the time and the weather, and keeps sending them', async () => {
+    const messages = await new Promise<unknown[]>((resolve, reject) => {
+      const got: unknown[] = [];
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+      ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION })));
+      ws.on('message', (data) => {
+        got.push(JSON.parse(data.toString()));
+        if (got.length === 3) {
+          ws.close();
+          resolve(got);
+        }
+      });
+      ws.on('error', reject);
+    });
+    expect(messages.every((m) => isServerMessage(m))).toBe(true);
+    const [welcome, first, later] = messages as [{ type: string }, WorldUpdate, WorldUpdate];
+    expect(welcome.type).toBe('welcome');
+    expect(first.type).toBe('world');
+    expect(first.time.utcOffset).toBe(1);
+    expect(first.time.rate).toBe(48); // a day in 30 minutes
+    expect(first.time.utc).toBeGreaterThanOrEqual(Date.UTC(2026, 11, 21, 13, 0));
+    expect(first.weather.state).toBe('rain'); // pinned by the configuration
+    expect(later.time.utc).toBeGreaterThan(first.time.utc + 30000); // well over a real second has passed
+  }, 10000);
 
   it('gives each connection its own player id', async () => {
     const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION });

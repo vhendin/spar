@@ -331,6 +331,7 @@ export class Terrain {
     const mask = new THREE.DataTexture(maskData, MASK_TEXELS + 1, MASK_TEXELS + 1, THREE.RGBAFormat, THREE.UnsignedByteType);
     mask.needsUpdate = true;
     mesh.userData.mask = mask;
+    mesh.receiveShadow = true;
     mesh.visible = false;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();

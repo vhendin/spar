@@ -1,5 +1,7 @@
 import { PROTOCOL_VERSION, type ClientMessage, type ServerMessage, type Welcome } from '@spar/shared';
 
+type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
+
 export type ConnectionState =
   | { status: 'connecting' }
   | { status: 'online'; welcome: Welcome }
@@ -12,7 +14,10 @@ export class Connection {
   private retryMs = 500;
   private stopped = false;
 
-  constructor(private readonly onChange: (state: ConnectionState) => void) {
+  constructor(
+    private readonly onChange: (state: ConnectionState) => void,
+    private readonly onWorld: (update: WorldUpdate) => void = () => {},
+  ) {
     this.open();
   }
 
@@ -36,6 +41,9 @@ export class Connection {
         case 'welcome':
           this.retryMs = 500;
           this.set({ status: 'online', welcome: msg });
+          break;
+        case 'world':
+          this.onWorld(msg);
           break;
         case 'error':
           // A version mismatch will not fix itself by retrying.

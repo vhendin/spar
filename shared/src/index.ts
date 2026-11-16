@@ -9,3 +9,6 @@ export type * from './generated/vegetation-rules';
 export type * from './generated/vehicle';
 export * from './vehicle/drivetrain';
 export * from './vehicle/tires';
+export * from './sky/clock';
+export * from './sky/solar';
+export * from './sky/weather';

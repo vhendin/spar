@@ -46,6 +46,7 @@ class Batch {
     private readonly material: THREE.Material,
     private readonly variation: number,
     private readonly group: THREE.Group,
+    private readonly castShadow: boolean,
   ) {}
 
   /** Makes room for `wanted` instances and starts a new fill. */
@@ -65,6 +66,7 @@ class Batch {
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.capacity * 3), 3);
     this.mesh.frustumCulled = false; // instances surround the camera; the shader hides the far ones
     this.mesh.matrixAutoUpdate = false;
+    this.mesh.castShadow = this.castShadow;
     this.group.add(this.mesh);
   }
 
@@ -194,8 +196,10 @@ export class Vegetation {
         perDetail.full[species] = [];
         perDetail.low[species] = [];
         for (let v = 0; v < def.variants; v++) {
-          perDetail.full[species][v] = new Batch(geometry(species, v, 'full'), fullMaterial, def.colors.variation, this.group);
-          if (lowMaterial) perDetail.low[species][v] = new Batch(geometry(species, v, 'low'), lowMaterial, def.colors.variation, this.group);
+          // Trees and rocks throw shadows; ground cover is too small and too plentiful to bother.
+          const shadow = layer.batch === 'tile';
+          perDetail.full[species][v] = new Batch(geometry(species, v, 'full'), fullMaterial, def.colors.variation, this.group, shadow);
+          if (lowMaterial) perDetail.low[species][v] = new Batch(geometry(species, v, 'low'), lowMaterial, def.colors.variation, this.group, shadow);
           if (layer.ranges.impostor !== undefined) {
             (this.atlasCell[species] ??= [])[v] = pictures.length;
             pictures.push(geometry(species, v, 'full'));
@@ -221,6 +225,7 @@ export class Vegetation {
 
   /** Call every frame with the camera position. Cheap unless the camera has moved to new ground. */
   update(camera: THREE.Vector3): void {
+    this.shading.viewer.value.copy(camera);
     if (Math.abs(camera.x - this.lastScan.x) + Math.abs(camera.z - this.lastScan.z) > 16 || this.inFlight < MAX_IN_FLIGHT) {
       this.lastScan.copy(camera);
       this.scan(this.tiles, this.index.tileSize, this.impostorRange || this.tileReach, camera, 'tile');

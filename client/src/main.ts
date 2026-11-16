@@ -1,8 +1,9 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
-import type { RegionIndex, RegionVectors, VehicleDef, Welcome } from '@spar/shared';
+import { parseLocalTime, type RegionIndex, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
+import { Environment } from './sky/environment';
 import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
 import { loadRegionIndex, RegionMissingError, regionUrl } from './terrain/region';
@@ -16,7 +17,6 @@ import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
 import { VehicleView } from './vehicle/view';
 
-const SKY = 0x9db8c8;
 /** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
 const STEP = 1 / 60;
 
@@ -54,6 +54,7 @@ interface World {
   index: RegionIndex;
   terrain: Terrain;
   shading: GroundShading;
+  environment: Environment;
   vegetation: Vegetation | null;
   physics: RAPIER.World;
   ground: GroundStore;
@@ -80,12 +81,9 @@ async function start(): Promise<void> {
 
   // World axes: X east, Y up, Z south, in metres from the region's north-west corner at sea level.
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, 2500, 30000);
-  scene.add(new THREE.HemisphereLight(0xcfe3f0, 0x4a4636, 0.7));
-  const sun = new THREE.DirectionalLight(0xfff1dd, 3.2);
-  sun.position.set(-0.6, 0.4, 0.65); // from the south-west, mid afternoon
-  scene.add(sun);
+  // ?shadows=0 turns sun shadows off, for slower machines.
+  const shadows = params.get('shadows') !== '0';
+  renderer.shadowMap.enabled = shadows;
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 60000);
   const fly = new FlyCamera(camera, canvas);
@@ -107,12 +105,16 @@ async function start(): Promise<void> {
   let world: World | null = null;
   let loadingRegion: string | null = null;
   let fps: number | null = null;
+  let latestWorld: Extract<ServerMessage, { type: 'world' }> | null = null;
+  /** Headlights: null follows the daylight, true and false are the driver's choice. */
+  let lamps: boolean | null = null;
   let groundView = Number(params.get('view')) || 0;
   let detailed = params.get('wheels') !== '0';
 
   const drawHud = (): void => {
     const lines = [`${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`, describe(link, world?.index ?? null)];
     if (world) {
+      lines.push(world.environment.describe());
       const { terrain, vegetation, index, sim, obstacles } = world;
       const p = camera.position;
       const ground = terrain.heightAt(p.x, p.z);
@@ -143,7 +145,7 @@ async function start(): Promise<void> {
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
           : 'click to fly · F drive · M masks'
-        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · R reset · G wheels · F fly',
+        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · G wheels · F fly',
     );
     hud.textContent = lines.join('\n');
   };
@@ -170,6 +172,22 @@ async function start(): Promise<void> {
       fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>),
     ]);
     scene.add(terrain.group, horizon);
+
+    // Time and weather come from the server. For a look at a particular moment, the URL can
+    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|overcast|rain.
+    const fixedTime = params.get('time');
+    const sky: Record<string, Weather> = {
+      clear: { state: 'clear', cloud: 0.15, rain: 0, wind: 0.2, windDirection: 100, wetness: 0 },
+      overcast: { state: 'overcast', cloud: 0.9, rain: 0, wind: 0.4, windDirection: 100, wetness: 0 },
+      rain: { state: 'rain', cloud: 1, rain: 0.8, wind: 0.6, windDirection: 100, wetness: 1 },
+    };
+    const environment = new Environment(
+      scene,
+      index,
+      { shadows, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null },
+      camera.far,
+    );
+    if (latestWorld) environment.setWorld(latestWorld, performance.now());
 
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
@@ -203,7 +221,7 @@ async function start(): Promise<void> {
     view.snap();
 
     world = {
-      index, terrain, shading, vegetation, physics, ground, sim, view, spawn,
+      index, terrain, shading, environment, vegetation, physics, ground, sim, view, spawn,
       obstacles: vegetation ? new Obstacles(RAPIER, physics, vegetation) : null,
       unplaced: true,
     };
@@ -246,6 +264,10 @@ async function start(): Promise<void> {
       case 'KeyG':
         detailed = !detailed;
         break;
+      case 'KeyH':
+        // Lights: follow the daylight, then on, then off.
+        lamps = lamps === null ? true : lamps ? false : null;
+        break;
       case 'KeyL':
         if (!flying) w?.sim.toggleRange();
         break;
@@ -278,6 +300,9 @@ async function start(): Promise<void> {
       });
     }
     drawHud();
+  }, (update) => {
+    latestWorld = update;
+    world?.environment.setWorld(update, performance.now());
   });
 
   let last = performance.now();
@@ -317,6 +342,19 @@ async function start(): Promise<void> {
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
       w.terrain.update(camera.position);
       w.vegetation?.update(camera.position);
+
+      // The sky sets the light, and the weather reaches into everything else.
+      const env = w.environment;
+      env.update(now, dt, camera.position, flying ? camera.position : w.view.group.position);
+      w.shading.wet.value = env.weather.wetness;
+      w.ground.rain = env.weather.wetness;
+      if (w.vegetation) {
+        w.vegetation.shading.wind.value = env.weather.wind;
+        w.vegetation.shading.windDirection.value.copy(env.windVector);
+        w.vegetation.shading.impostorLight.value = env.daylight;
+      }
+      const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
+      w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
     }
     renderer.render(scene, camera);
 

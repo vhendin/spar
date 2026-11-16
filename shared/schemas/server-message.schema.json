@@ -2,31 +2,173 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ServerMessage",
   "description": "Every message the server may send to a client.",
-  "oneOf": [{ "$ref": "#/definitions/Welcome" }, { "$ref": "#/definitions/ServerError" }],
+  "oneOf": [
+    {
+      "$ref": "#/definitions/Welcome"
+    },
+    {
+      "$ref": "#/definitions/WorldUpdate"
+    },
+    {
+      "$ref": "#/definitions/ServerError"
+    }
+  ],
   "definitions": {
     "Welcome": {
       "title": "Welcome",
       "description": "Reply to hello: who you are and which world to load.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "protocol", "playerId", "region", "seed"],
+      "required": [
+        "type",
+        "protocol",
+        "playerId",
+        "region",
+        "seed"
+      ],
       "properties": {
-        "type": { "type": "string", "const": "welcome" },
-        "protocol": { "type": "integer", "minimum": 1 },
-        "playerId": { "type": "string", "minLength": 1 },
-        "region": { "type": "string", "pattern": "^[a-z0-9_-]+$" },
-        "seed": { "type": "integer", "minimum": 0, "maximum": 4294967295 }
+        "type": {
+          "type": "string",
+          "const": "welcome"
+        },
+        "protocol": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "playerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
       }
     },
     "ServerError": {
       "title": "ServerError",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "code", "message"],
+      "required": [
+        "type",
+        "code",
+        "message"
+      ],
       "properties": {
-        "type": { "type": "string", "const": "error" },
-        "code": { "type": "string", "enum": ["bad_message", "protocol_mismatch"] },
-        "message": { "type": "string" }
+        "type": {
+          "type": "string",
+          "const": "error"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "bad_message",
+            "protocol_mismatch"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "WorldUpdate": {
+      "title": "WorldUpdate",
+      "description": "The game clock and the weather, which the server owns. Sent after welcome and every few seconds; clients run the clock on by themselves in between and ease towards new weather.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "time",
+        "weather"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "world"
+        },
+        "time": {
+          "title": "WorldTime",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "utc",
+            "rate",
+            "utcOffset"
+          ],
+          "properties": {
+            "utc": {
+              "description": "The in-game instant now, as UTC milliseconds.",
+              "type": "number"
+            },
+            "rate": {
+              "description": "In-game seconds per real second.",
+              "type": "number",
+              "minimum": 0
+            },
+            "utcOffset": {
+              "description": "Hours the region's clocks are ahead of UTC.",
+              "type": "number"
+            }
+          }
+        },
+        "weather": {
+          "title": "WorldWeather",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "state",
+            "cloud",
+            "rain",
+            "wind",
+            "windDirection",
+            "wetness"
+          ],
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": [
+                "clear",
+                "overcast",
+                "rain"
+              ]
+            },
+            "cloud": {
+              "description": "Share of the sky covered by cloud.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "rain": {
+              "description": "Rainfall, 0 none to 1 downpour.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "wind": {
+              "description": "Wind strength, 0 calm to 1 gale.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "windDirection": {
+              "description": "Compass bearing the wind blows towards, degrees.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 360
+            },
+            "wetness": {
+              "description": "How wet the ground is, 0 dry to 1 soaked.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
       }
     }
   }

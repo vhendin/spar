@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { parseLocalTime, type WeatherState } from '@spar/shared';
 
 export interface ServerConfig {
   host: string;
@@ -11,7 +12,18 @@ export interface ServerConfig {
   clientDist: string;
   /** Folder holding generated regions, one subfolder per region name. */
   regionsDir: string;
+  /** The in-game instant the session starts at, as UTC milliseconds. */
+  startUtc: number;
+  /** Hours the region's clocks are ahead of UTC. */
+  utcOffset: number;
+  /** Real minutes one in-game day takes; 0 stops the clock. */
+  dayLengthMinutes: number;
+  /** Pins the weather to one state; null lets it change. */
+  weather: WeatherState | null;
 }
+
+/** Central European standard time; the game does not follow summer time. */
+const UTC_OFFSET = 1;
 
 function int(value: string | undefined, fallback: number, name: string): number {
   if (value === undefined || value === '') return fallback;
@@ -24,7 +36,18 @@ function int(value: string | undefined, fallback: number, name: string): number 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const region = env.REGION ?? 'valadalen';
   if (!/^[a-z0-9_-]+$/.test(region)) throw new Error(`REGION must be lowercase letters, digits, - or _, got "${region}"`);
+  const start = env.START_TIME ?? '2026-08-15T09:00';
+  const startUtc = parseLocalTime(start, UTC_OFFSET);
+  if (startUtc === null) throw new Error(`START_TIME must look like 2026-08-15T09:00, got "${start}"`);
+  const dayLengthMinutes = env.DAY_LENGTH_MINUTES === undefined || env.DAY_LENGTH_MINUTES === '' ? 30 : Number(env.DAY_LENGTH_MINUTES);
+  if (!Number.isFinite(dayLengthMinutes) || dayLengthMinutes < 0) throw new Error(`DAY_LENGTH_MINUTES must be zero or more, got "${env.DAY_LENGTH_MINUTES}"`);
+  const weather = env.WEATHER ?? '';
+  if (!['', 'clear', 'overcast', 'rain'].includes(weather)) throw new Error(`WEATHER must be clear, overcast or rain, got "${weather}"`);
   return {
+    startUtc,
+    utcOffset: UTC_OFFSET,
+    dayLengthMinutes,
+    weather: weather === '' ? null : (weather as WeatherState),
     host: env.HOST ?? '0.0.0.0',
     port: int(env.PORT, 8080, 'PORT'),
     region,

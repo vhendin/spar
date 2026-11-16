@@ -5,7 +5,7 @@
 
 import * as THREE from 'three/webgpu';
 import {
-  attribute, cameraPosition, float, fract, mix, normalViewGeometry, positionGeometry, positionLocal, select, sin, smoothstep, texture, time, uniform, vec2, vec3,
+  attribute, float, fract, mix, normalViewGeometry, positionGeometry, positionLocal, select, sin, smoothstep, texture, time, uniform, vec2, vec3,
 } from 'three/tsl';
 
 /** Side of an impostor picture in units of tree height, and the empty margin below the tree. */
@@ -26,8 +26,13 @@ export class VegetationShading {
   /** Wind strength, 0 calm to 1 storm, and the direction it blows towards (x east, y south). */
   readonly wind = uniform(0.35);
   readonly windDirection = uniform(new THREE.Vector2(0.8, 0.6));
-  /** Brightness of the flat pictures, which carry baked light; follows the sun in a later step. */
+  /** Brightness of the flat pictures, which carry baked light; follows the daylight. */
   readonly impostorLight = uniform(1.0);
+  /**
+   * Where the player's camera is. Distances are measured from here rather than from
+   * whichever camera is drawing, so trees are picked the same way in the shadow pass.
+   */
+  readonly viewer = uniform(new THREE.Vector3());
 
   /**
    * For instanced meshes whose geometry has `sway` (float per vertex) and `iOrigin`
@@ -35,7 +40,7 @@ export class VegetationShading {
    */
   meshMaterial(o: MeshMaterialOptions): THREE.MeshLambertNodeMaterial {
     const origin = attribute<'vec4'>('iOrigin', 'vec4');
-    const distance = origin.xyz.distance(cameraPosition);
+    const distance = origin.xyz.distance(this.viewer);
     // Each instance switches a little nearer or farther than the next, so no ring shows.
     const jitter = origin.w.mul(0.2).add(0.9);
     const inRange = distance.greaterThanEqual(jitter.mul(o.near)).and(distance.lessThan(jitter.mul(o.far)));
@@ -65,7 +70,7 @@ export class VegetationShading {
     const origin = attribute<'vec4'>('iOrigin', 'vec4');
     const info = attribute<'vec4'>('iInfo', 'vec4');
     const corner = positionGeometry;
-    const toCamera = cameraPosition.sub(origin.xyz);
+    const toCamera = this.viewer.sub(origin.xyz);
     const distance = toCamera.length();
     const jitter = info.z.mul(0.2).add(0.9);
     // Far away a tree is a few pixels: draw fewer, wider ones for the same look.
