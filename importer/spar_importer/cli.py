@@ -13,7 +13,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p_fetch = sub.add_parser("fetch", help="download raw data for a region into data/raw")
     p_fetch.add_argument("region")
-    p_fetch.add_argument("--only", choices=["dem", "osm"], help="fetch just one kind of data")
+    p_fetch.add_argument("--only", choices=["dem", "osm"], help="fetch just elevation or just OpenStreetMap")
 
     p_build = sub.add_parser("build", help="write data/regions/<region> from the raw data")
     p_build.add_argument("region")

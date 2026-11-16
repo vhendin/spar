@@ -8,7 +8,7 @@ import pytest
 from osgeo import gdal, osr
 
 from spar_importer.build_region import build_region, finest_spacing
-from spar_importer.fetch import copernicus_tile_names
+from spar_importer.fetch import copernicus_tile_names, ensure_lantmateriet, tiles_touching
 from spar_importer.region import HORIZON_MARGIN, Region, load_schema
 
 REGION = Region("test", "Test", 400000, 7010000, 4096)
@@ -195,3 +195,22 @@ def test_tile_names_and_spacing():
     ]
     assert copernicus_tile_names((-0.5, -0.5, 0.5, 0.5))[0] == "Copernicus_DSM_COG_10_S01_00_W001_00_DEM"
     assert [finest_spacing(r) for r in (0.5, 1, 2, 10, 30, 90)] == [1, 1, 1, 2, 4, 8]
+
+
+def test_lantmateriet_tiles_are_chosen_by_projected_extent():
+    def item(name, w, s):
+        return {"assets": {"data": {"href": f"https://example.invalid/mhm/{name}.tif", "proj:bbox": [w, s, w + 10000, s + 10000]}}}
+
+    items = [item("m700_39", 390000, 7000000), item("m700_40", 400000, 7000000), item("m701_39", 390000, 7010000),
+             item("m701_40", 400000, 7010000), item("m702_39", 390000, 7020000), item("m700_41", 410000, 7000000)]
+    got = tiles_touching(items, 395360, 7002864, 405600, 7013104)
+    assert [name for name, _ in got] == ["m700_39.tif", "m700_40.tif", "m701_39.tif", "m701_40.tif"]
+    # An item without a projected extent is kept rather than silently dropped.
+    assert tiles_touching([{"assets": {"data": {"href": "https://example.invalid/x.tif"}}}], 0, 0, 1, 1) == [("x.tif", "https://example.invalid/x.tif")]
+
+
+def test_no_login_means_no_lantmateriet_download(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPAR_DATA", str(tmp_path))
+    monkeypatch.delenv("LANTMATERIET_USER", raising=False)
+    monkeypatch.delenv("LANTMATERIET_PASSWORD", raising=False)
+    assert ensure_lantmateriet(REGION) == []
