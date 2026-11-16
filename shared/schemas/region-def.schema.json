@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RegionDef",
+  "description": "A playable area, as given to the importer. Lives in defs/regions/<name>.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "title", "crs", "origin", "size"],
+  "properties": {
+    "name": { "description": "Folder and URL name.", "type": "string", "pattern": "^[a-z0-9_-]+$" },
+    "title": { "description": "Name shown to players.", "type": "string", "minLength": 1 },
+    "crs": { "description": "Projected coordinate system in metres.", "type": "string", "const": "EPSG:3006" },
+    "origin": {
+      "title": "RegionOrigin",
+      "description": "North-west corner of the area.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["easting", "northing"],
+      "properties": {
+        "easting": { "type": "integer" },
+        "northing": { "type": "integer" }
+      }
+    },
+    "size": {
+      "description": "Side of the square area in metres; a whole number of 2048 m root tiles.",
+      "type": "integer",
+      "minimum": 2048,
+      "multipleOf": 2048
+    }
+  }
+}

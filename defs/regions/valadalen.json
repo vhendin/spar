@@ -1,0 +1,7 @@
+{
+  "name": "valadalen",
+  "title": "Vålådalen–Ottsjö",
+  "crs": "EPSG:3006",
+  "origin": { "easting": 395360, "northing": 7013104 },
+  "size": 10240
+}

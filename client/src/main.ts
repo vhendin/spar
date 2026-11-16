@@ -1,7 +1,12 @@
 import * as THREE from 'three/webgpu';
+import type { RegionIndex, Welcome } from '@spar/shared';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
-import { buildTestScene } from './testScene';
+import { loadHorizon } from './terrain/horizon';
+import { loadRegionIndex, RegionMissingError } from './terrain/region';
+import { Terrain } from './terrain/terrain';
+
+const SKY = 0x9db8c8;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#view')!;
 const hud = document.querySelector<HTMLDivElement>('#hud')!;
@@ -13,15 +18,21 @@ function showFatal(text: string): void {
   hud.style.display = 'none';
 }
 
-function describe(state: ConnectionState): string {
+function describe(state: ConnectionState, index: RegionIndex | null): string {
   switch (state.status) {
     case 'connecting':
       return 'connecting…';
     case 'online':
-      return `${state.welcome.playerId} · region ${state.welcome.region} · seed ${state.welcome.seed}`;
+      return `${state.welcome.playerId} · ${index?.title ?? state.welcome.region} · seed ${state.welcome.seed}`;
     case 'offline':
       return `offline: ${state.reason}`;
   }
+}
+
+/** Reads "a,b,c" from a URL parameter as numbers, or null when absent or malformed. */
+function numbers(params: URLSearchParams, key: string, count: number): number[] | null {
+  const parts = params.get(key)?.split(',').map(Number);
+  return parts && parts.length === count && parts.every(Number.isFinite) ? parts : null;
 }
 
 async function start(): Promise<void> {
@@ -36,8 +47,16 @@ async function start(): Promise<void> {
   const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-  const camera = new THREE.PerspectiveCamera(65, 1, 0.3, 20000);
-  camera.position.set(0, 12, 60);
+  // World axes: X east, Y up, Z south, in metres from the region's north-west corner at sea level.
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(SKY);
+  scene.fog = new THREE.Fog(SKY, 2500, 30000);
+  scene.add(new THREE.HemisphereLight(0xcfe3f0, 0x4a4636, 0.7));
+  const sun = new THREE.DirectionalLight(0xfff1dd, 3.2);
+  sun.position.set(-0.6, 0.4, 0.65); // from the south-west, mid afternoon
+  scene.add(sun);
+
+  const camera = new THREE.PerspectiveCamera(60, 1, 1, 60000);
   const fly = new FlyCamera(camera, canvas);
 
   const resize = (): void => {
@@ -48,28 +67,60 @@ async function start(): Promise<void> {
   window.addEventListener('resize', resize);
   resize();
 
-  // The scene is built once the server has said which seed to use.
-  let scene: THREE.Scene | null = null;
-  let seed: number | null = null;
   let link: ConnectionState = { status: 'connecting' };
+  let terrain: Terrain | null = null;
+  let loadingRegion: string | null = null;
   let fps: number | null = null;
 
   const drawHud = (): void => {
-    const p = camera.position;
-    hud.textContent = [
-      `${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`,
-      describe(link),
-      `pos ${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)} · speed ${fly.speed.toFixed(0)} m/s`,
-      fly.captured ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · Esc release' : 'click to fly',
-    ].join('\n');
+    const lines = [`${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`, describe(link, terrain?.index ?? null)];
+    if (terrain) {
+      const p = camera.position;
+      const { origin, heights } = terrain.index;
+      const ground = terrain.heightAt(p.x, p.z);
+      lines.push(
+        `E ${(origin.easting + p.x).toFixed(0)} N ${(origin.northing - p.z).toFixed(0)} · ${p.y.toFixed(0)} m` +
+          (ground === null ? '' : ` (ground ${ground.toFixed(0)} m)`) +
+          ` · speed ${fly.speed.toFixed(0)} m/s`,
+        `terrain ${terrain.stats.nodes} patches · ${(terrain.stats.triangles / 1000).toFixed(0)}k triangles` +
+          (terrain.stats.loading ? ` · loading ${terrain.stats.loading}` : '') +
+          ` · ${heights.source.name} ${heights.source.resolution} m`,
+      );
+    } else if (loadingRegion) {
+      lines.push(`loading ${loadingRegion}…`);
+    }
+    lines.push(fly.captured ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · Esc release' : 'click to fly');
+    hud.textContent = lines.join('\n');
   };
   drawHud();
 
+  const enterRegion = async (welcome: Welcome): Promise<void> => {
+    loadingRegion = welcome.region;
+    drawHud();
+    const index = await loadRegionIndex(welcome.region);
+    const [ground, horizon] = await Promise.all([Terrain.load(index), loadHorizon(index)]);
+    scene.add(ground.group, horizon);
+    terrain = ground;
+
+    // Start above the middle of the area looking north, unless the URL says otherwise:
+    // ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees).
+    const mid = index.size / 2;
+    const pos = numbers(params, 'pos', 3) ?? [mid, (ground.heightAt(mid, mid) ?? index.heights.max) + 250, mid];
+    const look = numbers(params, 'look', 2) ?? [0, -12];
+    fly.setPose(pos[0]!, pos[1]!, pos[2]!, THREE.MathUtils.degToRad(look[0]!), THREE.MathUtils.degToRad(look[1]!));
+  };
+
   new Connection((state) => {
     link = state;
-    if (state.status === 'online' && state.welcome.seed !== seed) {
-      seed = state.welcome.seed;
-      scene = buildTestScene(seed);
+    if (state.status === 'online' && loadingRegion === null) {
+      enterRegion(state.welcome).catch((err: unknown) => {
+        console.error(err);
+        showFatal(
+          err instanceof RegionMissingError
+            ? `${err.message}\nOn the host, run:  docker compose run --rm importer build ${err.region}`
+            : `Spår could not load the world: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      });
     }
     drawHud();
   });
@@ -83,14 +134,15 @@ async function start(): Promise<void> {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
     fly.update(dt);
-    if (scene) renderer.render(scene, camera);
+    terrain?.update(camera.position);
+    renderer.render(scene, camera);
 
     frames++;
     if (now - fpsSince >= 500) {
       fps = (frames * 1000) / (now - fpsSince);
-      drawHud();
       frames = 0;
       fpsSince = now;
+      drawHud();
     }
   });
 }

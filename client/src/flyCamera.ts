@@ -13,7 +13,7 @@ const KEYS_DOWN = ['KeyQ', 'ControlLeft'];
  */
 export class FlyCamera {
   /** Base speed in metres per second. */
-  speed = 20;
+  speed = 60;
   private yaw = 0;
   private pitch = 0;
   private readonly down = new Set<string>();
@@ -51,6 +51,14 @@ export class FlyCamera {
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
+  }
+
+  /** Moves the camera. Yaw 0 looks north and grows to the left (west); pitch is positive upward. Radians. */
+  setPose(x: number, y: number, z: number, yaw: number, pitch: number): void {
+    this.camera.position.set(x, y, z);
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.camera.rotation.set(pitch, yaw, 0);
   }
 
   get captured(): boolean {

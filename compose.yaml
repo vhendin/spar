@@ -8,3 +8,14 @@ services:
     volumes:
       - ./data/regions:/data/regions:ro
     restart: unless-stopped
+
+  # Offline data import. Runs only on demand:
+  #   docker compose run --rm importer build valadalen
+  importer:
+    build: ./importer
+    profiles: ["tools"]
+    volumes:
+      - ./data:/data
+      - ./defs:/defs:ro
+      - ./shared/schemas:/schemas:ro
+      - ./importer:/app:ro
