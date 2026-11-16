@@ -1,8 +1,6 @@
 // Turns part of a height file into vertex data for one terrain node. Pure functions, used
 // from the terrain worker.
 
-import { terrainColor } from './shade';
-
 export interface NodeMeshRequest {
   /** Stored samples per side of the file, apron included. */
   side: number;
@@ -22,13 +20,18 @@ export interface NodeMeshRequest {
   scale: number;
   /** How far the skirt hangs below the edge, in metres. */
   skirt: number;
+  /** uv = offset + position across the node (0..1) * scale; places the node in its mask texture. */
+  uvOffsetX: number;
+  uvOffsetY: number;
+  uvScale: number;
 }
 
 export interface NodeMeshData {
   /** x east and z south from the node's north-west corner, y is elevation; all in metres. */
   positions: Float32Array;
   normals: Float32Array;
-  colors: Float32Array;
+  /** Where each vertex falls in the node's mask texture. */
+  uvs: Float32Array;
   minY: number;
   maxY: number;
 }
@@ -43,7 +46,7 @@ export function buildNodeMesh(file: Uint16Array, r: NodeMeshRequest): NodeMeshDa
   const total = nodeVertexCount(r.quads);
   const positions = new Float32Array(total * 3);
   const normals = new Float32Array(total * 3);
-  const colors = new Float32Array(total * 3);
+  const uvs = new Float32Array(total * 2);
   const step = r.stride * r.fileSpacing;
   const slope = r.scale / (2 * r.fileSpacing);
   let minY = Infinity;
@@ -67,7 +70,8 @@ export function buildNodeMesh(file: Uint16Array, r: NodeMeshRequest): NodeMeshDa
       normals[o] = -dx * inv;
       normals[o + 1] = inv;
       normals[o + 2] = -dz * inv;
-      terrainColor(y, inv, colors, o);
+      uvs[(j * n + i) * 2] = r.uvOffsetX + (i / r.quads) * r.uvScale;
+      uvs[(j * n + i) * 2 + 1] = r.uvOffsetY + (j / r.quads) * r.uvScale;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
@@ -81,10 +85,9 @@ export function buildNodeMesh(file: Uint16Array, r: NodeMeshRequest): NodeMeshDa
     positions[d] = positions[s]!;
     positions[d + 1] = positions[s + 1]! - r.skirt;
     positions[d + 2] = positions[s + 2]!;
-    for (let c = 0; c < 3; c++) {
-      normals[d + c] = normals[s + c]!;
-      colors[d + c] = colors[s + c]!;
-    }
+    for (let c = 0; c < 3; c++) normals[d + c] = normals[s + c]!;
+    uvs[v * 2] = uvs[from * 2]!;
+    uvs[v * 2 + 1] = uvs[from * 2 + 1]!;
     v++;
   };
   for (let i = 0; i < n; i++) copy(i); // north
@@ -92,7 +95,7 @@ export function buildNodeMesh(file: Uint16Array, r: NodeMeshRequest): NodeMeshDa
   for (let j = 0; j < n; j++) copy(j * n); // west
   for (let j = 0; j < n; j++) copy(j * n + n - 1); // east
 
-  return { positions, normals, colors, minY, maxY };
+  return { positions, normals, uvs, minY, maxY };
 }
 
 /** Triangle list matching buildNodeMesh; the same for every node with this many quads. */

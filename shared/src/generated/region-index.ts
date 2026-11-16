@@ -4,7 +4,7 @@
  * Written by the importer to data/regions/<name>/index.json; everything the game needs to load a region. Local coordinates: x runs east and z runs south from the north-west corner, in metres. Rasters are stored north row first.
  */
 export interface RegionIndex {
-  formatVersion: 1;
+  formatVersion: 3;
   name: string;
   title: string;
   crs: string;
@@ -24,6 +24,8 @@ export interface RegionIndex {
    * Credit lines for the data used.
    */
   attribution: string[];
+  masks: MaskPyramid;
+  vectors: VectorsRef;
 }
 /**
  * North-west corner in the projected coordinate system.
@@ -54,7 +56,7 @@ export interface HeightPyramid {
    *
    * @minItems 1
    */
-  levels: [HeightLevel, ...HeightLevel[]];
+  levels: [PyramidLevel, ...PyramidLevel[]];
   encoding: HeightEncoding;
   /**
    * Lowest elevation in the area, metres.
@@ -66,7 +68,7 @@ export interface HeightPyramid {
   max: number;
   source: ElevationSourceInfo;
 }
-export interface HeightLevel {
+export interface PyramidLevel {
   level: number;
   /**
    * Metres between samples.
@@ -118,4 +120,61 @@ export interface Horizon {
    */
   margin: number;
   encoding: HeightEncoding;
+  biome: HorizonBiome;
+}
+/**
+ * Land cover for the horizon: one byte per sample, covering the same square as the horizon heights.
+ */
+export interface HorizonBiome {
+  path: string;
+  samples: number;
+  spacing: number;
+}
+/**
+ * Ground properties as a pyramid of files laid out like the height pyramid, without an apron. A file holds one plane of `samples` x `samples` bytes per channel, in the order of `channels`.
+ */
+export interface MaskPyramid {
+  path: string;
+  samples: 257;
+  /**
+   * Levels present, finest first.
+   *
+   * @minItems 1
+   */
+  levels: [PyramidLevel, ...PyramidLevel[]];
+  /**
+   * @minItems 1
+   */
+  channels: [MaskChannel, ...MaskChannel[]];
+  /**
+   * Land cover classes by id.
+   */
+  biomes: GroundClass[];
+  /**
+   * Man-made surface classes by id; 0 means natural ground.
+   */
+  surfaces: GroundClass[];
+  /**
+   * Elevation in metres above which forest gives way to open fell.
+   */
+  treeline: number;
+}
+export interface MaskChannel {
+  name: 'biome' | 'surface' | 'road' | 'wetness' | 'canopy' | 'slope';
+  /**
+   * class = an id from biomes or surfaces; value = a quantity equal to byte * scale.
+   */
+  kind: 'class' | 'value';
+  scale?: number;
+  unit?: string;
+}
+export interface GroundClass {
+  id: number;
+  name: string;
+}
+/**
+ * Roads, waterways, lakes, places and spawn points; see the region-vectors schema.
+ */
+export interface VectorsRef {
+  path: string;
 }

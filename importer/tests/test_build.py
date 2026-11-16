@@ -63,11 +63,76 @@ def write_lantmateriet(data, west, south, east, north):
     write_tif(data / "raw/lantmateriet/patch.tif", ground(e[None, :], n[:, None]), (west, 1, 0, north, 0, -1), 3006)
 
 
+# Map features in local metres (x east, z south of the north-west corner).
+LAKE = [(1000, 1000), (1400, 1000), (1400, 1400), (1000, 1400)]
+FOREST = [(0, 2000), (2000, 2000), (2000, 4096), (0, 4096)]
+BOG = [(2500, 500), (3000, 500), (3000, 900), (2500, 900)]
+OSM_WAYS = [
+    (LAKE + LAKE[:1], {"natural": "water", "water": "lake", "name": "Testsjön"}),
+    (FOREST + FOREST[:1], {"landuse": "forest"}),
+    (BOG + BOG[:1], {"natural": "wetland", "wetland": "bog"}),
+    ([(100, 3000), (2000, 3000), (3900, 3000)], {"highway": "unclassified", "surface": "asphalt", "name": "Testvägen"}),
+    ([(2000, 100), (2000, 3900)], {"highway": "track", "tracktype": "grade4"}),
+    ([(300, 300), (900, 900)], {"highway": "path"}),
+    ([(300, 900), (900, 300)], {"highway": "path", "snowmobile": "designated"}),
+    ([(3000, 100), (3500, 2000)], {"waterway": "stream"}),
+]
+
+
+def write_osm(data, region=REGION):
+    """A hand-made OpenStreetMap file with one of each kind of feature the importer reads."""
+    sweref, wgs = osr.SpatialReference(), osr.SpatialReference()
+    sweref.ImportFromEPSG(3006)
+    wgs.ImportFromEPSG(4326)
+    sweref.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    wgs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    to_geo = osr.CoordinateTransformation(sweref, wgs)
+    nodes, ways, ids = [], [], {}
+
+    def node(x, z, tags=None):
+        if (x, z) not in ids or tags:
+            lon, lat, _ = to_geo.TransformPoint(region.west + x, region.north - z)
+            ids[(x, z)] = len(nodes) + 1
+            inner = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in (tags or {}).items())
+            nodes.append(f'<node id="{len(nodes) + 1}" version="1" lat="{lat:.7f}" lon="{lon:.7f}">{inner}</node>')
+        return ids[(x, z)]
+
+    for points, tags in OSM_WAYS:
+        refs = "".join(f'<nd ref="{node(x, z)}"/>' for x, z in points)
+        inner = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in tags.items())
+        ways.append(f'<way id="{len(ways) + 1}" version="1">{refs}{inner}</way>')
+    node(2100, 2900, {"place": "hamlet", "name": "Testby"})
+    path = data / "raw/osm" / f"{region.name}.osm"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('<?xml version="1.0" encoding="UTF-8"?><osm version="0.6">' + "".join(nodes) + "".join(ways) + "</osm>")
+
+
 @pytest.fixture
 def data(tmp_path, monkeypatch):
     monkeypatch.setenv("SPAR_DATA", str(tmp_path))
     write_copernicus(tmp_path)
+    write_osm(tmp_path)
     return tmp_path
+
+
+def read_mask(folder, index, level, x, y):
+    m = index["masks"]
+    raw = np.fromfile(folder / m["path"].format(level=level, x=x, y=y), dtype=np.uint8)
+    planes = raw.reshape(len(m["channels"]), m["samples"], m["samples"])
+    return {c["name"]: planes[i] for i, c in enumerate(m["channels"])}
+
+
+def mask_at(folder, index, level, x, z):
+    """Channel values at a local position, as {name: byte}."""
+    lv = next(v for v in index["masks"]["levels"] if v["level"] == level)
+    fx, fz = int(x // lv["span"]), int(z // lv["span"])
+    planes = read_mask(folder, index, level, fx, fz)
+    i, j = round((x - fx * lv["span"]) / lv["spacing"]), round((z - fz * lv["span"]) / lv["spacing"])
+    return {name: int(plane[j, i]) for name, plane in planes.items()}
+
+
+def class_id(index, kind, name):
+    return next(c["id"] for c in index["masks"][kind] if c["name"] == name)
 
 
 def read_index(folder):
@@ -164,7 +229,7 @@ def test_lantmateriet_takes_over_when_it_covers_the_area(data):
     index = read_index(folder)
     assert [lv["level"] for lv in index["heights"]["levels"]] == [0, 1, 2, 3]
     assert index["heights"]["source"] == {"name": "Lantmäteriet Markhöjdmodell", "resolution": 1.0, "kind": "terrain"}
-    assert len(index["attribution"]) == 2
+    assert len(index["attribution"]) == 3
     check_pyramid(folder, index)
     check_heights(folder, index, tolerance=0.1)
 
@@ -173,7 +238,7 @@ def test_partial_lantmateriet_is_ignored(data):
     write_lantmateriet(data, REGION.west, REGION.south, REGION.west + 1000, REGION.north)
     index = read_index(build_region(REGION, offline=True))
     assert index["heights"]["source"]["name"] == "Copernicus DEM GLO-30"
-    assert len(index["attribution"]) == 1
+    assert len(index["attribution"]) == 2
 
 
 def test_forced_source(data):
@@ -186,6 +251,108 @@ def test_no_data_is_a_clear_error(tmp_path, monkeypatch):
     monkeypatch.setenv("SPAR_DATA", str(tmp_path))
     with pytest.raises(SystemExit, match="No elevation data"):
         build_region(REGION, offline=True)
+
+
+def test_missing_osm_is_a_clear_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPAR_DATA", str(tmp_path))
+    write_copernicus(tmp_path)
+    with pytest.raises(SystemExit, match="No OpenStreetMap extract"):
+        build_region(REGION, offline=True)
+
+
+def test_masks_follow_the_map(data):
+    folder = build_region(REGION, offline=True)
+    index = read_index(folder)
+    assert index["formatVersion"] == 3
+    assert [lv["level"] for lv in index["masks"]["levels"]] == [1, 2, 3]
+    assert [c["name"] for c in index["masks"]["channels"]] == ["biome", "surface", "road", "wetness", "canopy", "slope"]
+    biome = lambda name: class_id(index, "biomes", name)  # noqa: E731
+    surface = lambda name: class_id(index, "surfaces", name)  # noqa: E731
+
+    for level in (1, 2, 3):
+        assert mask_at(folder, index, level, 1200, 1200)["biome"] == biome("water"), level
+        assert mask_at(folder, index, level, 800, 3500)["biome"] == biome("forest"), level
+        assert mask_at(folder, index, level, 2752, 704)["biome"] == biome("wetland"), level
+        # Roads stay unbroken at every level, even though they are narrower than a coarse sample.
+        assert mask_at(folder, index, level, 1000, 3000)["surface"] == surface("asphalt"), level
+        assert mask_at(folder, index, level, 2000, 1504)["surface"] == surface("dirt"), level
+        assert mask_at(folder, index, level, 3000, 2000)["surface"] == surface("none"), level
+        assert mask_at(folder, index, level, 1000, 3000)["road"] == 255, level
+        assert mask_at(folder, index, level, 3000, 2000)["road"] == 0, level
+
+    # Coverage falls off across the road's edge instead of stepping: the road is 4.5 m wide.
+    across = [mask_at(folder, index, 1, 1000, 3000 + dz)["road"] for dz in (0, 2, 4, 6)]
+    assert across[0] == 255 and across[-1] == 0 and 0 < across[1] < 255, across
+    assert across == sorted(across, reverse=True)
+
+    fine = mask_at(folder, index, 1, 600, 600)
+    assert fine["surface"] == surface("trail")
+    assert mask_at(folder, index, 3, 600, 600)["surface"] == surface("none")  # footpaths fade out at distance
+    assert mask_at(folder, index, 1, 400, 800)["surface"] == surface("none")  # winter-only route is not drawn
+    stream = mask_at(folder, index, 1, 3250, 1050)
+    assert stream["surface"] == surface("stream") and stream["wetness"] == 255
+    assert mask_at(folder, index, 3, 3252, 1052)["surface"] == surface("stream")  # streams stay visible far away
+
+    lake, forest, bog = (mask_at(folder, index, 1, *p) for p in ((1200, 1200), (800, 3500), (2752, 704)))
+    assert lake["wetness"] == 255 and lake["canopy"] == 0
+    assert bog["wetness"] >= 178 and bog["canopy"] == 0
+    assert 12 <= forest["canopy"] <= 120  # 3 to 30 m in quarter metres
+    # Unmapped ground was given a land cover, never left unknown.
+    assert mask_at(folder, index, 1, 3500, 3500)["biome"] in (biome("forest"), biome("heath"))
+    # Slope matches the synthetic landscape.
+    e, n, d = REGION.west + 3000.0, REGION.north - 2000.0, 1.0
+    rise = np.hypot((ground(e + d, n) - ground(e - d, n)) / 2, (ground(e, n + d) - ground(e, n - d)) / 2)
+    assert abs(mask_at(folder, index, 1, 3000, 2000)["slope"] * 90 / 255 - np.degrees(np.arctan(rise))) < 1.0
+
+    hb = index["horizon"]["biome"]
+    grid = np.fromfile(folder / hb["path"], dtype=np.uint8).reshape(hb["samples"], hb["samples"])
+    k = index["horizon"]["margin"] // hb["spacing"]
+    assert grid[k + 1200 // hb["spacing"], k + 1200 // hb["spacing"]] == biome("water")
+    assert 0 not in grid
+    assert "OpenStreetMap" in index["attribution"][-1]
+
+
+def test_vectors(data):
+    folder = build_region(REGION, offline=True)
+    index = read_index(folder)
+    vectors = json.loads((folder / index["vectors"]["path"]).read_text())
+    jsonschema.validate(vectors, load_schema("region-vectors"))
+
+    road = next(r for r in vectors["roads"] if r.get("name") == "Testvägen")
+    assert road["surface"] == "asphalt" and road["drivable"] and road["points"][0] == [100.0, 3000.0]
+    assert {r["kind"] for r in vectors["roads"]} == {"unclassified", "track", "path"}
+    assert sum(r["kind"] == "path" for r in vectors["roads"]) == 1
+    assert not next(r for r in vectors["roads"] if r["kind"] == "path")["drivable"]
+    assert [w["kind"] for w in vectors["waterways"]] == ["stream"]
+
+    (lake,) = vectors["lakes"]
+    assert lake["name"] == "Testsjön"
+    centre = ground(REGION.west + 1200.0, REGION.north - 1200.0)
+    assert abs(lake["level"] - centre) < 15
+    assert vectors["places"] == [{"name": "Testby", "kind": "hamlet", "x": 2100.0, "z": 2900.0}]
+
+    spawn = vectors["spawns"][0]
+    assert spawn["name"] == "Testby" and spawn["road"] == road["id"]
+    assert abs(spawn["x"] - 2100) < 1 and abs(spawn["z"] - 3000) < 1
+    assert spawn["heading"] in (90.0, 270.0)
+
+
+def test_flow_gathers_in_valleys():
+    from spar_importer.masks import flow_accumulation
+
+    # A tilted trough: everything drains to the middle column and out at the bottom row.
+    rows, cols = 40, 41
+    c = np.arange(cols)[None, :]
+    r = np.arange(rows)[:, None]
+    h = np.abs(c - 20) * 1.0 + (rows - r) * 0.5
+    acc = flow_accumulation(h)
+    assert acc.shape == h.shape
+    assert acc[rows - 2, 20] > 0.5 * rows * cols  # most of the grid passes the outlet
+    assert acc[5, 2] < 20  # a hillside cell collects little
+    # A closed hollow does not swallow the flow.
+    h2 = h.copy()
+    h2[18:22, 18:22] -= 5
+    assert flow_accumulation(h2)[rows - 2, 20] > 0.5 * rows * cols
 
 
 def test_tile_names_and_spacing():

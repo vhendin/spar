@@ -1,0 +1,25 @@
+{
+  "biomes": [
+    { "id": 0, "name": "unknown" },
+    { "id": 1, "name": "forest" },
+    { "id": 2, "name": "wetland" },
+    { "id": 3, "name": "bare_rock" },
+    { "id": 4, "name": "scree" },
+    { "id": 5, "name": "heath" },
+    { "id": 6, "name": "grassland" },
+    { "id": 7, "name": "farmland" },
+    { "id": 8, "name": "water" },
+    { "id": 9, "name": "scrub" },
+    { "id": 10, "name": "built_up" },
+    { "id": 11, "name": "sand" }
+  ],
+  "surfaces": [
+    { "id": 0, "name": "none" },
+    { "id": 1, "name": "asphalt" },
+    { "id": 2, "name": "gravel" },
+    { "id": 3, "name": "dirt" },
+    { "id": 4, "name": "trail" },
+    { "id": 5, "name": "boardwalk" },
+    { "id": 6, "name": "stream" }
+  ]
+}

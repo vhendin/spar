@@ -154,6 +154,17 @@ def ensure_osm(region: Region) -> Path:
     return extract
 
 
+def find_osm(region: Region, *, offline: bool) -> Path:
+    """The OpenStreetMap extract for a region; downloaded and cut unless offline."""
+    if not offline:
+        return ensure_osm(region)
+    folder = data_dir() / "raw" / "osm"
+    for name in (f"{region.name}.osm.pbf", f"{region.name}.osm"):
+        if (folder / name).exists():
+            return folder / name
+    raise SystemExit(f"No OpenStreetMap extract for {region.name} in {folder}. Run `fetch` first.")
+
+
 def fetch(region: Region, *, dem: bool = True, osm: bool = True) -> None:
     if dem:
         tiles = ensure_copernicus(region)

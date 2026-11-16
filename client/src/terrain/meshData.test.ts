@@ -4,6 +4,7 @@ import { buildNodeIndex, buildNodeMesh, nodeVertexCount, type NodeMeshRequest } 
 const SIDE = 259;
 const base: NodeMeshRequest = {
   side: SIDE, apron: 1, i0: 0, j0: 0, stride: 4, quads: 64, fileSpacing: 8, offset: 100, scale: 0.02, skirt: 50,
+  uvOffsetX: 0, uvOffsetY: 0, uvScale: 1,
 };
 
 /** A file whose ground rises `east` metres per metre eastward and `south` per metre southward. */
@@ -49,6 +50,17 @@ describe('buildNodeMesh', () => {
     const westStart = 65 * 65 + 2 * 65;
     expect(m.positions[westStart * 3]).toBe(0);
     expect(m.positions[(westStart + 64) * 3 + 2]).toBe(64 * 32);
+  });
+
+  it('places the node inside its mask texture', () => {
+    const r = { ...base, uvOffsetX: 0.25, uvOffsetY: 0.5, uvScale: 0.25 };
+    const m = buildNodeMesh(plane(0, 0, r), r);
+    expect([m.uvs[0], m.uvs[1]]).toEqual([0.25, 0.5]);
+    const last = 65 * 65 - 1;
+    expect([m.uvs[last * 2], m.uvs[last * 2 + 1]]).toEqual([0.5, 0.75]);
+    // Skirt vertices reuse the uv of the edge they hang from.
+    const eastSkirtEnd = nodeVertexCount(64) - 1;
+    expect([m.uvs[eastSkirtEnd * 2], m.uvs[eastSkirtEnd * 2 + 1]]).toEqual([0.5, 0.75]);
   });
 });
 

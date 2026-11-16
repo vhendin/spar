@@ -9,7 +9,7 @@ from pathlib import Path
 
 from osgeo import osr
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 3
 CRS = "EPSG:3006"  # SWEREF 99 TM
 TILE_SIZE = 256  # metres, world tile used for object placement
 SAMPLES = 257  # height samples per file side, edges shared with neighbours
@@ -17,6 +17,7 @@ APRON = 1  # extra samples stored around every file
 ROOT_LEVEL = 3  # coarsest height level: 8 m spacing, 2048 m files
 ROOT_SPAN = (SAMPLES - 1) << ROOT_LEVEL
 HORIZON_SPACING = 128  # metres
+HORIZON_BIOME_SPACING = 32  # metres
 HORIZON_MARGIN = 15360  # metres beyond the area on every side
 
 

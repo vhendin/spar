@@ -1,8 +1,9 @@
 import * as THREE from 'three/webgpu';
 import type { RegionIndex } from '@spar/shared';
-import { distanceToBox, NODE_QUADS, nodeSize, nodeSource, terrainLayout, type TerrainLayout } from './layout';
+import type { GroundShading } from './groundMaterial';
+import { distanceToBox, MASK_TEXELS, maskSource, NODE_QUADS, nodeSize, nodeSource, terrainLayout, type TerrainLayout } from './layout';
 import { buildNodeIndex, type NodeMeshData } from './meshData';
-import { heightFileUrl } from './region';
+import { heightFileUrl, maskFileUrl } from './region';
 import type { WorkerRequest, WorkerResponse } from './worker';
 
 /** A node splits when the camera is closer than this many node sizes. */
@@ -11,6 +12,8 @@ const SPLIT_FACTOR = 1.6;
 const MAX_IN_FLIGHT = 6;
 /** Unused finer nodes are dropped after this many updates. */
 const KEEP_FRAMES = 240;
+/** When mask samples are skipped, the surface that wins: roads over tracks over footpaths over streams. */
+const SURFACE_IMPORTANCE = ['none', 'stream', 'trail', 'boardwalk', 'dirt', 'gravel', 'asphalt'];
 
 const enum State {
   Empty,
@@ -53,7 +56,9 @@ export class Terrain {
   private readonly worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   private readonly pending = new Map<number, Pending>();
   private readonly indexArray = buildNodeIndex(NODE_QUADS);
-  private readonly material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+  private readonly material: THREE.Material;
+  private readonly surfaceRank: number[];
+  private readonly maskPlanes: { biome: number; surface: number; road: number; wetness: number; canopy: number };
   private readonly roots: Node[] = [];
   private readonly rootFiles: Uint16Array[] = [];
   private shown: Node[] = [];
@@ -63,8 +68,27 @@ export class Terrain {
   private inFlight = 0;
   private warned = false;
 
-  private constructor(readonly index: RegionIndex) {
+  private constructor(
+    readonly index: RegionIndex,
+    shading: GroundShading,
+  ) {
     this.layout = terrainLayout(index);
+    this.material = shading.material(MASK_TEXELS + 1, null);
+    this.surfaceRank = [];
+    for (const s of index.masks.surfaces) this.surfaceRank[s.id] = Math.max(0, SURFACE_IMPORTANCE.indexOf(s.name));
+    const plane = (name: string): number => {
+      const at = index.masks.channels.findIndex((c) => c.name === name);
+      if (at < 0) throw new Error(`Region "${index.name}" has no ${name} mask.`);
+      return at;
+    };
+    this.maskPlanes = {
+      biome: plane('biome'),
+      surface: plane('surface'),
+      road: plane('road'),
+      wetness: plane('wetness'),
+      canopy: plane('canopy'),
+    };
+    if (index.masks.surfaces.some((s) => s.id > 7)) throw new Error('This client handles at most eight surface classes.');
     this.group.name = 'terrain';
     this.worker.onmessage = (ev: MessageEvent<WorkerResponse>) => {
       const p = this.pending.get(ev.data.id);
@@ -76,8 +100,8 @@ export class Terrain {
   }
 
   /** Loads the coarsest level for the whole area, so there is always something to draw. */
-  static async load(index: RegionIndex): Promise<Terrain> {
-    const t = new Terrain(index);
+  static async load(index: RegionIndex, shading: GroundShading): Promise<Terrain> {
+    const t = new Terrain(index, shading);
     const { rootsPerSide, rootSize, rootLevel } = t.layout;
     const h = index.heights;
     const side = h.samples + 2 * h.apron;
@@ -224,6 +248,7 @@ export class Terrain {
     if (!node.mesh) return;
     this.group.remove(node.mesh);
     node.mesh.geometry.dispose();
+    (node.mesh.userData.mask as THREE.Texture).dispose();
     node.mesh = null;
     node.state = State.Empty;
   }
@@ -238,14 +263,16 @@ export class Terrain {
 
   private async loadNode(node: Node): Promise<void> {
     const h = this.index.heights;
+    const m = this.index.masks;
     const src = nodeSource(this.layout, h.samples, node.depth, node.ix, node.iz);
+    const maskSrc = maskSource(this.index, node.size, node.x0, node.z0);
     node.state = State.Loading;
     this.inFlight++;
     try {
       const reply = await this.call({
         id: 0,
-        kind: 'mesh',
-        url: heightFileUrl(this.index, src.level, src.fileX, src.fileY),
+        kind: 'node',
+        heightUrl: heightFileUrl(this.index, src.level, src.fileX, src.fileY),
         mesh: {
           side: h.samples + 2 * h.apron,
           apron: h.apron,
@@ -257,9 +284,23 @@ export class Terrain {
           offset: h.encoding.offset,
           scale: h.encoding.scale,
           skirt: Math.max(8, node.size / 16),
+          uvOffsetX: maskSrc.uvOffsetX,
+          uvOffsetY: maskSrc.uvOffsetY,
+          uvScale: maskSrc.uvScale,
+        },
+        maskUrl: maskFileUrl(this.index, maskSrc.level, maskSrc.fileX, maskSrc.fileY),
+        mask: {
+          samples: m.samples,
+          channels: m.channels.length,
+          ...this.maskPlanes,
+          i0: maskSrc.i0,
+          j0: maskSrc.j0,
+          stride: maskSrc.stride,
+          size: MASK_TEXELS + 1,
+          surfaceRank: this.surfaceRank,
         },
       });
-      if ('mesh' in reply) this.attach(node, reply.mesh);
+      if ('mesh' in reply) this.attach(node, reply.mesh, reply.mask);
     } catch (err) {
       node.state = State.Empty;
       node.retryAt = this.frame + 120;
@@ -272,11 +313,11 @@ export class Terrain {
     }
   }
 
-  private attach(node: Node, data: NodeMeshData): void {
+  private attach(node: Node, data: NodeMeshData, maskData: Uint8Array): void {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(data.uvs, 2));
     geometry.setIndex(new THREE.BufferAttribute(this.indexArray, 1));
     const box = new THREE.Box3(
       new THREE.Vector3(0, data.minY, 0),
@@ -287,6 +328,9 @@ export class Terrain {
 
     const mesh = new THREE.Mesh(geometry, this.material);
     mesh.position.set(node.x0, 0, node.z0);
+    const mask = new THREE.DataTexture(maskData, MASK_TEXELS + 1, MASK_TEXELS + 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    mask.needsUpdate = true;
+    mesh.userData.mask = mask;
     mesh.visible = false;
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();

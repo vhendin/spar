@@ -76,6 +76,56 @@ export function nodeSource(layout: TerrainLayout, samples: number, depth: number
   };
 }
 
+/** Every node's mask texture is MASK_TEXELS + 1 samples wide. */
+export const MASK_TEXELS = 128;
+
+export interface MaskSource {
+  level: number;
+  fileX: number;
+  fileY: number;
+  /** First sample of the window inside the file. */
+  i0: number;
+  j0: number;
+  /** File samples between the samples taken; MASK_TEXELS + 1 are taken per side. */
+  stride: number;
+  /** Where the node sits in its window: uv = offset + position across the node * scale. */
+  uvOffsetX: number;
+  uvOffsetY: number;
+  uvScale: number;
+}
+
+/**
+ * The part of a mask file a node's texture is cut from: the coarsest level that still
+ * gives MASK_TEXELS samples across the node. A node too small for that many samples at the
+ * finest level takes the larger window around it and uses a corner of the texture, so
+ * texels always stand for real samples.
+ */
+export function maskSource(index: RegionIndex, size: number, x0: number, z0: number): MaskSource {
+  const { levels, samples } = index.masks;
+  const finest = levels[0]!;
+  const coarsest = levels[levels.length - 1]!.level;
+  const window = Math.max(size, MASK_TEXELS * finest.spacing);
+  const wx = Math.floor(x0 / window) * window;
+  const wz = Math.floor(z0 / window) * window;
+  const wanted = window / MASK_TEXELS;
+  const level = Math.min(coarsest, Math.max(finest.level, Math.floor(Math.log2(wanted))));
+  const spacing = 2 ** level;
+  const span = (samples - 1) * spacing;
+  const fileX = Math.floor(wx / span);
+  const fileY = Math.floor(wz / span);
+  return {
+    level,
+    fileX,
+    fileY,
+    i0: (wx - fileX * span) / spacing,
+    j0: (wz - fileY * span) / spacing,
+    stride: wanted / spacing,
+    uvOffsetX: (x0 - wx) / window,
+    uvOffsetY: (z0 - wz) / window,
+    uvScale: size / window,
+  };
+}
+
 /** Distance from a point to an axis-aligned box. */
 export function distanceToBox(
   px: number, py: number, pz: number,

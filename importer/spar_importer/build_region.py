@@ -11,10 +11,15 @@ import jsonschema
 import numpy as np
 from osgeo import gdal
 
+from .fetch import find_osm
+from .ground import ground_classes
+from .masks import CHANNELS, MASK_LEVELS, MASK_SPACING, build_planes, halve, horizon_biome, level_info, resize_bilinear, to_bytes
+from .osm import load_osm
 from .region import (
     APRON,
     CRS,
     FORMAT_VERSION,
+    HORIZON_BIOME_SPACING,
     HORIZON_MARGIN,
     HORIZON_SPACING,
     ROOT_LEVEL,
@@ -25,11 +30,16 @@ from .region import (
     load_schema,
 )
 from .sources import ElevationSource, available_sources
+from .vectors import build_vectors
 
 gdal.UseExceptions()
 
 HEIGHT_PATH = "heights/L{level}/{x}_{y}.bin"
+MASK_PATH = "masks/L{level}/{x}_{y}.bin"
 HORIZON_PATH = "horizon.bin"
+HORIZON_BIOME_PATH = "horizon_biome.bin"
+VECTORS_PATH = "vectors.json"
+OSM_ATTRIBUTION = "Map data © OpenStreetMap contributors, ODbL"
 # Height steps tried in order; the first that fits the elevation range in 16 bits is used.
 SCALES = (0.01, 0.02, 0.05, 0.1, 0.2, 0.5)
 
@@ -122,8 +132,28 @@ def choose_sources(region: Region, *, offline: bool, source_name: str | None) ->
     raise SystemExit("No elevation source covers the whole area.")
 
 
+def write_masks(out: Path, planes: dict[str, np.ndarray], size: int) -> list[dict]:
+    """Writes the mask pyramid, finest level first, and returns its level list."""
+    levels = []
+    for level in MASK_LEVELS:
+        if level > MASK_LEVELS[0]:
+            planes = halve(planes, drop_footpaths=level == MASK_LEVELS[-1])
+        info = level_info(level, size, SAMPLES)
+        stack = to_bytes(planes)
+        folder = out / f"masks/L{level}"
+        folder.mkdir(parents=True)
+        for y in range(info["count"]):
+            for x in range(info["count"]):
+                r0, c0 = y * (SAMPLES - 1), x * (SAMPLES - 1)
+                np.ascontiguousarray(stack[:, r0 : r0 + SAMPLES, c0 : c0 + SAMPLES]).tofile(folder / f"{x}_{y}.bin")
+        levels.append(info)
+        print(f"  masks level {level}: {info['count'] ** 2} file(s) at {1 << level} m")
+    return levels
+
+
 def build_region(region: Region, *, offline: bool = False, source_name: str | None = None) -> Path:
     primary, sources = choose_sources(region, offline=offline, source_name=source_name)
+    osm_path = find_osm(region, offline=offline)
     spacing = finest_spacing(primary.resolution)
     finest_level = spacing.bit_length() - 1
     print(f"elevation from {primary.label} ({primary.resolution:g} m), finest grid {spacing} m")
@@ -188,6 +218,32 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
     h_enc = encoding_for(horizon)
     encode(horizon, h_enc).tofile(out / HORIZON_PATH)
 
+    # Masks and vectors from OpenStreetMap, on a 2 m grid whatever the elevation source.
+    print(f"reading {osm_path.name}")
+    osm = load_osm(osm_path)
+    m_n = region.size // MASK_SPACING + 1
+    if spacing <= MASK_SPACING:
+        heights2 = np.ascontiguousarray(area[:: MASK_SPACING // spacing, :: MASK_SPACING // spacing])
+    else:
+        heights2 = resize_bilinear(area, m_n, m_n)
+    planes, treeline, lake_levels = build_planes(osm, heights2, west=region.west, north=region.north)
+    mask_levels = write_masks(out, planes, region.size)
+
+    hb_n = (region.size + 2 * HORIZON_MARGIN) // HORIZON_BIOME_SPACING + 1
+    horizon_biome(
+        osm,
+        resize_bilinear(horizon, hb_n, hb_n),
+        treeline,
+        west=region.west - HORIZON_MARGIN,
+        north=region.north + HORIZON_MARGIN,
+        spacing=HORIZON_BIOME_SPACING,
+    ).tofile(out / HORIZON_BIOME_PATH)
+
+    vectors = build_vectors(osm, region, lake_levels)
+    jsonschema.validate(vectors, load_schema("region-vectors"))
+    (out / VECTORS_PATH).write_text(json.dumps(vectors, ensure_ascii=False, separators=(",", ":")) + "\n")
+    print(f"  {len(vectors['roads'])} road part(s), {len(vectors['lakes'])} lake(s), {len(vectors['spawns'])} spawn point(s), treeline {treeline:.0f} m")
+
     latitude, longitude = region.center_wgs84()
     index = {
         "formatVersion": FORMAT_VERSION,
@@ -208,14 +264,25 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
             "max": round(float(area.max()), 2),
             "source": {"name": primary.label, "resolution": primary.resolution, "kind": primary.kind},
         },
+        "masks": {
+            "path": MASK_PATH,
+            "samples": SAMPLES,
+            "levels": mask_levels,
+            "channels": CHANNELS,
+            "biomes": ground_classes()["biomes"],
+            "surfaces": ground_classes()["surfaces"],
+            "treeline": round(treeline, 1),
+        },
         "horizon": {
             "path": HORIZON_PATH,
             "samples": h_n,
             "spacing": HORIZON_SPACING,
             "margin": HORIZON_MARGIN,
             "encoding": h_enc,
+            "biome": {"path": HORIZON_BIOME_PATH, "samples": hb_n, "spacing": HORIZON_BIOME_SPACING},
         },
-        "attribution": list(dict.fromkeys(s.attribution for s in sources)),
+        "vectors": {"path": VECTORS_PATH},
+        "attribution": list(dict.fromkeys([s.attribution for s in sources] + [OSM_ATTRIBUTION])),
     }
     jsonschema.validate(index, load_schema("region-index"))
     (out / "index.json").write_text(json.dumps(index, indent=2, ensure_ascii=False) + "\n")

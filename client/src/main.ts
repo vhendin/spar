@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { RegionIndex, Welcome } from '@spar/shared';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
+import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
 import { loadRegionIndex, RegionMissingError } from './terrain/region';
 import { Terrain } from './terrain/terrain';
@@ -71,6 +72,8 @@ async function start(): Promise<void> {
   let terrain: Terrain | null = null;
   let loadingRegion: string | null = null;
   let fps: number | null = null;
+  let shading: GroundShading | null = null;
+  let groundView = 0;
 
   const drawHud = (): void => {
     const lines = [`${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`, describe(link, terrain?.index ?? null)];
@@ -89,7 +92,8 @@ async function start(): Promise<void> {
     } else if (loadingRegion) {
       lines.push(`loading ${loadingRegion}…`);
     }
-    lines.push(fly.captured ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · Esc release' : 'click to fly');
+    if (groundView > 0) lines.push(`view: ${GROUND_VIEWS[groundView]}`);
+    lines.push(fly.captured ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · M masks · Esc release' : 'click to fly · M masks');
     hud.textContent = lines.join('\n');
   };
   drawHud();
@@ -98,7 +102,9 @@ async function start(): Promise<void> {
     loadingRegion = welcome.region;
     drawHud();
     const index = await loadRegionIndex(welcome.region);
-    const [ground, horizon] = await Promise.all([Terrain.load(index), loadHorizon(index)]);
+    shading = new GroundShading(index);
+    shading.view.value = groundView;
+    const [ground, horizon] = await Promise.all([Terrain.load(index, shading), loadHorizon(index, shading)]);
     scene.add(ground.group, horizon);
     terrain = ground;
 
@@ -109,6 +115,17 @@ async function start(): Promise<void> {
     const look = numbers(params, 'look', 2) ?? [0, -12];
     fly.setPose(pos[0]!, pos[1]!, pos[2]!, THREE.MathUtils.degToRad(look[0]!), THREE.MathUtils.degToRad(look[1]!));
   };
+
+  // M steps through the raw mask views; ?view=n starts in one.
+  const setView = (n: number): void => {
+    groundView = ((n % GROUND_VIEWS.length) + GROUND_VIEWS.length) % GROUND_VIEWS.length;
+    if (shading) shading.view.value = groundView;
+    drawHud();
+  };
+  setView(Number(params.get('view')) || 0);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyM' && !e.repeat) setView(groundView + (e.shiftKey ? -1 : 1));
+  });
 
   new Connection((state) => {
     link = state;
