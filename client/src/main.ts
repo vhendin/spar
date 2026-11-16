@@ -1,14 +1,26 @@
+import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
-import type { RegionIndex, Welcome } from '@spar/shared';
+import type { RegionIndex, RegionVectors, VehicleDef, Welcome } from '@spar/shared';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
 import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
-import { loadRegionIndex, RegionMissingError } from './terrain/region';
+import { loadRegionIndex, RegionMissingError, regionUrl } from './terrain/region';
 import { Terrain } from './terrain/terrain';
 import { Vegetation } from './vegetation/vegetation';
+import { ChaseCamera } from './vehicle/chaseCamera';
+import { GroundStore } from './vehicle/groundStore';
+import { DriveInput } from './vehicle/input';
+import { Obstacles } from './vehicle/obstacles';
+import { driveReadout } from './vehicle/overlay';
+import { VehicleSim } from './vehicle/sim';
+import { VehicleView } from './vehicle/view';
 
 const SKY = 0x9db8c8;
+/** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
+const STEP = 1 / 60;
+
+const VEHICLES = import.meta.glob<VehicleDef>('../../defs/vehicles/*.json', { eager: true, import: 'default' });
 
 const canvas = document.querySelector<HTMLCanvasElement>('#view')!;
 const hud = document.querySelector<HTMLDivElement>('#hud')!;
@@ -37,6 +49,23 @@ function numbers(params: URLSearchParams, key: string, count: number): number[] 
   return parts && parts.length === count && parts.every(Number.isFinite) ? parts : null;
 }
 
+/** Everything that exists once a region is loaded. */
+interface World {
+  index: RegionIndex;
+  terrain: Terrain;
+  shading: GroundShading;
+  vegetation: Vegetation | null;
+  physics: RAPIER.World;
+  ground: GroundStore;
+  obstacles: Obstacles | null;
+  sim: VehicleSim;
+  view: VehicleView;
+  /** Where the vehicle starts and returns to: position and heading in degrees. */
+  spawn: { x: number; z: number; heading: number; name: string };
+  /** True until the vehicle has been set down on loaded ground. */
+  unplaced: boolean;
+}
+
 async function start(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const renderer = new THREE.WebGPURenderer({
@@ -45,7 +74,7 @@ async function start(): Promise<void> {
     forceWebGL: params.get('renderer') === 'webgl',
   });
   // Falls back to WebGL 2 by itself when the browser has no WebGPU.
-  await renderer.init();
+  await Promise.all([renderer.init(), RAPIER.init()]);
   const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -58,8 +87,13 @@ async function start(): Promise<void> {
   sun.position.set(-0.6, 0.4, 0.65); // from the south-west, mid afternoon
   scene.add(sun);
 
-  const camera = new THREE.PerspectiveCamera(60, 1, 1, 60000);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 60000);
   const fly = new FlyCamera(camera, canvas);
+  // Driving is the default; ?fly=1 or the F key hands the camera over to free flight.
+  let flying = params.get('fly') === '1' || params.has('pos');
+  fly.enabled = flying;
+  const chase = new ChaseCamera(camera, canvas, () => !flying);
+  const input = new DriveInput();
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -70,53 +104,75 @@ async function start(): Promise<void> {
   resize();
 
   let link: ConnectionState = { status: 'connecting' };
-  let terrain: Terrain | null = null;
-  let vegetation: Vegetation | null = null;
+  let world: World | null = null;
   let loadingRegion: string | null = null;
   let fps: number | null = null;
-  let shading: GroundShading | null = null;
-  let groundView = 0;
+  let groundView = Number(params.get('view')) || 0;
+  let detailed = params.get('wheels') !== '0';
 
   const drawHud = (): void => {
-    const lines = [`${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`, describe(link, terrain?.index ?? null)];
-    if (terrain) {
+    const lines = [`${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`, describe(link, world?.index ?? null)];
+    if (world) {
+      const { terrain, vegetation, index, sim, obstacles } = world;
       const p = camera.position;
-      const { origin, heights } = terrain.index;
       const ground = terrain.heightAt(p.x, p.z);
       lines.push(
-        `E ${(origin.easting + p.x).toFixed(0)} N ${(origin.northing - p.z).toFixed(0)} · ${p.y.toFixed(0)} m` +
+        `E ${(index.origin.easting + p.x).toFixed(0)} N ${(index.origin.northing - p.z).toFixed(0)} · ${p.y.toFixed(0)} m` +
           (ground === null ? '' : ` (ground ${ground.toFixed(0)} m)`) +
-          ` · speed ${fly.speed.toFixed(0)} m/s`,
+          (flying ? ` · speed ${fly.speed.toFixed(0)} m/s` : ''),
         `terrain ${terrain.stats.nodes} patches · ${(terrain.stats.triangles / 1000).toFixed(0)}k triangles` +
           (terrain.stats.loading ? ` · loading ${terrain.stats.loading}` : '') +
-          ` · ${heights.source.name} ${heights.source.resolution} m`,
+          ` · ${index.heights.source.name} ${index.heights.source.resolution} m`,
       );
       if (vegetation) {
         const v = vegetation.stats;
         lines.push(
           `plants ${(v.meshes / 1000).toFixed(1)}k meshes (${(v.full / 1000).toFixed(1)}k full) · ${(v.impostors / 1000).toFixed(0)}k far trees in ${v.tiles} tiles` +
-            (v.loading ? ` · placing ${v.loading}` : ''),
+            (v.loading ? ` · placing ${v.loading}` : '') +
+            (obstacles ? ` · ${obstacles.count} solid nearby` : ''),
         );
       }
+      if (groundView > 0) lines.push(`view: ${GROUND_VIEWS[groundView]}`);
+      lines.push('', world.unplaced ? `${sim.def.title} · waiting for the ground at ${world.spawn.name}…` : `${sim.def.title} · ${driveReadout(sim, detailed)}`);
     } else if (loadingRegion) {
       lines.push(`loading ${loadingRegion}…`);
     }
-    if (groundView > 0) lines.push(`view: ${GROUND_VIEWS[groundView]}`);
-    lines.push(fly.captured ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · M masks · Esc release' : 'click to fly · M masks');
+    lines.push(
+      '',
+      flying
+        ? fly.captured
+          ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
+          : 'click to fly · F drive · M masks'
+        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · R reset · G wheels · F fly',
+    );
     hud.textContent = lines.join('\n');
   };
   drawHud();
+
+  const setDown = (w: World, x: number, z: number, heading: number): boolean => {
+    const y = w.ground.heightAt(x, z);
+    if (y === null) return false;
+    w.sim.place(x, y + 0.25, z, heading);
+    w.view.snap();
+    chase.reset();
+    return true;
+  };
 
   const enterRegion = async (welcome: Welcome): Promise<void> => {
     loadingRegion = welcome.region;
     drawHud();
     const index = await loadRegionIndex(welcome.region);
-    shading = new GroundShading(index);
+    const shading = new GroundShading(index);
     shading.view.value = groundView;
-    const [ground, horizon] = await Promise.all([Terrain.load(index, shading), loadHorizon(index, shading)]);
-    scene.add(ground.group, horizon);
-    terrain = ground;
+    const [terrain, horizon, vectors] = await Promise.all([
+      Terrain.load(index, shading),
+      loadHorizon(index, shading),
+      fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>),
+    ]);
+    scene.add(terrain.group, horizon);
+
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
+    let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
       vegetation = await Vegetation.create(renderer, index, welcome.seed);
       scene.add(vegetation.group);
@@ -128,12 +184,37 @@ async function start(): Promise<void> {
       }
     }
 
-    // Start above the middle of the area looking north, unless the URL says otherwise:
-    // ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n metres above the ground.
+    // Vehicle: ?vehicle=<name> picks a definition, ?spawn=<name or number> a start point.
+    const defs = Object.values(VEHICLES);
+    const def = defs.find((d) => d.name === params.get('vehicle')) ?? defs.find((d) => d.name === 'tgb11') ?? defs[0]!;
+    const wanted = params.get('spawn');
+    const spawn =
+      vectors.spawns.find((s) => s.name.toLowerCase() === wanted?.toLowerCase()) ??
+      vectors.spawns[Number(wanted) || 0] ??
+      vectors.spawns[0] ?? { name: 'the middle', x: index.size / 2, z: index.size / 2, heading: 0 };
+
+    const physics = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+    physics.timestep = STEP;
+    const ground = new GroundStore(RAPIER, physics, index);
+    const sim = new VehicleSim(RAPIER, physics, def, ground);
+    const view = new VehicleView(sim);
+    scene.add(view.group);
+    sim.place(spawn.x, (terrain.heightAt(spawn.x, spawn.z) ?? index.heights.max) + 1, spawn.z, spawn.heading);
+    view.snap();
+
+    world = {
+      index, terrain, shading, vegetation, physics, ground, sim, view, spawn,
+      obstacles: vegetation ? new Obstacles(RAPIER, physics, vegetation) : null,
+      unplaced: true,
+    };
+
+    // The fly camera starts above the middle of the area looking north, unless the URL says
+    // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
+    // metres above the ground.
     const mid = index.size / 2;
-    const pos = numbers(params, 'pos', 3) ?? [mid, (ground.heightAt(mid, mid) ?? index.heights.max) + 250, mid];
+    const pos = numbers(params, 'pos', 3) ?? [mid, (terrain.heightAt(mid, mid) ?? index.heights.max) + 250, mid];
     const agl = Number(params.get('agl'));
-    if (params.has('agl') && Number.isFinite(agl)) pos[1] = (ground.heightAt(pos[0]!, pos[2]!) ?? pos[1]!) + agl;
+    if (params.has('agl') && Number.isFinite(agl)) pos[1] = (terrain.heightAt(pos[0]!, pos[2]!) ?? pos[1]!) + agl;
     const look = numbers(params, 'look', 2) ?? [0, -12];
     fly.setPose(pos[0]!, pos[1]!, pos[2]!, THREE.MathUtils.degToRad(look[0]!), THREE.MathUtils.degToRad(look[1]!));
     scene.getObjectByName('atlas')?.position.set(pos[0]!, pos[1]!, pos[2]! - 30);
@@ -142,12 +223,46 @@ async function start(): Promise<void> {
   // M steps through the raw mask views; ?view=n starts in one.
   const setView = (n: number): void => {
     groundView = ((n % GROUND_VIEWS.length) + GROUND_VIEWS.length) % GROUND_VIEWS.length;
-    if (shading) shading.view.value = groundView;
+    if (world) world.shading.view.value = groundView;
     drawHud();
   };
-  setView(Number(params.get('view')) || 0);
+
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyM' && !e.repeat) setView(groundView + (e.shiftKey ? -1 : 1));
+    if (e.repeat) return;
+    const w = world;
+    switch (e.code) {
+      case 'KeyM':
+        setView(groundView + (e.shiftKey ? -1 : 1));
+        break;
+      case 'KeyF':
+        flying = !flying;
+        fly.enabled = flying;
+        if (flying) fly.adopt();
+        else {
+          document.exitPointerLock();
+          chase.reset();
+        }
+        break;
+      case 'KeyG':
+        detailed = !detailed;
+        break;
+      case 'KeyL':
+        if (!flying) w?.sim.toggleRange();
+        break;
+      case 'KeyR':
+        // Back on its wheels where it stands; with Shift, back to the start.
+        if (w && !flying) {
+          const p = w.sim.body.translation();
+          const r = w.sim.body.rotation();
+          const heading = 180 - THREE.MathUtils.radToDeg(Math.atan2(2 * (r.w * r.y + r.x * r.z), 1 - 2 * (r.y * r.y + r.x * r.x)));
+          if (e.shiftKey) w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
+          else setDown(w, p.x, p.z, heading);
+        }
+        break;
+      default:
+        if (!flying && /^Digit[1-9]$/.test(e.code)) w?.sim.toggleLock(Number(e.code.slice(5)) - 1);
+    }
+    drawHud();
   });
 
   new Connection((state) => {
@@ -168,18 +283,45 @@ async function start(): Promise<void> {
   let last = performance.now();
   let frames = 0;
   let fpsSince = last;
+  let owed = 0;
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
-    fly.update(dt);
-    terrain?.update(camera.position);
-    vegetation?.update(camera.position);
+
+    const w = world;
+    if (w) {
+      const controls = flying ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
+      owed += dt;
+      let steps = 0;
+      while (owed >= STEP && steps < 4) {
+        owed -= STEP;
+        steps++;
+        const p = w.sim.body.translation();
+        // Physics waits until the ground under the vehicle has arrived.
+        if (!w.ground.update(p.x, p.z)) continue;
+        if (w.unplaced) w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
+        w.sim.step(controls, STEP);
+        w.physics.step();
+        w.view.capture();
+        // Off the edge of the world or under it: start over.
+        if (w.sim.body.translation().y < w.index.heights.min - 50) w.unplaced = true;
+      }
+      if (steps === 4) owed = 0; // too slow to keep up: let time slip rather than spiral
+      w.view.render(w.unplaced ? 1 : owed / STEP);
+      const at = w.view.group.position;
+      w.obstacles?.update(now / 1000, at.x, at.z);
+
+      if (flying) fly.update(dt);
+      else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
+      w.terrain.update(camera.position);
+      w.vegetation?.update(camera.position);
+    }
     renderer.render(scene, camera);
 
     frames++;
-    if (now - fpsSince >= 500) {
+    if (now - fpsSince >= 250) {
       fps = (frames * 1000) / (now - fpsSince);
       frames = 0;
       fpsSince = now;

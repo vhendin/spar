@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isGroundClasses, isRegionDef, isSpecies, isVegetationRules } from './validate';
+import { isGroundClasses, isRegionDef, isSpecies, isVegetationRules, isVehicleDef } from './validate';
 
 const defs = join(import.meta.dirname, '../../defs');
 
@@ -34,6 +34,13 @@ describe('defs/ground.json', () => {
     }
     expect(ground.biomes[0]!.name).toBe('unknown');
     expect(ground.surfaces[0]!.name).toBe('none');
+  });
+
+  it('says what every land cover is to drive on, from the list of grounds', () => {
+    if (!isGroundClasses(ground)) return;
+    for (const biome of ground.biomes) expect(ground.grounds, biome.name).toContain(biome.ground);
+    for (const surface of ground.surfaces) if (surface.ground !== undefined) expect(ground.grounds, surface.name).toContain(surface.ground);
+    expect(ground.surfaces[0]!.ground).toBeUndefined();
   });
 });
 
@@ -79,5 +86,38 @@ describe('defs/species and defs/biomes.json', () => {
 
   it('covers the vegetation types of the milestone', () => {
     expect(files.length).toBeGreaterThanOrEqual(15);
+  });
+});
+
+describe('defs/vehicles', () => {
+  const files = readdirSync(join(defs, 'vehicles')).filter((f) => f.endsWith('.json'));
+  const grounds = (JSON.parse(readFileSync(join(defs, 'ground.json'), 'utf8')) as { grounds: string[] }).grounds;
+
+  it('has a 4x4 and a 6x6, to prove the axle count is data', () => {
+    const axles = files.map((f) => (JSON.parse(readFileSync(join(defs, 'vehicles', f), 'utf8')) as { axles: unknown[] }).axles.length);
+    expect(axles).toContain(2);
+    expect(axles).toContain(3);
+  });
+
+  it.each(files)('%s is a sound vehicle', (file) => {
+    const def: unknown = JSON.parse(readFileSync(join(defs, 'vehicles', file), 'utf8'));
+    expect(isVehicleDef(def), JSON.stringify(isVehicleDef.errors)).toBe(true);
+    if (!isVehicleDef(def)) return;
+    expect(def.name).toBe(basename(file, '.json'));
+    // Tyres know every kind of ground.
+    for (const table of [def.tires.grip, def.tires.wetGrip, def.tires.rollingResistance]) expect(Object.keys(table).sort()).toEqual([...grounds].sort());
+    expect(def.axles.reduce((sum, a) => sum + a.brakeShare, 0)).toBeCloseTo(1, 6);
+    expect(def.axles.some((a) => a.driven)).toBe(true);
+    expect(def.axles.some((a) => a.steer > 0)).toBe(true);
+    // Axles are listed front to rear and fit under the body.
+    const z = def.axles.map((a) => a.z);
+    expect(z).toEqual([...z].sort((a, b) => b - a));
+    expect(Math.max(...z.map(Math.abs)) + def.wheels.radius).toBeLessThan(def.body.length / 2 + 0.1);
+    // The springs carry the vehicle within their travel.
+    const perWheel = (def.chassis.mass * 9.81) / (def.axles.length * 2);
+    for (const axle of def.axles) expect(perWheel / axle.suspension.stiffness).toBeLessThan(axle.suspension.travel);
+    const rpm = def.drivetrain.torqueCurve.map((p) => p[0]!);
+    expect(rpm).toEqual([...rpm].sort((a, b) => a - b));
+    expect(def.attachments.map((a) => a.name)).toEqual(expect.arrayContaining(['front_tow', 'rear_tow']));
   });
 });

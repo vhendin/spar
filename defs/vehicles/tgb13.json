@@ -1,0 +1,217 @@
+{
+  "name": "tgb13",
+  "title": "Terrängbil 6×6",
+  "chassis": {
+    "mass": 2820,
+    "centerOfMass": [
+      0,
+      0.82,
+      0.05
+    ],
+    "groundClearance": 0.39,
+    "box": {
+      "center": [
+        0,
+        1.415,
+        0
+      ],
+      "size": [
+        1.86,
+        1.51,
+        5.25
+      ]
+    }
+  },
+  "wheels": {
+    "radius": 0.45,
+    "width": 0.27
+  },
+  "axles": [
+    {
+      "z": 1.75,
+      "track": 1.54,
+      "driven": true,
+      "steer": 32,
+      "brakeShare": 0.44,
+      "suspension": {
+        "travel": 0.26,
+        "stiffness": 62000,
+        "damping": 4600
+      },
+      "differential": "lockable"
+    },
+    {
+      "z": -0.55,
+      "track": 1.54,
+      "driven": true,
+      "steer": 0,
+      "brakeShare": 0.28,
+      "handbrake": true,
+      "suspension": {
+        "travel": 0.26,
+        "stiffness": 48000,
+        "damping": 3800
+      },
+      "differential": "lockable"
+    },
+    {
+      "z": -1.6,
+      "track": 1.54,
+      "driven": true,
+      "steer": 0,
+      "brakeShare": 0.28,
+      "handbrake": true,
+      "suspension": {
+        "travel": 0.26,
+        "stiffness": 48000,
+        "damping": 3800
+      },
+      "differential": "lockable"
+    }
+  ],
+  "drivetrain": {
+    "torqueCurve": [
+      [
+        800,
+        150
+      ],
+      [
+        1500,
+        190
+      ],
+      [
+        2500,
+        206
+      ],
+      [
+        3500,
+        200
+      ],
+      [
+        4250,
+        193
+      ],
+      [
+        5000,
+        165
+      ]
+    ],
+    "idle": 800,
+    "redline": 4700,
+    "gears": [
+      4.03,
+      2.16,
+      1.37,
+      1.0
+    ],
+    "reverse": 3.68,
+    "ranges": {
+      "high": 1.0,
+      "low": 2.1
+    },
+    "finalDrive": 5.99,
+    "efficiency": 0.85,
+    "engineBraking": 0.22,
+    "shift": {
+      "up": 3700,
+      "down": 1500
+    }
+  },
+  "brakes": {
+    "force": 23515
+  },
+  "tires": {
+    "grip": {
+      "asphalt": 0.95,
+      "gravel": 0.72,
+      "dirt": 0.62,
+      "grass": 0.55,
+      "rock": 0.78,
+      "sand": 0.5,
+      "bog": 0.36,
+      "water": 0.3
+    },
+    "wetGrip": {
+      "asphalt": 0.8,
+      "gravel": 0.85,
+      "dirt": 0.65,
+      "grass": 0.6,
+      "rock": 0.7,
+      "sand": 0.95,
+      "bog": 0.85,
+      "water": 1.0
+    },
+    "rollingResistance": {
+      "asphalt": 0.015,
+      "gravel": 0.03,
+      "dirt": 0.05,
+      "grass": 0.07,
+      "rock": 0.035,
+      "sand": 0.16,
+      "bog": 0.26,
+      "water": 0.5
+    }
+  },
+  "body": {
+    "length": 5.35,
+    "width": 1.93,
+    "height": 2.17,
+    "floor": 0.66,
+    "beltline": 1.32,
+    "cabLength": 1.5,
+    "windscreenRake": 0.16,
+    "rear": "canvas",
+    "roofRack": true,
+    "colors": {
+      "body": "#4d5a3c",
+      "roof": "#434c33",
+      "trim": "#23271f",
+      "glass": "#18242a",
+      "canvas": "#5e6248",
+      "hub": "#3d4630",
+      "tire": "#151515"
+    },
+    "headlights": [
+      [
+        0.66,
+        1.02,
+        2.675
+      ],
+      [
+        -0.66,
+        1.02,
+        2.675
+      ]
+    ],
+    "taillights": [
+      [
+        0.8,
+        0.95,
+        -2.675
+      ],
+      [
+        -0.8,
+        0.95,
+        -2.675
+      ]
+    ]
+  },
+  "attachments": [
+    {
+      "name": "front_tow",
+      "position": [
+        0,
+        0.62,
+        2.7249999999999996
+      ]
+    },
+    {
+      "name": "rear_tow",
+      "position": [
+        0,
+        0.62,
+        -2.7249999999999996
+      ]
+    }
+  ]
+}

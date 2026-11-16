@@ -1,25 +1,26 @@
 {
+  "grounds": ["asphalt", "gravel", "dirt", "grass", "rock", "sand", "bog", "water"],
   "biomes": [
-    { "id": 0, "name": "unknown" },
-    { "id": 1, "name": "forest" },
-    { "id": 2, "name": "wetland" },
-    { "id": 3, "name": "bare_rock" },
-    { "id": 4, "name": "scree" },
-    { "id": 5, "name": "heath" },
-    { "id": 6, "name": "grassland" },
-    { "id": 7, "name": "farmland" },
-    { "id": 8, "name": "water" },
-    { "id": 9, "name": "scrub" },
-    { "id": 10, "name": "built_up" },
-    { "id": 11, "name": "sand" }
+    { "id": 0, "name": "unknown", "ground": "dirt" },
+    { "id": 1, "name": "forest", "ground": "dirt" },
+    { "id": 2, "name": "wetland", "ground": "bog" },
+    { "id": 3, "name": "bare_rock", "ground": "rock" },
+    { "id": 4, "name": "scree", "ground": "rock" },
+    { "id": 5, "name": "heath", "ground": "grass" },
+    { "id": 6, "name": "grassland", "ground": "grass" },
+    { "id": 7, "name": "farmland", "ground": "grass" },
+    { "id": 8, "name": "water", "ground": "water" },
+    { "id": 9, "name": "scrub", "ground": "grass" },
+    { "id": 10, "name": "built_up", "ground": "gravel" },
+    { "id": 11, "name": "sand", "ground": "sand" }
   ],
   "surfaces": [
     { "id": 0, "name": "none" },
-    { "id": 1, "name": "asphalt" },
-    { "id": 2, "name": "gravel" },
-    { "id": 3, "name": "dirt" },
-    { "id": 4, "name": "trail" },
-    { "id": 5, "name": "boardwalk" },
-    { "id": 6, "name": "stream" }
+    { "id": 1, "name": "asphalt", "ground": "asphalt" },
+    { "id": 2, "name": "gravel", "ground": "gravel" },
+    { "id": 3, "name": "dirt", "ground": "dirt" },
+    { "id": 4, "name": "trail", "ground": "dirt" },
+    { "id": 5, "name": "boardwalk", "ground": "gravel" },
+    { "id": 6, "name": "stream", "ground": "water" }
   ]
 }

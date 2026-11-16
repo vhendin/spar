@@ -242,6 +242,39 @@ export class Vegetation {
     this.stats.loading = this.inFlight;
   }
 
+  /**
+   * Visits every placed object within `radius` of a point that vehicles can hit (species
+   * with a collider), giving its permanent name, shape, position, height and radius share.
+   */
+  forEachSolid(
+    x: number,
+    z: number,
+    radius: number,
+    visit: (key: string, shape: 'trunk' | 'rock', px: number, py: number, pz: number, size: number, radiusPerHeight: number) => void,
+  ): void {
+    const size = this.index.tileSize;
+    const perSide = size / CHUNK;
+    for (const tile of this.tiles.values()) {
+      if (tile.state !== 'ready') continue;
+      if (Math.max(tile.x - x, 0, x - tile.x - size) > radius || Math.max(tile.z - z, 0, z - tile.z - size) > radius) continue;
+      for (const placed of tile.layers) {
+        const starts = placed.chunkStart!;
+        for (let c = 0; c < perSide * perSide; c++) {
+          const cx = tile.x + (c % perSide) * CHUNK, cz = tile.z + Math.floor(c / perSide) * CHUNK;
+          if (Math.max(cx - x, 0, x - cx - CHUNK) > radius || Math.max(cz - z, 0, z - cz - CHUNK) > radius) continue;
+          for (let k = starts[c]!; k < starts[c + 1]!; k++) {
+            const collider = SPECIES[placed.species[k]!]!.collider;
+            if (!collider) continue;
+            const at = k * STRIDE;
+            const px = placed.data[at]!, pz = placed.data[at + 2]!;
+            if ((px - x) * (px - x) + (pz - z) * (pz - z) > radius * radius) continue;
+            visit(`${placed.layer}:${placed.cells[k * 2]}:${placed.cells[k * 2 + 1]}`, collider.shape, px, placed.data[at + 1]!, pz, placed.data[at + 3]!, collider.radiusPerHeight);
+          }
+        }
+      }
+    }
+  }
+
   /** The sheet of far-tree pictures on a board, for checking how they came out. */
   atlasBoard(width: number): THREE.Mesh {
     const height = (width * this.atlas.rows) / this.atlas.columns;

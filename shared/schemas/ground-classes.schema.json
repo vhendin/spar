@@ -1,23 +1,62 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "GroundClasses",
-  "description": "The land cover (biome) classes and the surface classes of narrow features (roads, paths, streams) stored in region masks. Lives in defs/ground.json. Ids are what the mask files hold; never renumber, only append.",
+  "description": "The land cover (biome) classes and the surface classes of narrow features (roads, paths, streams) stored in region masks, and the kind of ground each one is to drive on. Lives in defs/ground.json. Ids are what the mask files hold; never renumber, only append.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["biomes", "surfaces"],
+  "required": [
+    "grounds",
+    "biomes",
+    "surfaces"
+  ],
   "properties": {
-    "biomes": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/GroundClass" } },
-    "surfaces": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/GroundClass" } }
+    "grounds": {
+      "description": "Kinds of ground a tyre can stand on; vehicle definitions give grip and rolling resistance for each.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "biomes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/GroundClass"
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/GroundClass"
+      }
+    }
   },
   "definitions": {
     "GroundClass": {
       "title": "GroundClass",
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "properties": {
-        "id": { "type": "integer", "minimum": 0, "maximum": 255 },
-        "name": { "type": "string", "pattern": "^[a-z0-9_]+$" }
+        "id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "ground": {
+          "description": "What this class is to drive on: one of `grounds`. A surface class without it leaves the land cover's ground in force.",
+          "type": "string"
+        }
       }
     }
   }

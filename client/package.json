@@ -8,6 +8,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "@spar/shared": "workspace:*",
     "three": "^0.187.0"
   },

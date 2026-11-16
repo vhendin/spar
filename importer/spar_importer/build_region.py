@@ -269,8 +269,8 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
             "samples": SAMPLES,
             "levels": mask_levels,
             "channels": CHANNELS,
-            "biomes": ground_classes()["biomes"],
-            "surfaces": ground_classes()["surfaces"],
+            "biomes": [{"id": c["id"], "name": c["name"]} for c in ground_classes()["biomes"]],
+            "surfaces": [{"id": c["id"], "name": c["name"]} for c in ground_classes()["surfaces"]],
             "treeline": round(treeline, 1),
         },
         "horizon": {

@@ -14,6 +14,8 @@ const KEYS_DOWN = ['KeyQ', 'ControlLeft'];
 export class FlyCamera {
   /** Base speed in metres per second. */
   speed = 60;
+  /** When false the camera ignores keys and mouse, e.g. while driving. */
+  enabled = true;
   private yaw = 0;
   private pitch = 0;
   private readonly down = new Set<string>();
@@ -27,11 +29,12 @@ export class FlyCamera {
     this.pitch = camera.rotation.x;
 
     element.addEventListener('click', () => {
+      if (!this.enabled) return;
       // Rejected when the page is not focused or the user just pressed Esc; harmless.
       Promise.resolve(element.requestPointerLock()).catch(() => {});
     });
     document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== element) return;
+      if (document.pointerLockElement !== element || !this.enabled) return;
       this.yaw -= e.movementX * 0.0022;
       this.pitch -= e.movementY * 0.0022;
       const limit = Math.PI / 2 - 0.01;
@@ -40,6 +43,7 @@ export class FlyCamera {
     element.addEventListener(
       'wheel',
       (e) => {
+        if (!this.enabled) return;
         e.preventDefault();
         this.speed = Math.max(1, Math.min(2000, this.speed * (e.deltaY < 0 ? 1.25 : 0.8)));
       },
@@ -70,7 +74,15 @@ export class FlyCamera {
     return (has(positive) ? 1 : 0) - (has(negative) ? 1 : 0);
   }
 
+  /** Takes over from wherever the camera is now looking. */
+  adopt(): void {
+    this.camera.rotation.reorder('YXZ');
+    this.yaw = this.camera.rotation.y;
+    this.pitch = this.camera.rotation.x;
+  }
+
   update(dt: number): void {
+    if (!this.enabled) return;
     this.camera.rotation.set(this.pitch, this.yaw, 0);
 
     const forward = this.axis(KEYS_FORWARD, KEYS_BACK);

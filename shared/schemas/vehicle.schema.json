@@ -1,0 +1,488 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VehicleDef",
+  "description": "A vehicle, defined entirely as data. Lives in defs/vehicles/<name>.json. Positions are [x, y, z] in metres in the vehicle's own frame: x to the left, y up, z forward, measured from the point on the ground under the middle of the body when it stands still.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "title",
+    "chassis",
+    "wheels",
+    "axles",
+    "drivetrain",
+    "brakes",
+    "tires",
+    "body",
+    "attachments"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "chassis": {
+      "title": "Chassis",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mass",
+        "centerOfMass",
+        "groundClearance",
+        "box"
+      ],
+      "properties": {
+        "mass": {
+          "description": "Kilograms, ready to drive.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "centerOfMass": {
+          "$ref": "#/definitions/Vec3"
+        },
+        "box": {
+          "title": "CollisionBox",
+          "description": "The bodywork as a box for collisions: its centre and full width, height and length. The frame under it, between the axles and down to the ground clearance, is added automatically; keeping the box above the wheels gives the vehicle its approach and departure angles.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "center",
+            "size"
+          ],
+          "properties": {
+            "center": {
+              "$ref": "#/definitions/Vec3"
+            },
+            "size": {
+              "$ref": "#/definitions/Vec3"
+            }
+          }
+        },
+        "groundClearance": {
+          "description": "Height of the lowest part between the axles.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "wheels": {
+      "title": "Wheels",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "radius",
+        "width"
+      ],
+      "properties": {
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "axles": {
+      "description": "Front to rear; any number.",
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "title": "Axle",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "z",
+          "track",
+          "driven",
+          "steer",
+          "brakeShare",
+          "suspension",
+          "differential"
+        ],
+        "properties": {
+          "z": {
+            "description": "Position along the vehicle, metres forward of the middle.",
+            "type": "number"
+          },
+          "track": {
+            "description": "Distance between the two wheels' centres.",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "driven": {
+            "type": "boolean"
+          },
+          "steer": {
+            "description": "Largest steering angle in degrees; 0 for an axle that does not steer.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 60
+          },
+          "brakeShare": {
+            "description": "Share of the total brake force this axle gets; shares add up to 1.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "handbrake": {
+            "type": "boolean"
+          },
+          "suspension": {
+            "title": "Suspension",
+            "description": "Per wheel.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "travel",
+              "stiffness",
+              "damping"
+            ],
+            "properties": {
+              "travel": {
+                "description": "Metres the wheel can move up or down from where it rests.",
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "stiffness": {
+                "description": "Spring rate in newtons per metre.",
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "damping": {
+                "description": "Damper rate in newton seconds per metre.",
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          },
+          "differential": {
+            "description": "open sends drive to the wheel that turns easiest; lockable can be locked by the driver; locked always drives both wheels together.",
+            "type": "string",
+            "enum": [
+              "open",
+              "lockable",
+              "locked"
+            ]
+          }
+        }
+      }
+    },
+    "drivetrain": {
+      "title": "Drivetrain",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "torqueCurve",
+        "idle",
+        "redline",
+        "gears",
+        "reverse",
+        "ranges",
+        "finalDrive",
+        "efficiency",
+        "engineBraking",
+        "shift"
+      ],
+      "properties": {
+        "torqueCurve": {
+          "description": "Engine torque at full throttle as [rpm, newton metres] points, rising in rpm.",
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "idle": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "redline": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "gears": {
+          "description": "Forward gear ratios, first gear first.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "reverse": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "ranges": {
+          "title": "Ranges",
+          "description": "Transfer case ratios.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "high",
+            "low"
+          ],
+          "properties": {
+            "high": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "low": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "finalDrive": {
+          "description": "Axle ratio including any hub reduction.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "efficiency": {
+          "description": "Share of engine torque that reaches the wheels.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "engineBraking": {
+          "description": "Braking torque with the throttle closed at the redline, as a share of peak torque.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "shift": {
+          "title": "ShiftPoints",
+          "description": "Engine speeds at which the automatic gear change shifts.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "up",
+            "down"
+          ],
+          "properties": {
+            "up": {
+              "type": "number"
+            },
+            "down": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "brakes": {
+      "title": "Brakes",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "force"
+      ],
+      "properties": {
+        "force": {
+          "description": "Total braking force at the tyres with the pedal down, newtons.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "tires": {
+      "title": "Tires",
+      "description": "Keyed by the ground names of defs/ground.json.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grip",
+        "wetGrip",
+        "rollingResistance"
+      ],
+      "properties": {
+        "grip": {
+          "description": "Friction coefficient on dry ground.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "wetGrip": {
+          "description": "Multiplier on grip when the ground is soaked.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "rollingResistance": {
+          "description": "Drag as a share of the load on the wheel.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "body": {
+      "title": "Body",
+      "description": "Parameters of the procedural body. Heights are above the ground.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "length",
+        "width",
+        "height",
+        "floor",
+        "beltline",
+        "cabLength",
+        "windscreenRake",
+        "rear",
+        "roofRack",
+        "colors",
+        "headlights",
+        "taillights"
+      ],
+      "properties": {
+        "length": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "floor": {
+          "description": "Height of the body's lower edge.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "beltline": {
+          "description": "Height where the windows start.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cabLength": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "windscreenRake": {
+          "description": "How far the top of the windscreen leans back, metres.",
+          "type": "number",
+          "minimum": 0
+        },
+        "rear": {
+          "description": "What sits behind the cab.",
+          "type": "string",
+          "enum": [
+            "hardtop",
+            "canvas",
+            "pickup"
+          ]
+        },
+        "roofRack": {
+          "type": "boolean"
+        },
+        "colors": {
+          "title": "BodyColors",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "body",
+            "roof",
+            "trim",
+            "glass",
+            "canvas",
+            "hub",
+            "tire"
+          ],
+          "properties": {
+            "body": {
+              "$ref": "#/definitions/Color"
+            },
+            "roof": {
+              "$ref": "#/definitions/Color"
+            },
+            "trim": {
+              "$ref": "#/definitions/Color"
+            },
+            "glass": {
+              "$ref": "#/definitions/Color"
+            },
+            "canvas": {
+              "$ref": "#/definitions/Color"
+            },
+            "hub": {
+              "$ref": "#/definitions/Color"
+            },
+            "tire": {
+              "$ref": "#/definitions/Color"
+            }
+          }
+        },
+        "headlights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Vec3"
+          }
+        },
+        "taillights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Vec3"
+          }
+        }
+      }
+    },
+    "attachments": {
+      "description": "Points where things can be hooked on; reserved for the winch.",
+      "type": "array",
+      "items": {
+        "title": "Attachment",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "position"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/definitions/Vec3"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Vec3": {
+      "title": "Vec3",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      }
+    },
+    "Color": {
+      "title": "VehicleColor",
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    }
+  }
+}

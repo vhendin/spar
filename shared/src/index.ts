@@ -6,3 +6,6 @@ export type * from './generated/region-index';
 export type * from './generated/region-vectors';
 export type * from './generated/species';
 export type * from './generated/vegetation-rules';
+export type * from './generated/vehicle';
+export * from './vehicle/drivetrain';
+export * from './vehicle/tires';

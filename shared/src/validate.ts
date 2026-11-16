@@ -10,9 +10,11 @@ import type { GroundClasses } from './generated/ground-classes';
 import type { RegionDef } from './generated/region-def';
 import type { RegionIndex } from './generated/region-index';
 import speciesSchema from '../schemas/species.schema.json' with { type: 'json' };
+import vehicleSchema from '../schemas/vehicle.schema.json' with { type: 'json' };
 import vegetationRulesSchema from '../schemas/vegetation-rules.schema.json' with { type: 'json' };
 import type { Species } from './generated/species';
 import type { VegetationRules } from './generated/vegetation-rules';
+import type { VehicleDef } from './generated/vehicle';
 import type { ClientMessage, ServerMessage } from './protocol';
 
 const ajv = new Ajv({ allErrors: false });
@@ -24,3 +26,4 @@ export const isRegionIndex = ajv.compile(regionIndexSchema) as ValidateFunction<
 export const isGroundClasses = ajv.compile(groundClassesSchema) as ValidateFunction<GroundClasses>;
 export const isSpecies = ajv.compile(speciesSchema) as ValidateFunction<Species>;
 export const isVegetationRules = ajv.compile(vegetationRulesSchema) as ValidateFunction<VegetationRules>;
+export const isVehicleDef = ajv.compile(vehicleSchema) as ValidateFunction<VehicleDef>;
