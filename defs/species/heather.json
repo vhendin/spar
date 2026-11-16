@@ -1,0 +1,33 @@
+{
+  "name": "heather",
+  "title": "Heather (ljung)",
+  "generator": "shrub",
+  "variants": 3,
+  "params": {
+    "form": "mound",
+    "lobes": [
+      6,
+      8
+    ],
+    "spread": [
+      2.4,
+      3.4
+    ],
+    "lean": 0.0
+  },
+  "colors": {
+    "foliage": "#5a6a3e",
+    "accent": "#a0628f",
+    "variation": 0.18
+  },
+  "seasons": {
+    "spring": "#5f6c40",
+    "summer": "#5a6a3e",
+    "autumn": "#74566a",
+    "winter": "#544a3a"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 0.7
+  }
+}

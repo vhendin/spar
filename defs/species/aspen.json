@@ -1,0 +1,60 @@
+{
+  "name": "aspen",
+  "title": "Aspen (asp)",
+  "generator": "broadleaf",
+  "variants": 3,
+  "params": {
+    "stems": 1,
+    "split": [
+      0.55,
+      0.7
+    ],
+    "branches": [
+      3,
+      4
+    ],
+    "crownWidth": [
+      0.2,
+      0.27
+    ],
+    "elongate": [
+      1.1,
+      1.4
+    ],
+    "blobs": [
+      6,
+      8
+    ],
+    "trunkRadius": 0.015,
+    "crook": [
+      0.0,
+      0.02
+    ],
+    "lean": [
+      0.0,
+      0.04
+    ],
+    "barkMarks": 0.15
+  },
+  "colors": {
+    "bark": "#9aa08c",
+    "barkTop": "#b3b8a2",
+    "foliage": "#5f8a45",
+    "accent": "#4a4a40",
+    "variation": 0.14
+  },
+  "seasons": {
+    "spring": "#9cbf62",
+    "summer": "#5f8a45",
+    "autumn": "#e0a528",
+    "winter": "#6a6258"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.3
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.013
+  }
+}

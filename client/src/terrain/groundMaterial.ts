@@ -124,7 +124,7 @@ export class GroundShading {
 
       const color = this.biomeColors.element(biome).toVar();
       // Tall forest shades its floor; wet ground is darker; steep ground is bare.
-      color.assign(mix(color, deepForest, select(biome.equal(int(this.forestId)), clamp(canopy.div(22), 0, 1).mul(0.55), 0)));
+      color.assign(mix(color, deepForest, select(biome.equal(int(this.forestId)), clamp(canopy.div(22), 0, 1).mul(0.3), 0)));
       color.mulAssign(select(isWater, 1, float(1).sub(wet.mul(0.4))));
       color.assign(mix(color, rockColor, select(isWater, 0, rock)));
       color.mulAssign(select(isWater, 1, tint));

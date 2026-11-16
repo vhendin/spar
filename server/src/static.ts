@@ -58,7 +58,17 @@ export async function serveFile(
   }
   if (!info.isFile()) return send(res, 404, 'Not found');
 
+  // Region files change only when the importer runs: let browsers keep them and ask
+  // whether they are still current, instead of downloading them again.
+  const etag = `"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`;
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, { ETag: etag, 'Cache-Control': opts.immutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
+    res.end();
+    return;
+  }
+
   res.writeHead(200, {
+    ETag: etag,
     'Content-Type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
     'Content-Length': info.size,
     'Cache-Control': opts.immutable ? 'public, max-age=31536000, immutable' : 'no-cache',

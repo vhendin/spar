@@ -9,6 +9,10 @@ import serverSchema from '../schemas/server-message.schema.json' with { type: 'j
 import type { GroundClasses } from './generated/ground-classes';
 import type { RegionDef } from './generated/region-def';
 import type { RegionIndex } from './generated/region-index';
+import speciesSchema from '../schemas/species.schema.json' with { type: 'json' };
+import vegetationRulesSchema from '../schemas/vegetation-rules.schema.json' with { type: 'json' };
+import type { Species } from './generated/species';
+import type { VegetationRules } from './generated/vegetation-rules';
 import type { ClientMessage, ServerMessage } from './protocol';
 
 const ajv = new Ajv({ allErrors: false });
@@ -18,3 +22,5 @@ export const isServerMessage = ajv.compile(serverSchema) as ValidateFunction<Ser
 export const isRegionDef = ajv.compile(regionDefSchema) as ValidateFunction<RegionDef>;
 export const isRegionIndex = ajv.compile(regionIndexSchema) as ValidateFunction<RegionIndex>;
 export const isGroundClasses = ajv.compile(groundClassesSchema) as ValidateFunction<GroundClasses>;
+export const isSpecies = ajv.compile(speciesSchema) as ValidateFunction<Species>;
+export const isVegetationRules = ajv.compile(vegetationRulesSchema) as ValidateFunction<VegetationRules>;

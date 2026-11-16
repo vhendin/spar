@@ -1,0 +1,60 @@
+{
+  "name": "birch",
+  "title": "Birch (björk)",
+  "generator": "broadleaf",
+  "variants": 4,
+  "params": {
+    "stems": 1,
+    "split": [
+      0.45,
+      0.6
+    ],
+    "branches": [
+      3,
+      5
+    ],
+    "crownWidth": [
+      0.2,
+      0.28
+    ],
+    "elongate": [
+      1.4,
+      1.9
+    ],
+    "blobs": [
+      7,
+      9
+    ],
+    "trunkRadius": 0.014,
+    "crook": [
+      0.01,
+      0.035
+    ],
+    "lean": [
+      0.0,
+      0.05
+    ],
+    "barkMarks": 0.45
+  },
+  "colors": {
+    "bark": "#e6e2d6",
+    "barkTop": "#c9c2b2",
+    "foliage": "#6b8f3a",
+    "accent": "#2a2622",
+    "variation": 0.16
+  },
+  "seasons": {
+    "spring": "#93b94e",
+    "summer": "#6b8f3a",
+    "autumn": "#d8b030",
+    "winter": "#6e6258"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.45
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.012
+  }
+}

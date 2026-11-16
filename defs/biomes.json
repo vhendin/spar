@@ -1,0 +1,578 @@
+{
+  "layers": [
+    {
+      "name": "trees",
+      "spacing": 4.5,
+      "batch": "tile",
+      "ranges": {
+        "full": 55,
+        "low": 220,
+        "impostor": 2500
+      }
+    },
+    {
+      "name": "rocks",
+      "spacing": 11,
+      "batch": "tile",
+      "ranges": {
+        "full": 60,
+        "low": 220
+      }
+    },
+    {
+      "name": "shrubs",
+      "spacing": 2.2,
+      "batch": "patch",
+      "ranges": {
+        "full": 90
+      }
+    },
+    {
+      "name": "ground",
+      "spacing": 0.8,
+      "batch": "patch",
+      "ranges": {
+        "full": 45
+      }
+    }
+  ],
+  "rules": [
+    {
+      "species": "spruce",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.38
+      },
+      "wetness": {
+        "prefer": [
+          0.15,
+          0.7
+        ],
+        "tolerate": [
+          0.0,
+          0.92
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -140
+        ],
+        "tolerate": [
+          -9999,
+          -50
+        ]
+      },
+      "slope": {
+        "prefer": [
+          0,
+          30
+        ],
+        "tolerate": [
+          0,
+          45
+        ]
+      },
+      "size": {
+        "canopy": 1.05
+      }
+    },
+    {
+      "species": "pine",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.26,
+        "bare_rock": 0.03
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.3
+        ],
+        "tolerate": [
+          0.0,
+          0.6
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -120
+        ],
+        "tolerate": [
+          -9999,
+          -40
+        ]
+      },
+      "slope": {
+        "prefer": [
+          0,
+          35
+        ],
+        "tolerate": [
+          0,
+          50
+        ]
+      },
+      "size": {
+        "canopy": 1.0
+      }
+    },
+    {
+      "species": "birch",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.13,
+        "grassland": 0.012,
+        "built_up": 0.03,
+        "wetland": 0.01
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.75
+        ],
+        "tolerate": [
+          0.0,
+          0.9
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -90
+        ],
+        "tolerate": [
+          -9999,
+          -20
+        ]
+      },
+      "slope": {
+        "prefer": [
+          0,
+          30
+        ],
+        "tolerate": [
+          0,
+          45
+        ]
+      },
+      "size": {
+        "canopy": 0.85
+      }
+    },
+    {
+      "species": "birch",
+      "layer": "trees",
+      "biomes": {
+        "grassland": 0.01,
+        "built_up": 0.02,
+        "wetland": 0.008
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -90
+        ],
+        "tolerate": [
+          -9999,
+          -20
+        ]
+      },
+      "size": {
+        "range": [
+          5,
+          13
+        ]
+      }
+    },
+    {
+      "species": "mountain_birch",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.6,
+        "scrub": 0.3,
+        "heath": 0.03,
+        "grassland": 0.015
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.8
+        ],
+        "tolerate": [
+          0.0,
+          0.92
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -110,
+          20
+        ],
+        "tolerate": [
+          -190,
+          70
+        ]
+      },
+      "slope": {
+        "prefer": [
+          0,
+          35
+        ],
+        "tolerate": [
+          0,
+          50
+        ]
+      },
+      "size": {
+        "range": [
+          2.5,
+          5.5
+        ]
+      }
+    },
+    {
+      "species": "aspen",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.02
+      },
+      "wetness": {
+        "prefer": [
+          0.1,
+          0.6
+        ],
+        "tolerate": [
+          0.0,
+          0.8
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -150
+        ],
+        "tolerate": [
+          -9999,
+          -80
+        ]
+      },
+      "size": {
+        "canopy": 1.0
+      }
+    },
+    {
+      "species": "rowan",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.02,
+        "scrub": 0.03,
+        "built_up": 0.01
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -60
+        ],
+        "tolerate": [
+          -9999,
+          -10
+        ]
+      },
+      "size": {
+        "range": [
+          3,
+          7
+        ]
+      }
+    },
+    {
+      "species": "alder",
+      "layer": "trees",
+      "biomes": {
+        "forest": 0.3,
+        "wetland": 0.02,
+        "grassland": 0.05
+      },
+      "wetness": {
+        "prefer": [
+          0.8,
+          1.0
+        ],
+        "tolerate": [
+          0.62,
+          1.0
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -100
+        ],
+        "tolerate": [
+          -9999,
+          -40
+        ]
+      },
+      "size": {
+        "range": [
+          5,
+          11
+        ]
+      }
+    },
+    {
+      "species": "bog_pine",
+      "layer": "trees",
+      "biomes": {
+        "wetland": 0.045
+      },
+      "wetness": {
+        "prefer": [
+          0.5,
+          1.0
+        ],
+        "tolerate": [
+          0.3,
+          1.0
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -60
+        ],
+        "tolerate": [
+          -9999,
+          0
+        ]
+      },
+      "size": {
+        "range": [
+          2,
+          5.5
+        ]
+      }
+    },
+    {
+      "species": "boulder",
+      "layer": "rocks",
+      "biomes": {
+        "forest": 0.1,
+        "heath": 0.22,
+        "scree": 0.9,
+        "bare_rock": 0.35,
+        "scrub": 0.1,
+        "grassland": 0.03
+      },
+      "slope": {
+        "prefer": [
+          8,
+          90
+        ],
+        "tolerate": [
+          -12,
+          90
+        ]
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.6
+        ],
+        "tolerate": [
+          0.0,
+          0.9
+        ]
+      },
+      "size": {
+        "range": [
+          0.4,
+          2.4
+        ],
+        "skew": 3
+      }
+    },
+    {
+      "species": "juniper",
+      "layer": "shrubs",
+      "biomes": {
+        "forest": 0.03,
+        "heath": 0.025,
+        "grassland": 0.02,
+        "scrub": 0.05
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.3
+        ],
+        "tolerate": [
+          0.0,
+          0.6
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          40
+        ],
+        "tolerate": [
+          -9999,
+          120
+        ]
+      },
+      "size": {
+        "range": [
+          0.6,
+          2.4
+        ],
+        "skew": 2
+      }
+    },
+    {
+      "species": "blueberry",
+      "layer": "shrubs",
+      "biomes": {
+        "forest": 0.4,
+        "heath": 0.1,
+        "scrub": 0.2
+      },
+      "wetness": {
+        "prefer": [
+          0.15,
+          0.7
+        ],
+        "tolerate": [
+          0.0,
+          0.85
+        ]
+      },
+      "size": {
+        "range": [
+          0.22,
+          0.42
+        ]
+      }
+    },
+    {
+      "species": "heather",
+      "layer": "shrubs",
+      "biomes": {
+        "forest": 0.16,
+        "heath": 0.32,
+        "wetland": 0.2,
+        "bare_rock": 0.06,
+        "scrub": 0.2
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.45
+        ],
+        "tolerate": [
+          0.0,
+          0.95
+        ]
+      },
+      "size": {
+        "range": [
+          0.2,
+          0.4
+        ]
+      }
+    },
+    {
+      "species": "grass",
+      "layer": "ground",
+      "biomes": {
+        "grassland": 0.75,
+        "farmland": 0.85,
+        "built_up": 0.3,
+        "forest": 0.08,
+        "heath": 0.14,
+        "scrub": 0.3
+      },
+      "wetness": {
+        "prefer": [
+          0.0,
+          0.6
+        ],
+        "tolerate": [
+          0.0,
+          0.85
+        ]
+      },
+      "size": {
+        "range": [
+          0.25,
+          0.55
+        ]
+      }
+    },
+    {
+      "species": "sedge",
+      "layer": "ground",
+      "biomes": {
+        "wetland": 0.6,
+        "forest": 0.3,
+        "grassland": 0.4,
+        "heath": 0.3,
+        "scrub": 0.3
+      },
+      "wetness": {
+        "prefer": [
+          0.82,
+          1.0
+        ],
+        "tolerate": [
+          0.66,
+          1.0
+        ]
+      },
+      "size": {
+        "range": [
+          0.3,
+          0.65
+        ]
+      }
+    },
+    {
+      "species": "reed",
+      "layer": "ground",
+      "biomes": {
+        "wetland": 0.35,
+        "forest": 0.3,
+        "grassland": 0.3,
+        "scrub": 0.3
+      },
+      "wetness": {
+        "prefer": [
+          0.94,
+          1.0
+        ],
+        "tolerate": [
+          0.9,
+          1.0
+        ]
+      },
+      "elevation": {
+        "prefer": [
+          -9999,
+          -80
+        ],
+        "tolerate": [
+          -9999,
+          -20
+        ]
+      },
+      "size": {
+        "range": [
+          1.2,
+          2.1
+        ]
+      }
+    }
+  ]
+}

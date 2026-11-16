@@ -1,0 +1,63 @@
+{
+  "name": "mountain_birch",
+  "title": "Mountain birch (fjällbjörk)",
+  "generator": "broadleaf",
+  "variants": 4,
+  "params": {
+    "stems": [
+      2,
+      4
+    ],
+    "split": [
+      0.2,
+      0.35
+    ],
+    "branches": [
+      2,
+      3
+    ],
+    "crownWidth": [
+      0.4,
+      0.6
+    ],
+    "elongate": [
+      0.8,
+      1.1
+    ],
+    "blobs": [
+      6,
+      8
+    ],
+    "trunkRadius": 0.03,
+    "crook": [
+      0.08,
+      0.16
+    ],
+    "lean": [
+      0.1,
+      0.3
+    ],
+    "barkMarks": 0.3
+  },
+  "colors": {
+    "bark": "#cfc8b8",
+    "barkTop": "#a39a8a",
+    "foliage": "#628538",
+    "accent": "#3a332c",
+    "variation": 0.18
+  },
+  "seasons": {
+    "spring": "#8fb24a",
+    "summer": "#628538",
+    "autumn": "#d29a2c",
+    "winter": "#6b5f55"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.4
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.02
+  }
+}

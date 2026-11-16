@@ -255,7 +255,19 @@ def wetness_index(heights2: np.ndarray, slope2: np.ndarray, biome: np.ndarray) -
     wet *= 0.5 + 0.5 * np.clip(1 - slope2 / 8.0, 0, 1)
     wetland = biome == biome_id("wetland")
     wet[wetland] = np.maximum(wet[wetland], 0.7) * 0.3 + 0.7
-    wet[biome == biome_id("water")] = 1.0
+    # Shores: the few metres of ground beside open water are wet, for reeds and sedges.
+    water = biome == biome_id("water")
+    reach = water.copy()
+    for step in range(1, 4):
+        grown = reach.copy()
+        grown[1:] |= reach[:-1]
+        grown[:-1] |= reach[1:]
+        grown[:, 1:] |= reach[:, :-1]
+        grown[:, :-1] |= reach[:, 1:]
+        shore = grown & ~reach
+        wet[shore] = np.maximum(wet[shore], 1.0 - 0.03 * step)
+        reach = grown
+    wet[water] = 1.0
     return wet
 
 

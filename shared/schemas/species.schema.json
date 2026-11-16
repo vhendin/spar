@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Species",
+  "description": "One kind of plant or rock, drawn by a procedural generator. Lives in defs/species/<name>.json. Adding a species means adding a file here and a rule in defs/biomes.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "title", "generator", "variants", "params", "colors", "seasons", "deciduous", "wind"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "title": { "description": "English name, with the Swedish name in brackets.", "type": "string" },
+    "generator": { "description": "Which mesh generator builds it.", "type": "string", "enum": ["conifer", "broadleaf", "shrub", "grass", "boulder"] },
+    "variants": { "description": "How many different individuals are generated; instances pick one at random.", "type": "integer", "minimum": 1, "maximum": 8 },
+    "params": {
+      "description": "Shape parameters read by the generator. A [min, max] pair is drawn anew for every variant. Lengths are fractions of the plant's height.",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "string" },
+          { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } }
+        ]
+      }
+    },
+    "colors": {
+      "title": "SpeciesColors",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["foliage", "variation"],
+      "properties": {
+        "bark": { "$ref": "#/definitions/Color" },
+        "barkTop": { "description": "Bark colour high on the trunk, when it differs.", "$ref": "#/definitions/Color" },
+        "foliage": { "description": "Main colour in summer; for rocks, the stone.", "$ref": "#/definitions/Color" },
+        "accent": { "description": "Tips, flowers, seed heads or lichen.", "$ref": "#/definitions/Color" },
+        "variation": { "description": "How much individuals differ in brightness, 0 to 0.5.", "type": "number", "minimum": 0, "maximum": 0.5 }
+      }
+    },
+    "seasons": {
+      "title": "SeasonColors",
+      "description": "Foliage colour through the year.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spring", "summer", "autumn", "winter"],
+      "properties": {
+        "spring": { "$ref": "#/definitions/Color" },
+        "summer": { "$ref": "#/definitions/Color" },
+        "autumn": { "$ref": "#/definitions/Color" },
+        "winter": { "$ref": "#/definitions/Color" }
+      }
+    },
+    "deciduous": { "description": "True when it stands bare in winter.", "type": "boolean" },
+    "wind": {
+      "title": "SpeciesWind",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stiffness"],
+      "properties": { "stiffness": { "description": "0 sways freely, 1 does not move.", "type": "number", "minimum": 0, "maximum": 1 } }
+    },
+    "collider": {
+      "title": "SpeciesCollider",
+      "description": "Present when vehicles can hit it. A trunk is a post, a rock is a ball.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape", "radiusPerHeight"],
+      "properties": {
+        "shape": { "type": "string", "enum": ["trunk", "rock"] },
+        "radiusPerHeight": { "description": "Collider radius as a fraction of the instance's height.", "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  },
+  "definitions": {
+    "Color": { "title": "HexColor", "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" }
+  }
+}

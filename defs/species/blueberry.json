@@ -1,0 +1,33 @@
+{
+  "name": "blueberry",
+  "title": "Blueberry (blåbärsris)",
+  "generator": "shrub",
+  "variants": 3,
+  "params": {
+    "form": "mound",
+    "lobes": [
+      6,
+      8
+    ],
+    "spread": [
+      2.6,
+      3.6
+    ],
+    "lean": 0.0
+  },
+  "colors": {
+    "foliage": "#4d7a34",
+    "accent": "#6c9440",
+    "variation": 0.16
+  },
+  "seasons": {
+    "spring": "#7fae48",
+    "summer": "#4d7a34",
+    "autumn": "#a3462c",
+    "winter": "#5a4a38"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.6
+  }
+}

@@ -6,6 +6,7 @@ import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
 import { loadRegionIndex, RegionMissingError } from './terrain/region';
 import { Terrain } from './terrain/terrain';
+import { Vegetation } from './vegetation/vegetation';
 
 const SKY = 0x9db8c8;
 
@@ -70,6 +71,7 @@ async function start(): Promise<void> {
 
   let link: ConnectionState = { status: 'connecting' };
   let terrain: Terrain | null = null;
+  let vegetation: Vegetation | null = null;
   let loadingRegion: string | null = null;
   let fps: number | null = null;
   let shading: GroundShading | null = null;
@@ -89,6 +91,13 @@ async function start(): Promise<void> {
           (terrain.stats.loading ? ` · loading ${terrain.stats.loading}` : '') +
           ` · ${heights.source.name} ${heights.source.resolution} m`,
       );
+      if (vegetation) {
+        const v = vegetation.stats;
+        lines.push(
+          `plants ${(v.meshes / 1000).toFixed(1)}k meshes (${(v.full / 1000).toFixed(1)}k full) · ${(v.impostors / 1000).toFixed(0)}k far trees in ${v.tiles} tiles` +
+            (v.loading ? ` · placing ${v.loading}` : ''),
+        );
+      }
     } else if (loadingRegion) {
       lines.push(`loading ${loadingRegion}…`);
     }
@@ -107,13 +116,27 @@ async function start(): Promise<void> {
     const [ground, horizon] = await Promise.all([Terrain.load(index, shading), loadHorizon(index, shading)]);
     scene.add(ground.group, horizon);
     terrain = ground;
+    // ?plants=0 leaves the ground bare, for looking at the terrain alone.
+    if (params.get('plants') !== '0') {
+      vegetation = await Vegetation.create(renderer, index, welcome.seed);
+      scene.add(vegetation.group);
+      // ?atlas=1 stands the far-tree pictures up in front of the start position.
+      if (params.get('atlas') === '1') {
+        const board = vegetation.atlasBoard(40);
+        board.name = 'atlas';
+        scene.add(board);
+      }
+    }
 
     // Start above the middle of the area looking north, unless the URL says otherwise:
-    // ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees).
+    // ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n metres above the ground.
     const mid = index.size / 2;
     const pos = numbers(params, 'pos', 3) ?? [mid, (ground.heightAt(mid, mid) ?? index.heights.max) + 250, mid];
+    const agl = Number(params.get('agl'));
+    if (params.has('agl') && Number.isFinite(agl)) pos[1] = (ground.heightAt(pos[0]!, pos[2]!) ?? pos[1]!) + agl;
     const look = numbers(params, 'look', 2) ?? [0, -12];
     fly.setPose(pos[0]!, pos[1]!, pos[2]!, THREE.MathUtils.degToRad(look[0]!), THREE.MathUtils.degToRad(look[1]!));
+    scene.getObjectByName('atlas')?.position.set(pos[0]!, pos[1]!, pos[2]! - 30);
   };
 
   // M steps through the raw mask views; ?view=n starts in one.
@@ -152,6 +175,7 @@ async function start(): Promise<void> {
     last = now;
     fly.update(dt);
     terrain?.update(camera.position);
+    vegetation?.update(camera.position);
     renderer.render(scene, camera);
 
     frames++;

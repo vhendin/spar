@@ -1,0 +1,62 @@
+{
+  "name": "rowan",
+  "title": "Rowan (rönn)",
+  "generator": "broadleaf",
+  "variants": 3,
+  "params": {
+    "stems": [
+      1,
+      3
+    ],
+    "split": [
+      0.3,
+      0.45
+    ],
+    "branches": [
+      3,
+      4
+    ],
+    "crownWidth": [
+      0.32,
+      0.42
+    ],
+    "elongate": [
+      0.9,
+      1.2
+    ],
+    "blobs": [
+      6,
+      8
+    ],
+    "trunkRadius": 0.02,
+    "crook": [
+      0.02,
+      0.06
+    ],
+    "lean": [
+      0.03,
+      0.15
+    ],
+    "barkMarks": 0.0
+  },
+  "colors": {
+    "bark": "#6f675c",
+    "foliage": "#4f7a36",
+    "accent": "#b5402a",
+    "variation": 0.15
+  },
+  "seasons": {
+    "spring": "#86ad4e",
+    "summer": "#4f7a36",
+    "autumn": "#c4522a",
+    "winter": "#5f564d"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.45
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.016
+  }
+}

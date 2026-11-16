@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "VegetationRules",
+  "description": "What grows where. Lives in defs/biomes.json. Each layer scatters candidate spots on its own jittered grid; at each spot every rule of the layer gets a weight from the ground masks, the weights' sum is the chance that something stands there, and the species is drawn in proportion to the weights.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["layers", "rules"],
+  "properties": {
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "title": "VegetationLayer",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "spacing", "batch", "ranges"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "spacing": { "description": "Grid cell size in metres: at most one object per cell.", "type": "number", "exclusiveMinimum": 0 },
+          "batch": { "description": "tile = placed per 256 m world tile and kept far out; patch = placed per 32 m patch near the camera only.", "type": "string", "enum": ["tile", "patch"] },
+          "ranges": {
+            "title": "LayerRanges",
+            "description": "Distances in metres out to which each representation is drawn.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["full"],
+            "properties": {
+              "full": { "description": "Full mesh.", "type": "number", "exclusiveMinimum": 0 },
+              "low": { "description": "Simplified mesh, beyond full.", "type": "number", "exclusiveMinimum": 0 },
+              "impostor": { "description": "Flat picture, beyond low.", "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "title": "VegetationRule",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["species", "layer", "biomes", "size"],
+        "properties": {
+          "species": { "description": "Name of a file in defs/species.", "type": "string" },
+          "layer": { "type": "string" },
+          "biomes": {
+            "description": "Chance per grid cell in each land cover class, before the bands below scale it down.",
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+          },
+          "wetness": { "description": "0 dry to 1 standing water.", "$ref": "#/definitions/Band" },
+          "slope": { "description": "Degrees.", "$ref": "#/definitions/Band" },
+          "elevation": { "description": "Metres above (+) or below (-) the region's treeline.", "$ref": "#/definitions/Band" },
+          "size": {
+            "title": "SizeRule",
+            "description": "Height of the instance in metres: either a share of the canopy height mask, or a range of its own.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "canopy": { "description": "Multiplier on the canopy height at the spot.", "type": "number", "exclusiveMinimum": 0 },
+              "range": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0 } },
+              "skew": { "description": "With range: 1 spreads sizes evenly, 2 or 3 make small ones more common.", "type": "integer", "minimum": 1, "maximum": 3 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Band": {
+      "title": "Band",
+      "description": "Full weight inside prefer, none outside tolerate, sliding in between.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prefer", "tolerate"],
+      "properties": {
+        "prefer": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+        "tolerate": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } }
+      }
+    }
+  }
+}

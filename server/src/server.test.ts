@@ -63,6 +63,15 @@ describe('http', () => {
     expect(await res.json()).toEqual({ name: 'demo' });
   });
 
+  it('answers 304 when the browser already has the current file', async () => {
+    const url = `http://127.0.0.1:${port}/regions/demo/index.json`;
+    const etag = (await fetch(url)).headers.get('etag')!;
+    expect(etag).toMatch(/^".+"$/);
+    const again = await fetch(url, { headers: { 'If-None-Match': etag } });
+    expect(again.status).toBe(304);
+    expect((await fetch(url, { headers: { 'If-None-Match': '"stale"' } })).status).toBe(200);
+  });
+
   it('refuses to leave the served folders', async () => {
     for (const path of ['/regions/..%2fsecret.txt', '/regions/%2e%2e/secret.txt', '/..%2f..%2fsecret.txt']) {
       const res = await fetch(`http://127.0.0.1:${port}${path}`);

@@ -1,0 +1,52 @@
+{
+  "name": "bog_pine",
+  "title": "Bog pine (martall)",
+  "generator": "conifer",
+  "variants": 4,
+  "params": {
+    "crownBase": [
+      0.35,
+      0.55
+    ],
+    "crownWidth": [
+      0.28,
+      0.4
+    ],
+    "tiers": [
+      3,
+      5
+    ],
+    "droop": [
+      0.0,
+      0.2
+    ],
+    "dome": 1.0,
+    "irregular": 0.55,
+    "trunkRadius": 0.028,
+    "crook": [
+      0.06,
+      0.14
+    ]
+  },
+  "colors": {
+    "bark": "#5c4d44",
+    "barkTop": "#8f6447",
+    "foliage": "#46573a",
+    "accent": "#5c6b45",
+    "variation": 0.15
+  },
+  "seasons": {
+    "spring": "#46573a",
+    "summer": "#46573a",
+    "autumn": "#46573a",
+    "winter": "#46573a"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 0.6
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.022
+  }
+}

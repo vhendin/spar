@@ -1,0 +1,51 @@
+{
+  "name": "spruce",
+  "title": "Norway spruce (gran)",
+  "generator": "conifer",
+  "variants": 4,
+  "params": {
+    "crownBase": [
+      0.08,
+      0.2
+    ],
+    "crownWidth": [
+      0.15,
+      0.2
+    ],
+    "tiers": [
+      10,
+      13
+    ],
+    "droop": [
+      0.35,
+      0.6
+    ],
+    "dome": 0.0,
+    "irregular": 0.18,
+    "trunkRadius": 0.016,
+    "crook": [
+      0.0,
+      0.012
+    ]
+  },
+  "colors": {
+    "bark": "#4a3a2e",
+    "foliage": "#263d26",
+    "accent": "#3d5a34",
+    "variation": 0.14
+  },
+  "seasons": {
+    "spring": "#263d26",
+    "summer": "#263d26",
+    "autumn": "#263d26",
+    "winter": "#22382a"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 0.75
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.014
+  }
+}

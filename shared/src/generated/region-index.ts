@@ -151,7 +151,7 @@ export interface MaskPyramid {
    */
   biomes: GroundClass[];
   /**
-   * Man-made surface classes by id; 0 means natural ground.
+   * Surface classes of roads, paths and streams by id; 0 means plain ground.
    */
   surfaces: GroundClass[];
   /**

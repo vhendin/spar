@@ -1,0 +1,33 @@
+{
+  "name": "juniper",
+  "title": "Juniper (en)",
+  "generator": "shrub",
+  "variants": 3,
+  "params": {
+    "form": "column",
+    "lobes": [
+      3,
+      5
+    ],
+    "spread": [
+      0.35,
+      0.6
+    ],
+    "lean": 0.12
+  },
+  "colors": {
+    "foliage": "#33503c",
+    "accent": "#4c6a4e",
+    "variation": 0.14
+  },
+  "seasons": {
+    "spring": "#33503c",
+    "summer": "#33503c",
+    "autumn": "#33503c",
+    "winter": "#33503c"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 0.8
+  }
+}

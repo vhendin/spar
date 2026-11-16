@@ -1,0 +1,62 @@
+{
+  "name": "alder",
+  "title": "Grey alder (gråal)",
+  "generator": "broadleaf",
+  "variants": 3,
+  "params": {
+    "stems": [
+      1,
+      2
+    ],
+    "split": [
+      0.4,
+      0.55
+    ],
+    "branches": [
+      3,
+      5
+    ],
+    "crownWidth": [
+      0.22,
+      0.3
+    ],
+    "elongate": [
+      1.2,
+      1.6
+    ],
+    "blobs": [
+      7,
+      9
+    ],
+    "trunkRadius": 0.016,
+    "crook": [
+      0.01,
+      0.04
+    ],
+    "lean": [
+      0.0,
+      0.1
+    ],
+    "barkMarks": 0.0
+  },
+  "colors": {
+    "bark": "#5c5a52",
+    "foliage": "#3f6638",
+    "accent": "#3a362f",
+    "variation": 0.12
+  },
+  "seasons": {
+    "spring": "#6f9648",
+    "summer": "#3f6638",
+    "autumn": "#55683a",
+    "winter": "#544d45"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.45
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.014
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "sedge",
+  "title": "Sedge tussock (starr)",
+  "generator": "grass",
+  "variants": 3,
+  "params": {
+    "blades": [
+      10,
+      13
+    ],
+    "bladeWidth": 0.06,
+    "splay": [
+      0.7,
+      1.2
+    ],
+    "mound": 0.35,
+    "heads": false
+  },
+  "colors": {
+    "foliage": "#7a8540",
+    "accent": "#b9a658",
+    "variation": 0.18
+  },
+  "seasons": {
+    "spring": "#8fa048",
+    "summer": "#7a8540",
+    "autumn": "#b0924a",
+    "winter": "#9c8656"
+  },
+  "deciduous": true,
+  "wind": {
+    "stiffness": 0.2
+  }
+}

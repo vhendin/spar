@@ -1,0 +1,52 @@
+{
+  "name": "pine",
+  "title": "Scots pine (tall)",
+  "generator": "conifer",
+  "variants": 4,
+  "params": {
+    "crownBase": [
+      0.55,
+      0.7
+    ],
+    "crownWidth": [
+      0.2,
+      0.28
+    ],
+    "tiers": [
+      5,
+      7
+    ],
+    "droop": [
+      -0.05,
+      0.12
+    ],
+    "dome": 1.0,
+    "irregular": 0.4,
+    "trunkRadius": 0.017,
+    "crook": [
+      0.0,
+      0.03
+    ]
+  },
+  "colors": {
+    "bark": "#5a463a",
+    "barkTop": "#95603f",
+    "foliage": "#3a5236",
+    "accent": "#52683f",
+    "variation": 0.12
+  },
+  "seasons": {
+    "spring": "#3a5236",
+    "summer": "#3a5236",
+    "autumn": "#3a5236",
+    "winter": "#34493a"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 0.8
+  },
+  "collider": {
+    "shape": "trunk",
+    "radiusPerHeight": 0.015
+  }
+}
