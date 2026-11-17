@@ -446,3 +446,14 @@ def test_no_login_means_no_lantmateriet_download(tmp_path, monkeypatch):
     monkeypatch.delenv("LANTMATERIET_USER", raising=False)
     monkeypatch.delenv("LANTMATERIET_PASSWORD", raising=False)
     assert ensure_lantmateriet(REGION) == []
+
+
+def test_sea_is_large_low_water_only():
+    from spar_importer.masks import sea_cells
+
+    heights = np.full((200, 200), 12.0, dtype=np.float32)
+    heights[:, :80] = 0.1  # a bay along one side: 80 × 200 cells of 2 m, 6.4 ha
+    heights[150:155, 150:155] = 0.2  # a small hollow inland, 100 m²
+    sea = sea_cells(heights, 2.0)
+    assert sea[:, :80].all()
+    assert not sea[:, 80:].any()

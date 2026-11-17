@@ -24,6 +24,11 @@ CHANNELS = [
     {"name": "slope", "kind": "value", "scale": 90 / 255, "unit": "degrees"},
 ]
 DEFAULT_TREELINE = 900.0
+NO_TREELINE_MARGIN = 40.0  # metres: forest this close to the top means no treeline
+# The elevation models lay the sea flat at about 0 m (RH 2000). Ground this low that forms
+# a large connected area is sea; a smaller hollow by the shore stays land.
+SEA_LEVEL_MAX = 0.6  # metres
+SEA_MIN_AREA = 50000.0  # square metres
 
 
 def _srs() -> osr.SpatialReference:
@@ -143,12 +148,38 @@ def reconcile_lakes(biome: np.ndarray, heights2: np.ndarray, lakes: list, labels
         cover[grown] = water
 
 
+def sea_cells(heights: np.ndarray, spacing: float) -> np.ndarray:
+    """True where the ground is open sea: large connected areas at sea level."""
+    low = (heights <= SEA_LEVEL_MAX).astype(np.uint8)
+    if not low.any():
+        return low.astype(bool)
+    rows, cols = low.shape
+    ds = gdal.GetDriverByName("MEM").Create("", cols, rows, 1, gdal.GDT_Byte)
+    band = ds.GetRasterBand(1)
+    band.WriteArray(low)
+    # Sieving drops every connected patch smaller than the threshold, low or not.
+    gdal.SieveFilter(band, None, band, max(2, int(SEA_MIN_AREA / spacing**2)), 4)
+    return band.ReadAsArray().astype(bool) & (low > 0)
+
+
+def mark_sea(biome: np.ndarray, heights: np.ndarray, spacing: float) -> int:
+    sea = sea_cells(heights, spacing)
+    biome[sea] = biome_id("water")
+    return int(sea.sum())
+
+
 def estimate_treeline(biome: np.ndarray, heights: np.ndarray) -> float:
     """Elevation that 98 % of mapped forest lies below, or a default when little forest is mapped."""
     forest = heights[biome == biome_id("forest")]
     if forest.size < 2000:
         return DEFAULT_TREELINE
-    return float(np.percentile(forest[:: max(1, forest.size // 200000)], 98))
+    line = float(np.percentile(forest[:: max(1, forest.size // 200000)], 98))
+    # Lowland: forest reaches the highest ground, so there is no treeline in the area.
+    # Put it well above the top, or hilltops would turn into bare fell.
+    top = float(np.percentile(heights[:: 8, :: 8], 99.5))
+    if line >= top - NO_TREELINE_MARGIN:
+        return max(line, float(heights.max())) + 400.0
+    return line
 
 
 def fill_unknown(biome: np.ndarray, heights: np.ndarray, treeline: float) -> None:
@@ -447,6 +478,9 @@ def build_planes(
     lakes, labels, levels = lake_levels(osm, heights2, **grid)
     reconcile_lakes(biome, heights2, lakes, labels, levels, west=west, north=north, spacing=MASK_SPACING)
     del labels
+    sea = mark_sea(biome, heights2, MASK_SPACING)
+    if sea:
+        print(f"  sea {sea * MASK_SPACING**2 / 1e6:.1f} km²")
     treeline = estimate_treeline(biome, heights2)
     fill_unknown(biome, heights2, treeline)
     surface, road = road_planes(osm, west=west, north=north, size=size)
@@ -469,6 +503,7 @@ def horizon_biome(osm: OsmData, heights: np.ndarray, treeline: float, *, west: f
     wide = [(w.geom.Buffer(spacing / 2), biome_id("water")) for w in osm.waterways if w.kind == "river"]
     rivers = rasterize(wide, west=west, north=north, spacing=spacing, size=size, all_touched=True)
     biome[rivers > 0] = biome_id("water")
+    mark_sea(biome, heights, spacing)
     fill_unknown(biome, heights, treeline)
     return biome
 

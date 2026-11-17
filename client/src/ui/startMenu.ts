@@ -151,7 +151,7 @@ export class StartMenu {
     };
 
     add('h1', 'Spår');
-    add('p', 'Off-road driving in the Jämtland mountains', box, 'sub');
+    add('p', 'Off-road driving through real Swedish landscapes', box, 'sub');
 
     const columns = add('div', '', box, 'columns');
     const left = add('div', '', columns, 'column');
