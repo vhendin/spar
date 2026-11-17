@@ -177,6 +177,11 @@ export class MapScreen {
       : '';
   }
 
+  /** The map's picture of the ground, once drawn: one pixel per height sample. */
+  get picture(): HTMLCanvasElement | null {
+    return this.image;
+  }
+
   /** Starts drawing the map's picture of the ground, for the minimap and the map. */
   prepare(): void {
     void this.load();

@@ -61,6 +61,16 @@ export class VehicleView {
     this.glass.visible = !inside;
   }
 
+  /** Frees the meshes' GPU memory, when the vehicle is swapped for another. */
+  dispose(): void {
+    this.group.removeFromParent();
+    this.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      o.geometry.dispose();
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) (m as THREE.Material).dispose();
+    });
+  }
+
   /** Jumps to the body's current pose, after placing or resetting the vehicle. */
   snap(): void {
     this.read(this.to);

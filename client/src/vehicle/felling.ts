@@ -43,7 +43,8 @@ export class Felling {
 
   constructor(
     R: typeof RAPIER,
-    private readonly body: RAPIER.RigidBody,
+    /** The vehicle's body; replaced when the vehicle is. */
+    public body: RAPIER.RigidBody,
   ) {
     this.events = new R.EventQueue(true);
   }

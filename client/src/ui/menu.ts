@@ -6,6 +6,8 @@ import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type
 export interface MenuActions {
   resume(): void;
   map(): void;
+  /** Back to the start screen. */
+  mainMenu(): void;
   timeAndWeather(): void;
   resetVehicle(): void;
   toStart(): void;
@@ -42,6 +44,8 @@ const CONTROLS: [string, string][] = [
 export class Menu {
   private page: 'main' | 'settings' | 'controls' = 'main';
   private readonly box: HTMLDivElement;
+  /** When a page was opened on its own (from the start screen): where Back goes instead of the main page. */
+  private exit: (() => void) | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -64,7 +68,26 @@ export class Menu {
     return this.root.style.display === 'flex';
   }
 
+  /** Opens the settings or the controls by themselves; Back calls `exit`. */
+  showPage(page: 'settings' | 'controls', exit: () => void): void {
+    this.exit = exit;
+    this.page = page;
+    this.render();
+    this.root.style.display = 'flex';
+  }
+
+  /** Leaves a page opened by itself, if that is what is showing. Returns true if it did. */
+  private leave(): boolean {
+    const exit = this.exit;
+    if (!exit) return false;
+    this.exit = null;
+    this.hide();
+    exit();
+    return true;
+  }
+
   show(): void {
+    this.exit = null;
     this.page = 'main';
     this.render();
     this.root.style.display = 'flex';
@@ -76,6 +99,7 @@ export class Menu {
 
   /** Esc: back out of a sub-page, or close. Returns true when the menu closed. */
   back(): boolean {
+    if (this.leave()) return false;
     if (this.page !== 'main') {
       this.page = 'main';
       this.render();
@@ -103,6 +127,7 @@ export class Menu {
       return b;
     };
     const go = (page: typeof this.page): void => {
+      if (page === 'main' && this.leave()) return;
       this.page = page;
       this.render();
     };
@@ -128,6 +153,8 @@ export class Menu {
       button('Back on the wheels', () => this.actions.resetVehicle(), row);
       button('Back to the start', () => this.actions.toStart(), row);
       const foot = add('div', '', box, 'foot');
+      button('Main menu', () => this.actions.mainMenu(), foot, 'link');
+      add('span', ' · ', foot, 'note');
       button('Credits', () => this.actions.credits(), foot, 'link');
       return;
     }

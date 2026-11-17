@@ -34,6 +34,7 @@ import { VehicleAudio } from './audio/vehicleAudio';
 import { Guide } from './ui/guide';
 import { MapScreen, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
+import { saveLastPosition, StartMenu } from './ui/startMenu';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -128,6 +129,8 @@ interface World {
   arrival: { x: number; z: number; heading: number; name: string };
   /** True until the vehicle has been set down on loaded ground. */
   unplaced: boolean;
+  /** The start screen, unless the URL or a rebuild went straight to driving. */
+  start: StartMenu;
 }
 
 async function start(): Promise<void> {
@@ -202,6 +205,14 @@ async function start(): Promise<void> {
   // (F fly, B masks, K colliders, G wheels).
   let debug = params.get('debug') === '1';
   let paused = false;
+  /** True while the start screen shows: the world turns slowly behind it and nothing drives. */
+  let starting = false;
+  /** Where the camera is in its slow turn round the valley behind the start screen. */
+  let tour = 0;
+  let lastSaved = 0;
+  const startRoot = document.createElement('div');
+  startRoot.id = 'start';
+  document.body.append(startRoot);
   const dash = new Dashboard(document.body);
   dash.visible = false;
   let hintUntil = 0;
@@ -261,7 +272,7 @@ async function start(): Promise<void> {
     let text = '';
     if (link.status === 'offline') text = `No connection to the game server: ${link.reason}`;
     else if (!world) text = link.status === 'connecting' ? 'Connecting…' : `Loading ${loadingRegion ?? ''}…`;
-    else if (world.unplaced) text = `Loading ${world.index.title}…`;
+    else if (world.unplaced && !starting) text = `Loading ${world.index.title}…`;
     status.textContent = text;
     status.style.display = text && !debug ? 'flex' : 'none';
     hud.style.display = debug ? 'block' : 'none';
@@ -374,7 +385,33 @@ async function start(): Promise<void> {
     });
     // The minimap needs the map's picture from the start.
     map.prepare();
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true };
+    const start = new StartMenu(startRoot, index, vectors, defs, def.name, {
+      drive: (choice) => {
+        const w = world;
+        if (!w) return;
+        const chosen = defs.find((d) => d.name === choice.vehicle);
+        if (chosen) setVehicle(w, chosen);
+        travel(w, { name: choice.start.name, x: choice.start.x, z: choice.start.z, heading: choice.start.heading });
+        starting = false;
+        start.hide();
+        w.view.group.visible = true;
+        chase.reset();
+        drawHud();
+      },
+      settings: () => {
+        start.hide();
+        menu.showPage('settings', () => start.show());
+      },
+      controls: () => {
+        start.hide();
+        menu.showPage('controls', () => start.show());
+      },
+      credits: () => showCredits(true),
+    });
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
+    const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
+    if (!direct) showStart(world);
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -403,6 +440,41 @@ async function start(): Promise<void> {
   const resetVehicle = (w: World): void => {
     const p = w.sim.body.translation();
     setDown(w, p.x, p.z, headingOf(w));
+  };
+  /** Swaps the vehicle for another kind, where the old one stood. */
+  const setVehicle = (w: World, def: VehicleDef): void => {
+    try {
+      localStorage.setItem(VEHICLE_KEY, def.name);
+    } catch {
+      // Not remembered for next time.
+    }
+    if (w.sim.def === def) return;
+    const p = w.sim.body.translation();
+    const heading = headingOf(w);
+    const visible = w.view.group.visible;
+    w.view.dispose();
+    w.sim.dispose();
+    w.sim = new VehicleSim(RAPIER, w.physics, def, w.ground);
+    w.view = new VehicleView(w.sim);
+    w.view.group.visible = visible;
+    scene.add(w.view.group);
+    w.felling.body = w.sim.body;
+    chase.eye.set(...driverEye(def));
+    w.sim.place(p.x, p.y, p.z, heading);
+    w.view.snap();
+    w.tracks.break();
+  };
+  /** The start screen, over the world turning slowly. */
+  const showStart = (w: World): void => {
+    starting = true;
+    w.unplaced = true;
+    w.view.group.visible = false;
+    if (w.map.open) toggleMap();
+    flying = false;
+    fly.enabled = false;
+    if (document.pointerLockElement) document.exitPointerLock();
+    w.start.show();
+    drawHud();
   };
   /** Off to another start point, which then becomes the one to go back to. */
   const travel = (w: World, s: World['spawn']): void => {
@@ -476,6 +548,10 @@ async function start(): Promise<void> {
     menuRoot,
     {
       resume,
+      mainMenu: () => {
+        resume();
+        if (world) showStart(world);
+      },
       map: () => {
         resume();
         toggleMap();
@@ -496,17 +572,13 @@ async function start(): Promise<void> {
       vehicles: Object.values(VEHICLES).map((d) => ({ name: d.name, title: d.title })).sort((a, b) => a.title.localeCompare(b.title)),
       vehicle: () => world?.sim.def.name ?? '',
       chooseVehicle: (name) => {
-        if (name === world?.sim.def.name) return;
-        try {
-          localStorage.setItem(VEHICLE_KEY, name);
-        } catch {
-          // Not remembered: the URL carries it this once.
-          const next = new URLSearchParams(location.search);
-          next.set('vehicle', name);
-          location.search = next.toString();
-          return;
-        }
-        rebuild();
+        const w = world;
+        const def = Object.values(VEHICLES).find((d) => d.name === name);
+        if (!w || !def || def === w.sim.def) return;
+        // Swapped where it stands, set down on its wheels.
+        setVehicle(w, def);
+        if (!w.unplaced) resetVehicle(w);
+        resume();
       },
       changed: (key) => {
         saveSettings(settings);
@@ -549,6 +621,11 @@ async function start(): Promise<void> {
     const w = world;
     if (e.code === 'Escape') {
       // Close whatever is on top: credits, then the time and weather panel, then the menu.
+      if (starting) {
+        if (credits.style.display === 'flex') showCredits(false);
+        else if (menu.open) menu.back();
+        return;
+      }
       if (credits.style.display === 'flex') showCredits(false);
       else if (w?.map.open) toggleMap();
       else if (panel.open) panel.toggle();
@@ -564,7 +641,7 @@ async function start(): Promise<void> {
       drawStatus();
       return;
     }
-    if (paused) return;
+    if (paused || starting) return;
     // The developer's keys work only while the developer read-out shows (F3).
     if (!debug && ['KeyB', 'KeyF', 'KeyK', 'KeyG'].includes(e.code)) return;
     switch (e.code) {
@@ -663,14 +740,14 @@ async function start(): Promise<void> {
     // The gamepad's Start button opens and closes the menu.
     const pad = navigator.getGamepads?.().find((p) => p?.connected && p.mapping === 'standard');
     const start = pad?.buttons[9]?.pressed ?? false;
-    if (start && !startHeld && world) {
+    if (start && !startHeld && world && !starting) {
       if (paused) resume();
       else pause();
     }
     startHeld = start;
     // Back (Select) opens and closes the map.
     const back = pad?.buttons[8]?.pressed ?? false;
-    if (back && !backHeld && world && !paused) toggleMap();
+    if (back && !backHeld && world && !paused && !starting) toggleMap();
     backHeld = back;
 
     const w = world;
@@ -679,6 +756,7 @@ async function start(): Promise<void> {
       const controls = flying || paused || w.map.open ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
       if (!paused) owed += dt;
       let steps = 0;
+      if (starting) owed = 0;
       while (owed >= STEP && steps < 4) {
         owed -= STEP;
         steps++;
@@ -709,7 +787,17 @@ async function start(): Promise<void> {
       const at = flying && w.obstacles?.debug.visible ? camera.position : w.view.group.position;
       w.obstacles?.update(now / 1000, at.x, at.z);
 
-      if (flying) fly.update(dt);
+      if (starting) {
+        // A slow turn round the middle of the region, high up, while the start screen shows.
+        tour += dt * 0.012;
+        const mid = w.index.size / 2;
+        const below = w.terrain.heightAt(mid, mid) ?? (w.index.heights.min + w.index.heights.max) / 2;
+        const cx = mid + Math.cos(tour) * 2600, cz = mid + Math.sin(tour) * 2600;
+        // High over the valley, and never into a fellside on the way round.
+        camera.position.set(cx, Math.max(below + 650, (w.terrain.heightAt(cx, cz) ?? below) + 300), cz);
+        camera.lookAt(mid, below + 150, mid);
+        w.start.setPicture(w.map.picture);
+      } else if (flying) fly.update(dt);
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
       seeThrough.strength.value = flying || chase.mode === 'cab' ? 0 : 1;
       w.view.setInside(!flying && chase.mode === 'cab');
@@ -745,7 +833,7 @@ async function start(): Promise<void> {
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
 
       // Sound: the vehicle where it is, the world where the camera is.
-      const inside = !flying && chase.mode === 'cab';
+      const inside = !flying && !starting && chase.mode === 'cab';
       audio.inside = inside;
       audio.listen(camera);
       w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], w.unplaced);
@@ -762,7 +850,14 @@ async function start(): Promise<void> {
 
       // The map, and the way to the destination.
       const where = mapState(w);
-      if (!w.unplaced && !flying) w.map.record(where.x, where.z);
+      if (!w.unplaced && !flying) {
+        w.map.record(where.x, where.z);
+        // Remembered now and then, for "Where you left off" next time.
+        if (now - lastSaved > 5000) {
+          lastSaved = now;
+          saveLastPosition({ region: w.index.name, x: where.x, z: where.z, heading: where.heading });
+        }
+      }
       w.map.update(where, now);
       minimap.update(dt, w.map, where, !w.unplaced && !w.map.open);
       guide.update(now, camera, flying ? camera.position : w.view.group.position, (x, z) => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z), !w.unplaced && !w.map.open);
