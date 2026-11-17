@@ -77,9 +77,12 @@ export class VehicleAudio {
     this.engineLevel = ctx.createGain();
     this.engineLevel.gain.value = 0;
     this.engineLevel.connect(this.at);
-    const body = out.filter('peaking', 110, 1.2, 7);
-    body.connect(this.engineLevel);
-    this.engineTone = out.lowpass(500, 0.9);
+    // A deep, boomy pipe: the low end lifted, a hollow resonance around 70 Hz.
+    const boom = out.filter('lowshelf', 140, 0.7, 5);
+    boom.connect(this.engineLevel);
+    const body = out.filter('peaking', 70, 1.1, 8);
+    body.connect(boom);
+    this.engineTone = out.lowpass(300, 0.6);
     this.engineTone.connect(body);
 
     // Air drawn in and the rattle of the valves: a breathy band that climbs with the revs.
@@ -95,7 +98,7 @@ export class VehicleAudio {
     this.whineLevel.gain.value = 0;
     this.whineLevel.connect(this.at);
     this.whine = ctx.createOscillator();
-    this.whine.type = 'triangle';
+    this.whine.type = 'sine';
     this.whine.connect(this.whineLevel);
     this.whine.start();
 
@@ -154,17 +157,17 @@ export class VehicleAudio {
       ease(this.engine.parameters.get('rpm')!, rpm, t, 0.02);
       ease(this.engine.parameters.get('load')!, load, t, 0.03);
     }
-    ease(this.engineTone.frequency, 260 + rpm * 0.28 + load * 1400, t);
-    ease(this.engineLevel.gain, quiet ? 0 : 0.85 + 0.5 * load + 0.4 * rev, t);
-    ease(this.intakeTone.frequency, 500 + rpm * 0.55, t);
-    ease(this.intakeLevel.gain, quiet ? 0 : (0.01 + 0.05 * load) * (0.3 + rev), t);
+    ease(this.engineTone.frequency, 140 + rpm * 0.1 + load * 380, t);
+    ease(this.engineLevel.gain, quiet ? 0 : 1.1 + 0.6 * load + 0.4 * rev, t);
+    ease(this.intakeTone.frequency, 250 + rpm * 0.2, t);
+    ease(this.intakeLevel.gain, quiet ? 0 : (0.004 + 0.02 * load) * (0.3 + rev), t);
 
     // Gears: the transfer case turns with the wheels, faster in low range; reverse is straight-cut and sings.
     const speed = Math.abs(sim.speed);
     const shaft = (speed / (2 * Math.PI * sim.def.wheels.radius)) * def.finalDrive * def.ranges[d.range]!;
     const reverse = d.gear < 0;
-    ease(this.whine.frequency, Math.max(30, shaft * (reverse ? 31 : 23)), t);
-    const whine = quiet ? 0 : Math.min(1, speed / 3) * (0.012 + 0.02 * load) * (d.range === 'low' ? 2.2 : 1) * (reverse ? 2.5 : 1);
+    ease(this.whine.frequency, Math.max(30, shaft * (reverse ? 19 : 13)), t);
+    const whine = quiet ? 0 : Math.min(1, speed / 3) * (0.002 + 0.004 * load) * (d.range === 'low' ? 2 : 1) * (reverse ? 2 : 1);
     ease(this.whineLevel.gain, whine, t);
 
     if (d.gear !== this.gear) {

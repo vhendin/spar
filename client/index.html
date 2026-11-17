@@ -18,7 +18,7 @@
         font: 17px/1.5 system-ui, sans-serif; color: #e8eef0; letter-spacing: 0.02em; pointer-events: none;
       }
       #hint {
-        position: fixed; left: 16px; bottom: 16px; padding: 6px 12px; border-radius: 4px;
+        position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px; padding: 6px 12px; border-radius: 4px; white-space: nowrap;
         font: 13px/1.4 system-ui, sans-serif; color: #e8eef0; background: rgba(6, 10, 12, 0.6);
         opacity: 0; transition: opacity 0.8s; pointer-events: none;
       }
@@ -140,6 +140,10 @@
       }
       #map button:hover { background: rgba(255, 255, 255, 0.16); }
       #map button.on { background: #c9a45c; border-color: #c9a45c; color: #111; }
+      #minimap {
+        position: fixed; left: 16px; bottom: 16px; width: min(190px, 30vw); height: min(190px, 30vw); display: none; z-index: 5;
+        border-radius: 50%; pointer-events: none; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+      }
       #guide {
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
         padding: 5px 14px 5px 10px; border-radius: 18px; pointer-events: none;
@@ -156,7 +160,7 @@
     <canvas id="view"></canvas>
     <div id="hud"></div>
     <div id="status"></div>
-    <div id="hint"><kbd>Esc</kbd> menu and pause · <kbd>M</kbd> map · <kbd>T</kbd> time and weather · <kbd>V</kbd> camera</div>
+    <div id="hint"><kbd>Esc</kbd> menu and pause · <kbd>M</kbd> map · <kbd>N</kbd> minimap · <kbd>T</kbd> time and weather · <kbd>V</kbd> camera</div>
     <div id="menu"></div>
     <div id="credits"></div>
     <div id="world"></div>

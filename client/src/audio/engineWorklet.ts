@@ -1,6 +1,8 @@
 // The engine's sound, made sample by sample on the audio thread: one exhaust pulse for every
-// cylinder firing, so the beat follows the revs exactly. Under load each pulse is harder and
-// rougher; off the throttle it softens to a burble. The filters outside shape the pipe.
+// cylinder firing, so the beat follows the revs exactly. The cylinders are deliberately
+// uneven and the whole cycle swells and dips once per two turns, which gives the slow,
+// lumpy chug of an old working engine rather than a smooth hum. Under load each pulse is
+// harder; off the throttle it softens to a burble. The filters outside shape the pipe.
 //
 // Kept as source text and loaded from a blob, so it needs no separate build step.
 
@@ -19,7 +21,7 @@ class SparEngine extends AudioWorkletProcessor {
     this.seed = 0x2545f491;
     // No two cylinders fire quite alike: the uneven beat of a real engine.
     this.trim = [];
-    for (let i = 0; i < this.cylinders; i++) this.trim.push(0.82 + 0.36 * this.rand());
+    for (let i = 0; i < this.cylinders; i++) this.trim.push(0.55 + 0.9 * this.rand());
     this.phase = 0;
     this.slot = 0;
     this.pulse = 0;
@@ -57,15 +59,17 @@ class SparEngine extends AudioWorkletProcessor {
         this.slot = slot;
         const load = this.load;
         const rough = 1 + (this.rand() - 0.5) * (0.12 + 0.35 * load);
-        this.pulse += (0.3 + 0.7 * load) * this.trim[slot] * rough;
-        // Each pulse rings away in about a third of the time to the next one.
+        // Swells once per cycle: the chug.
+        const swell = 1 + 0.35 * Math.sin(this.phase * Math.PI * 2);
+        this.pulse += (0.3 + 0.7 * load) * this.trim[slot] * rough * swell;
+        // Each pulse rings away in about half the time to the next one.
         const gap = 120 / (this.rpm * n);
-        this.decay = Math.exp(-1 / (gap * 0.32 * sampleRate));
+        this.decay = Math.exp(-1 / (gap * 0.5 * sampleRate));
       }
       this.pulse *= this.decay;
-      const rasp = (this.rand() * 2 - 1) * this.pulse * (0.15 + 0.45 * this.load);
+      const rasp = (this.rand() * 2 - 1) * this.pulse * (0.05 + 0.18 * this.load);
       // A touch of smoothing on the pulse's leading edge, then the rasp on top.
-      this.lp += (this.pulse - this.lp) * 0.35;
+      this.lp += (this.pulse - this.lp) * 0.12;
       const x = this.lp + rasp;
       // Block the steady part, leaving only the beat.
       const y = x - this.x1 + 0.995 * this.y1;

@@ -36,6 +36,9 @@ const MAX_ZOOM = 3;
 const TRAIL_STEP = 15;
 const TRAIL_MAX = 6000;
 
+/** min x, min z, max x, max z. */
+type Box = [number, number, number, number];
+
 interface Pick {
   name: string;
   x: number;
@@ -172,6 +175,202 @@ export class MapScreen {
     this.readout.textContent = hv && ground !== null
       ? `${ground.toFixed(0)} m · E ${(this.index.origin.easting + hv.x).toFixed(0)} N ${(this.index.origin.northing - hv.z).toFixed(0)}`
       : '';
+  }
+
+  /** Starts drawing the map's picture of the ground, for the minimap and the map. */
+  prepare(): void {
+    void this.load();
+  }
+
+  /**
+   * The minimap: a round window `range` metres across around `state`, turned so the way the
+   * vehicle faces is up. Drawn into `c`, `size` pixels across.
+   */
+  drawMini(c: CanvasRenderingContext2D, size: number, state: MapState, range: number): void {
+    const s = size / range;
+    const half = size / 2;
+    const reach = (range / 2) * 1.5;
+    const turn = (-state.heading * Math.PI) / 180;
+    const cos = Math.cos(turn), sin = Math.sin(turn);
+    /** World to minimap pixels. */
+    const at = (x: number, z: number): [number, number] => {
+      const dx = (x - state.x) * s, dz = (z - state.z) * s;
+      return [half + dx * cos - dz * sin, half + dx * sin + dz * cos];
+    };
+    const near = (b: Box): boolean => b[0] < state.x + reach && b[2] > state.x - reach && b[1] < state.z + reach && b[3] > state.z - reach;
+
+    c.save();
+    c.clearRect(0, 0, size, size);
+    c.beginPath();
+    c.arc(half, half, half - 1, 0, Math.PI * 2);
+    c.clip();
+    c.fillStyle = '#e9e6da';
+    c.fillRect(0, 0, size, size);
+    // The ground picture and the lines, in world units under one transform.
+    c.save();
+    c.translate(half, half);
+    c.rotate(turn);
+    c.scale(s, s);
+    c.translate(-state.x, -state.z);
+    if (this.image && this.rasters) {
+      c.imageSmoothingEnabled = true;
+      c.drawImage(this.image, 0, 0, this.index.size + this.rasters.spacing, this.index.size + this.rasters.spacing);
+    }
+    c.lineCap = c.lineJoin = 'round';
+    const line = (points: number[][], close = false): void => {
+      c.beginPath();
+      points.forEach(([x, z], i) => (i === 0 ? c.moveTo(x!, z!) : c.lineTo(x!, z!)));
+      if (close) c.closePath();
+    };
+    const boxes = this.boxes();
+    c.strokeStyle = '#3f86c2';
+    this.vectors.waterways.forEach((w, i) => {
+      if (!near(boxes.water[i]!)) return;
+      c.lineWidth = w.kind === 'river' ? 10 : 3 / s;
+      line(w.points);
+      c.stroke();
+    });
+    c.fillStyle = '#5b4e45';
+    this.vectors.buildings.forEach((b, i) => {
+      if (!near(boxes.buildings[i]!)) return;
+      line(b.outline, true);
+      c.fill();
+    });
+    c.setLineDash([4 / s, 3 / s]);
+    c.strokeStyle = '#6b4a33';
+    c.lineWidth = 1.2 / s;
+    this.vectors.roads.forEach((r, i) => {
+      if ((r.drivable && r.kind !== 'track') || !near(boxes.roads[i]!)) return;
+      line(r.points);
+      c.stroke();
+    });
+    c.setLineDash([]);
+    for (const pass of [0, 1]) {
+      this.vectors.roads.forEach((r, i) => {
+        if (!r.drivable || !near(boxes.roads[i]!)) return;
+        const w = Math.max(r.surface === 'asphalt' ? 4 : 3, (r.width ?? 4) * s) / s;
+        c.strokeStyle = pass === 0 ? (r.surface === 'asphalt' ? '#7a3b1e' : '#5d4c3d') : r.surface === 'asphalt' ? '#ee8d3e' : '#fffaf0';
+        c.lineWidth = pass === 0 ? w + 2 / s : w;
+        line(r.points);
+        c.stroke();
+      });
+    }
+    // Where the vehicle has been.
+    const t = this.trail;
+    if (t.length >= 4) {
+      c.strokeStyle = 'rgba(200,40,90,0.75)';
+      c.lineWidth = 2.5 / s;
+      c.beginPath();
+      let pen = false;
+      for (let i = 0; i < t.length; i += 2) {
+        if (Number.isNaN(t[i]!) || Math.abs(t[i]! - state.x) > reach || Math.abs(t[i + 1]! - state.z) > reach) {
+          pen = false;
+          continue;
+        }
+        if (pen) c.lineTo(t[i]!, t[i + 1]!);
+        else c.moveTo(t[i]!, t[i + 1]!);
+        pen = true;
+      }
+      c.stroke();
+    }
+    c.restore();
+
+    // Names stay upright.
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    for (const p of this.vectors.places) {
+      if (Math.hypot(p.x - state.x, p.z - state.z) > range / 2) continue;
+      const [px, py] = at(p.x, p.z);
+      c.font = '600 11px system-ui, sans-serif';
+      c.lineWidth = 3;
+      c.strokeStyle = 'rgba(255,255,255,0.85)';
+      c.strokeText(p.name, px, py);
+      c.fillStyle = '#222';
+      c.fillText(p.name, px, py);
+    }
+
+    // The destination: a pin when it is in view, otherwise an arrow on the rim pointing to it.
+    const d = state.destination;
+    if (d) {
+      const [px, py] = at(d.x, d.z);
+      const dx = px - half, dy = py - half;
+      const out = Math.hypot(dx, dy);
+      c.fillStyle = '#d63c28';
+      c.strokeStyle = '#fff';
+      c.lineWidth = 1.5;
+      if (out < half - 10) {
+        c.beginPath();
+        c.arc(px, py - 9, 5, Math.PI * 0.85, Math.PI * 2.15);
+        c.lineTo(px, py);
+        c.closePath();
+        c.fill();
+        c.stroke();
+      } else {
+        c.save();
+        c.translate(half + (dx / out) * (half - 10), half + (dy / out) * (half - 10));
+        c.rotate(Math.atan2(dy, dx) + Math.PI / 2);
+        c.beginPath();
+        c.moveTo(0, -7);
+        c.lineTo(6, 5);
+        c.lineTo(-6, 5);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        c.restore();
+      }
+    }
+
+    // The vehicle in the middle, always facing up.
+    c.fillStyle = '#f08a24';
+    c.strokeStyle = '#111';
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(half, half - 9);
+    c.lineTo(half + 6, half + 7);
+    c.lineTo(half, half + 3);
+    c.lineTo(half - 6, half + 7);
+    c.closePath();
+    c.fill();
+    c.stroke();
+
+    // North on the rim.
+    const nx = half + sin * (half - 11), ny = half - cos * (half - 11);
+    c.fillStyle = 'rgba(10,15,18,0.85)';
+    c.beginPath();
+    c.arc(nx, ny, 8, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#fff';
+    c.font = '700 10px system-ui, sans-serif';
+    c.fillText('N', nx, ny + 0.5);
+    c.restore();
+
+    c.strokeStyle = 'rgba(10,15,18,0.8)';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(half, half, half - 1, 0, Math.PI * 2);
+    c.stroke();
+  }
+
+  private boxCache: { roads: Box[]; buildings: Box[]; water: Box[] } | null = null;
+
+  /** Bounding boxes of the lines, so the minimap skips what is far away. */
+  private boxes(): { roads: Box[]; buildings: Box[]; water: Box[] } {
+    const box = (points: number[][]): Box => {
+      const b: Box = [Infinity, Infinity, -Infinity, -Infinity];
+      for (const [x, z] of points) {
+        b[0] = Math.min(b[0], x!);
+        b[1] = Math.min(b[1], z!);
+        b[2] = Math.max(b[2], x!);
+        b[3] = Math.max(b[3], z!);
+      }
+      return b;
+    };
+    this.boxCache ??= {
+      roads: this.vectors.roads.map((r) => box(r.points)),
+      buildings: this.vectors.buildings.map((b) => box(b.outline)),
+      water: this.vectors.waterways.map((w) => box(w.points)),
+    };
+    return this.boxCache;
   }
 
   private async load(): Promise<void> {

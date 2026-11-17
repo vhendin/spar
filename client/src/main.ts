@@ -33,6 +33,7 @@ import { AudioOut } from './audio/output';
 import { VehicleAudio } from './audio/vehicleAudio';
 import { Guide } from './ui/guide';
 import { MapScreen, type MapState } from './ui/map';
+import { Minimap } from './ui/minimap';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -173,6 +174,7 @@ async function start(): Promise<void> {
   // The way to the destination chosen on the map.
   const guide = new Guide(document.body);
   scene.add(guide.beacon);
+  const minimap = new Minimap(document.body);
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -370,6 +372,8 @@ async function start(): Promise<void> {
       },
       close: () => toggleMap(),
     });
+    // The minimap needs the map's picture from the start.
+    map.prepare();
     world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
@@ -567,6 +571,10 @@ async function start(): Promise<void> {
       case 'KeyM':
         toggleMap();
         break;
+      case 'KeyN':
+        // Minimap: near, far, hidden.
+        minimap.cycle();
+        break;
       case 'KeyB':
         setView(groundView + (e.shiftKey ? -1 : 1));
         break;
@@ -756,6 +764,7 @@ async function start(): Promise<void> {
       const where = mapState(w);
       if (!w.unplaced && !flying) w.map.record(where.x, where.z);
       w.map.update(where, now);
+      minimap.update(dt, w.map, where, !w.unplaced && !w.map.open);
       guide.update(now, camera, flying ? camera.position : w.view.group.position, (x, z) => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z), !w.unplaced && !w.map.open);
 
       dash.visible = !flying && !w.unplaced;

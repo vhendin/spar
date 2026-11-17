@@ -32,6 +32,7 @@ const CONTROLS: [string, string][] = [
   ['R', 'Back on the wheels'],
   ['Shift R', 'Back to the start'],
   ['M', 'Map: choose a destination, or another start point'],
+  ['N', 'Minimap: near, far, hidden'],
   ['T', 'Time and weather'],
   ['C', 'Credits'],
   ['Esc', 'Menu and pause'],
