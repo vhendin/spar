@@ -9,7 +9,7 @@ import { WorldPanel } from './worldPanel';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { SeeThrough } from './seeThrough';
 import { Environment } from './sky/environment';
-import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
+import { GROUND_VIEWS, GroundShading, snowLine } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
 import { loadRegionIndex, RegionMissingError, regionUrl } from './terrain/region';
 import { Terrain } from './terrain/terrain';
@@ -166,6 +166,7 @@ async function start(): Promise<void> {
   const input = new DriveInput();
   const look = new Look(renderer, scene, camera, settings.glow > 0);
   const plain = params.get('look') === '0';
+  const snowOverride = params.has('snow') && Number.isFinite(Number(params.get('snow'))) ? Number(params.get('snow')) : null;
   // Sound starts with the first key or click; ?sound=0 keeps it off for this visit.
   const audio = new AudioOut(params.get('sound') === '0' ? 0 : settings.volume);
   const ambience = new Ambience(audio);
@@ -714,11 +715,18 @@ async function start(): Promise<void> {
       const env = w.environment;
       env.update(now, dt, camera.position, flying ? camera.position : w.view.group.position);
       w.shading.wet.value = env.weather.wetness;
+      w.shading.sky.value.set(env.skyColor.r, env.skyColor.g, env.skyColor.b);
+      w.shading.sunColor.value.set(env.sunLight.r, env.sunLight.g, env.sunLight.b);
+      w.shading.wind.value = env.weather.wind;
+      w.shading.windDirection.value.copy(env.windVector);
+      // ?snow=<metres> puts the snow line there instead of where the month has it.
+      w.shading.snowLine.value = snowOverride ?? snowLine(env.month());
       w.ground.rain = env.weather.wetness;
       if (w.vegetation) {
         w.vegetation.shading.wind.value = env.weather.wind;
         w.vegetation.shading.windDirection.value.copy(env.windVector);
         w.vegetation.shading.impostorLight.value = env.daylight;
+        if (!w.unplaced) w.vegetation.shading.trample.update(paused ? 0 : dt, w.sim, w.view.group);
       }
       // Mud, dust and water off the tyres.
       // Ruts behind the wheels, and mud on the vehicle.

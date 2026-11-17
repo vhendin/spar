@@ -5,10 +5,11 @@
 
 import * as THREE from 'three/webgpu';
 import {
-  attribute, float, fract, mix, normalViewGeometry, positionGeometry, positionLocal, select, sin, smoothstep, texture, time, uniform, vec2, vec3,
+  attribute, float, fract, max, mix, normalViewGeometry, positionGeometry, positionLocal, select, sin, smoothstep, texture, time, uniform, vec2, vec3,
 } from 'three/tsl';
 import { cloudShadow } from '../sky/clouds';
 import { FADE_END, FADE_START, JITTER_MIN, JITTER_SPAN } from './coverage';
+import { Trample, TRAMPLE_CELL, TRAMPLE_SIZE } from './trample';
 
 /** Side of an impostor picture in units of tree height, and the empty margin below the tree. */
 export const IMPOSTOR_CELL = 1.1;
@@ -22,6 +23,8 @@ export interface MeshMaterialOptions {
   fadeOut: boolean;
   stiffness: number;
   doubleSided: boolean;
+  /** Low plants that the vehicle presses flat. */
+  trample?: boolean;
 }
 
 export class VegetationShading {
@@ -35,6 +38,9 @@ export class VegetationShading {
    * whichever camera is drawing, so trees are picked the same way in the shadow pass.
    */
   readonly viewer = uniform(new THREE.Vector3());
+  /** Where the vehicle has pressed grass and shrubs flat. */
+  readonly trample = new Trample();
+  private readonly trampleCentre = uniform(this.trample.centre);
 
   /**
    * For instanced meshes whose geometry has `sway` (float per vertex) and `iOrigin`
@@ -53,10 +59,24 @@ export class VegetationShading {
     const phase = origin.x.mul(0.07).add(origin.z.mul(0.05)).add(origin.w.mul(6.28));
     const gust = sin(time.mul(1.6).add(phase)).mul(0.6).add(sin(time.mul(3.7).add(phase.mul(2.3))).mul(0.25)).add(0.5);
     const bend = attribute<'float'>('sway', 'float').mul(local.y).mul(0.05 * (1 - o.stiffness)).mul(this.wind).mul(gust);
-    const push = vec3(this.windDirection.x, 0, this.windDirection.y).mul(bend);
+    let push = vec3(this.windDirection.x, 0, this.windDirection.y).mul(bend);
 
     const material = new THREE.MeshLambertNodeMaterial({ vertexColors: true, side: o.doubleSided ? THREE.DoubleSide : THREE.FrontSide });
-    material.positionNode = origin.xyz.add(local.add(push).mul(shown));
+    let shape = local;
+    if (o.trample) {
+      // Pressed over the way the vehicle went, and lower; and no longer swaying.
+      const t = texture(this.trample.texture, origin.xz.div(TRAMPLE_SIZE * TRAMPLE_CELL));
+      const off = origin.xz.sub(this.trampleCentre).abs();
+      const inside = max(off.x, off.y).lessThan((TRAMPLE_SIZE / 2 - 2) * TRAMPLE_CELL);
+      const flat = select(inside, t.x, 0);
+      const lie = vec2(t.y, t.z).mul(2).sub(1);
+      const lean = flat.mul(0.85);
+      shape = vec3(local.x.add(lie.x.mul(local.y).mul(lean).mul(1.1)), local.y.mul(float(1).sub(lean.mul(0.8))), local.z.add(lie.y.mul(local.y).mul(lean).mul(1.1)));
+      push = push.mul(float(1).sub(flat));
+      // Crushed stems show paler.
+      material.colorNode = mix(vec3(1, 1, 1), vec3(1.15, 1.1, 0.75), flat.mul(0.6));
+    }
+    material.positionNode = origin.xyz.add(shape.add(push).mul(shown));
     // Leaves and needles let light through: shade both sides of a surface alike, instead of
     // turning the normal on the back, which leaves crowns black from below.
     if (o.doubleSided) material.normalNode = normalViewGeometry;

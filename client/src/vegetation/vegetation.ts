@@ -228,7 +228,11 @@ export class Vegetation {
       for (const species of used) {
         const def: Species = SPECIES[species]!;
         const { full, low } = layer.ranges;
-        const options = { stiffness: def.wind.stiffness, doubleSided: def.generator !== 'boulder' && def.generator !== 'stump' };
+        const options = {
+          stiffness: def.wind.stiffness,
+          doubleSided: def.generator !== 'boulder' && def.generator !== 'stump',
+          trample: def.generator === 'grass' || def.generator === 'shrub',
+        };
         // Without a further representation to hand over to, the last one shrinks away.
         const fullMaterial = this.shading.meshMaterial({ ...options, near: 0, far: full, fadeOut: low === undefined });
         const lowMaterial = low === undefined ? null : this.shading.meshMaterial({ ...options, near: full, far: low, fadeOut: layer.ranges.impostor === undefined });

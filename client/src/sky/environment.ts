@@ -132,6 +132,16 @@ export class Environment {
     return ((((this.utc + this.clock.utcOffset * 3600000) % day) + day) % day) / 3600000;
   }
 
+  /** Colour of the sky near the horizon (linear RGB), as the fog has it. */
+  get skyColor(): THREE.Color {
+    return this.fog.color.value;
+  }
+
+  /** The sun's light reaching the ground in the open: colour times strength. */
+  get sunLight(): THREE.Color {
+    return this.sunRadiance.value;
+  }
+
   /** The month on the region's clocks, 0 January to 11 December. */
   month(): number {
     return new Date(this.utc + this.clock.utcOffset * 3600000).getUTCMonth();
