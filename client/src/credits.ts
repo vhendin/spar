@@ -28,6 +28,6 @@ export function fillCredits(panel: HTMLElement, index: RegionIndex | null): void
   const software = add('ul', '');
   for (const line of SOFTWARE) add('li', line, software);
   add('p', 'Every tree, rock, house and fence is generated in your browser from these data; nothing comes from the internet while you play.');
-  add('p', 'Press C to close.').className = 'hint';
+  add('p', 'Click, C or Esc to close.').className = 'hint';
   panel.replaceChildren(box);
 }

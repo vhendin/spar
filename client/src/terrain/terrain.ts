@@ -71,7 +71,8 @@ export class Terrain {
   private constructor(
     readonly index: RegionIndex,
     shading: GroundShading,
-    private readonly split: number,
+    /** A patch is divided while the camera is nearer than this many times its size; can change at any time. */
+    public split: number,
   ) {
     this.layout = terrainLayout(index);
     this.material = shading.material(MASK_TEXELS + 1, null);

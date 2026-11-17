@@ -6,7 +6,7 @@ import { Features } from './features/features';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
 import { WorldPanel } from './worldPanel';
-import { chooseQuality, nextQuality, saveQuality } from './quality';
+import { loadSettings, saveSettings, type Settings } from './settings';
 import { SeeThrough } from './seeThrough';
 import { Environment } from './sky/environment';
 import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
@@ -24,6 +24,8 @@ import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
 import { Spray } from './vehicle/spray';
 import { VehicleView } from './vehicle/view';
+import { Dashboard } from './ui/dashboard';
+import { Menu } from './ui/menu';
 
 /** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
 const STEP = 1 / 60;
@@ -35,11 +37,44 @@ const hud = document.querySelector<HTMLDivElement>('#hud')!;
 const fatal = document.querySelector<HTMLDivElement>('#fatal')!;
 const credits = document.querySelector<HTMLDivElement>('#credits')!;
 const worldRoot = document.querySelector<HTMLDivElement>('#world')!;
+const menuRoot = document.querySelector<HTMLDivElement>('#menu')!;
+const status = document.querySelector<HTMLDivElement>('#status')!;
+const hint = document.querySelector<HTMLDivElement>('#hint')!;
+
+/** Where to put the vehicle after the world is rebuilt for new settings (kept for this tab only). */
+const RESUME_KEY = 'spar.resume';
+/** The vehicle last chosen in the menu. */
+const VEHICLE_KEY = 'spar.vehicle';
+interface Resume {
+  x: number;
+  z: number;
+  heading: number;
+  camera: string;
+}
+
+function takeResume(): Resume | null {
+  try {
+    const text = sessionStorage.getItem(RESUME_KEY);
+    sessionStorage.removeItem(RESUME_KEY);
+    return text ? (JSON.parse(text) as Resume) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
 
 function showFatal(text: string): void {
   fatal.textContent = text;
   fatal.style.display = 'flex';
   hud.style.display = 'none';
+  status.style.display = 'none';
 }
 
 function describe(state: ConnectionState, index: RegionIndex | null): string {
@@ -76,6 +111,8 @@ interface World {
   felling: Felling;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
+  /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
+  arrival: { x: number; z: number; heading: number; name: string };
   /** True until the vehicle has been set down on loaded ground. */
   unplaced: boolean;
 }
@@ -90,17 +127,20 @@ async function start(): Promise<void> {
   // Falls back to WebGL 2 by itself when the browser has no WebGPU.
   await Promise.all([renderer.init(), RAPIER.init()]);
   const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
-  // ?quality=low|medium|high, or P to step through them (remembered on this computer).
-  const quality = chooseQuality(params);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
+  // Graphics settings from the menu (remembered on this computer); ?quality=low|medium|high
+  // picks a preset for this visit. `built` is what the world was built with.
+  const settings = loadSettings(params);
+  const built: Settings = { ...settings };
+  const resumeAt = takeResume();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
 
   // World axes: X east, Y up, Z south, in metres from the region's north-west corner at sea level.
   const scene = new THREE.Scene();
   // ?shadows=0 turns sun shadows off whatever the quality.
-  const shadows = quality.shadows && params.get('shadows') !== '0';
+  const shadows = settings.shadows > 0 && params.get('shadows') !== '0';
   renderer.shadowMap.enabled = shadows;
 
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 60000);
+  const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.5, 60000);
   const fly = new FlyCamera(camera, canvas);
   // Driving is the default; ?fly=1 or the F key hands the camera over to free flight.
   let flying = params.get('fly') === '1' || params.has('pos');
@@ -109,7 +149,7 @@ async function start(): Promise<void> {
   // Trees, rocks and buildings between the camera and the vehicle turn see-through.
   const seeThrough = new SeeThrough();
   // ?camera=orbit|cab starts in another view.
-  const startView = params.get('camera');
+  const startView = resumeAt?.camera ?? params.get('camera');
   if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
   const input = new DriveInput();
 
@@ -135,11 +175,20 @@ async function start(): Promise<void> {
   let lamps: boolean | null = null;
   let groundView = Number(params.get('view')) || 0;
   let detailed = params.get('wheels') !== '0';
+  // F3, or ?debug=1, shows the developer read-out and allows the developer keys
+  // (F fly, M masks, K colliders, G wheels).
+  let debug = params.get('debug') === '1';
+  let paused = false;
+  const dash = new Dashboard(document.body);
+  dash.visible = false;
+  let hintUntil = 0;
 
   const drawHud = (): void => {
+    drawStatus();
+    if (!debug) return;
     const info = renderer.info.render;
     const lines = [
-      `${fps === null ? '–' : fps.toFixed(0)} fps · ${backend} · ${quality.name} quality (P) · ${frameMs.toFixed(1)} ms CPU · ${info.drawCalls} draws · ${(info.triangles / 1e6).toFixed(2)}M triangles`,
+      `${fps === null ? '–' : fps.toFixed(0)} fps · ${backend} · ${frameMs.toFixed(1)} ms CPU · ${info.drawCalls} draws · ${(info.triangles / 1e6).toFixed(2)}M triangles`,
       describe(link, world?.index ?? null),
     ];
     if (world) {
@@ -178,10 +227,21 @@ async function start(): Promise<void> {
       flying
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
-          : 'click to fly · F drive · M masks · T time and weather · C credits'
-        : `W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · V view (${chase.mode}) · drag to look · G wheels · K colliders · T time and weather · F fly · C credits`,
+          : 'click to fly · F drive · M masks · F3 hide'
+        : `view ${chase.mode} · G wheels · K colliders · M masks · F fly · F3 hide`,
     );
     hud.textContent = lines.join('\n');
+  };
+
+  /** What players see before they can drive: connecting, loading, or what went wrong. */
+  const drawStatus = (): void => {
+    let text = '';
+    if (link.status === 'offline') text = `No connection to the game server: ${link.reason}`;
+    else if (!world) text = link.status === 'connecting' ? 'Connecting…' : `Loading ${loadingRegion ?? ''}…`;
+    else if (world.unplaced) text = `Loading ${world.index.title}…`;
+    status.textContent = text;
+    status.style.display = text && !debug ? 'flex' : 'none';
+    hud.style.display = debug ? 'block' : 'none';
   };
   drawHud();
 
@@ -201,7 +261,7 @@ async function start(): Promise<void> {
     const shading = new GroundShading(index);
     shading.view.value = groundView;
     const [terrain, horizon, vectors] = await Promise.all([
-      Terrain.load(index, shading, quality.terrainSplit),
+      Terrain.load(index, shading, settings.terrainSplit),
       loadHorizon(index, shading),
       fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>),
     ]);
@@ -218,7 +278,7 @@ async function start(): Promise<void> {
     const environment = new Environment(
       scene,
       index,
-      { shadows, shadowMapSize: quality.shadowMapSize, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null },
+      { shadows, shadowMapSize: settings.shadows, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null },
       camera.far,
     );
     if (latestWorld) environment.setWorld(latestWorld, performance.now());
@@ -226,7 +286,7 @@ async function start(): Promise<void> {
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
-      vegetation = await Vegetation.create(renderer, index, welcome.seed, quality.plantRange, quality.farTreeRange, seeThrough);
+      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough);
       scene.add(vegetation.group);
       // ?atlas=1 stands the far-tree pictures up in front of the start position.
       if (params.get('atlas') === '1') {
@@ -240,13 +300,13 @@ async function start(): Promise<void> {
     let features: Features | null = null;
     if (params.get('objects') !== '0') {
       features = new Features(index, vectors, welcome.seed, seeThrough);
-      features.rangeScale = quality.objectRange;
+      features.rangeScale = settings.objectRange;
       scene.add(features.group);
     }
 
     // Vehicle: ?vehicle=<name> picks a definition, ?spawn=<name or number> a start point.
     const defs = Object.values(VEHICLES);
-    const def = defs.find((d) => d.name === params.get('vehicle')) ?? defs.find((d) => d.name === 'tgb11') ?? defs[0]!;
+    const def = defs.find((d) => d.name === (params.get('vehicle') ?? stored(VEHICLE_KEY))) ?? defs.find((d) => d.name === 'tgb11') ?? defs[0]!;
     const wanted = params.get('spawn');
     const spawn =
       vectors.spawns.find((s) => s.name.toLowerCase() === wanted?.toLowerCase()) ??
@@ -272,7 +332,9 @@ async function start(): Promise<void> {
       obstacles.debug.visible = params.get('colliders') === '1';
       scene.add(obstacles.debug);
     }
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, felling, spawn, obstacles, unplaced: true };
+    // After a rebuild for new settings, the vehicle goes back where it was.
+    const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, felling, spawn, arrival, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -293,9 +355,141 @@ async function start(): Promise<void> {
     drawHud();
   };
 
+  const headingOf = (w: World): number => {
+    const r = w.sim.body.rotation();
+    return 180 - THREE.MathUtils.radToDeg(Math.atan2(2 * (r.w * r.y + r.x * r.z), 1 - 2 * (r.y * r.y + r.x * r.x)));
+  };
+  /** Back on its wheels where it stands. */
+  const resetVehicle = (w: World): void => {
+    const p = w.sim.body.translation();
+    setDown(w, p.x, p.z, headingOf(w));
+  };
+  const toStart = (w: World): void => {
+    w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
+  };
+
+  /** Starts over with the saved settings, putting the vehicle back where it is now. */
+  const rebuild = (): void => {
+    const w = world;
+    try {
+      if (w && !w.unplaced) {
+        const p = w.sim.body.translation();
+        const keep: Resume = { x: p.x, z: p.z, heading: headingOf(w), camera: chase.mode };
+        sessionStorage.setItem(RESUME_KEY, JSON.stringify(keep));
+      }
+    } catch {
+      // Without storage the vehicle starts at the spawn point instead.
+    }
+    // The URL's preset and vehicle would override what was just chosen.
+    const next = new URLSearchParams(location.search);
+    next.delete('quality');
+    next.delete('vehicle');
+    location.search = next.toString();
+  };
+
+  const showCredits = (on: boolean): void => {
+    if (on) fillCredits(credits, world?.index ?? null);
+    credits.style.display = on ? 'flex' : 'none';
+  };
+  credits.addEventListener('click', () => showCredits(false));
+
+  const pause = (): void => {
+    if (paused) return;
+    paused = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    menu.show();
+  };
+  const resume = (): void => {
+    paused = false;
+    menu.hide();
+    if (panel.open) panel.toggle();
+    showCredits(false);
+  };
+
+  const menu = new Menu(
+    menuRoot,
+    {
+      resume,
+      timeAndWeather: () => {
+        panel.toggle();
+        if (world) panel.refresh(world.environment);
+      },
+      resetVehicle: () => {
+        if (world) resetVehicle(world);
+        resume();
+      },
+      toStart: () => {
+        if (world) toStart(world);
+        resume();
+      },
+      credits: () => showCredits(true),
+      vehicles: Object.values(VEHICLES).map((d) => ({ name: d.name, title: d.title })).sort((a, b) => a.title.localeCompare(b.title)),
+      vehicle: () => world?.sim.def.name ?? '',
+      chooseVehicle: (name) => {
+        if (name === world?.sim.def.name) return;
+        try {
+          localStorage.setItem(VEHICLE_KEY, name);
+        } catch {
+          // Not remembered: the URL carries it this once.
+          const next = new URLSearchParams(location.search);
+          next.set('vehicle', name);
+          location.search = next.toString();
+          return;
+        }
+        rebuild();
+      },
+      changed: (key) => {
+        saveSettings(settings);
+        switch (key) {
+          case 'pixelRatio':
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
+            resize();
+            break;
+          case 'fov':
+            camera.fov = settings.fov;
+            camera.updateProjectionMatrix();
+            break;
+          case 'terrainSplit':
+            if (world) world.terrain.split = settings.terrainSplit;
+            break;
+          case 'objectRange':
+            if (world?.features) world.features.rangeScale = settings.objectRange;
+            break;
+        }
+      },
+      restart: rebuild,
+    },
+    settings,
+    built,
+  );
+
+  // Switching to another tab or window pauses too.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && world) pause();
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const w = world;
+    if (e.code === 'Escape') {
+      // Close whatever is on top: credits, then the time and weather panel, then the menu.
+      if (credits.style.display === 'flex') showCredits(false);
+      else if (panel.open) panel.toggle();
+      else if (menu.open) {
+        if (menu.back()) resume();
+      } else pause();
+      return;
+    }
+    if (e.code === 'F3') {
+      e.preventDefault();
+      debug = !debug;
+      drawHud();
+      drawStatus();
+      return;
+    }
+    if (paused) return;
+    // The developer's keys work only while the developer read-out shows (F3).
+    if (!debug && ['KeyM', 'KeyF', 'KeyK', 'KeyG'].includes(e.code)) return;
     switch (e.code) {
       case 'KeyM':
         setView(groundView + (e.shiftKey ? -1 : 1));
@@ -311,26 +505,11 @@ async function start(): Promise<void> {
         break;
       case 'KeyC':
         // Credits: the data and software the world is made from.
-        if (credits.style.display === 'flex') credits.style.display = 'none';
-        else {
-          fillCredits(credits, w?.index ?? null);
-          credits.style.display = 'flex';
-        }
+        showCredits(credits.style.display !== 'flex');
         break;
-      case 'KeyP': {
-        // A new quality takes effect on a fresh start; keep the place and view.
-        saveQuality(nextQuality(quality.name));
-        const next = new URLSearchParams(location.search);
-        next.delete('quality');
-        location.search = next.toString();
-        break;
-      }
       case 'KeyT':
         panel.toggle();
         if (w) panel.refresh(w.environment);
-        break;
-      case 'Escape':
-        if (panel.open) panel.toggle();
         break;
       case 'BracketLeft':
       case 'BracketRight':
@@ -356,11 +535,8 @@ async function start(): Promise<void> {
       case 'KeyR':
         // Back on its wheels where it stands; with Shift, back to the start.
         if (w && !flying) {
-          const p = w.sim.body.translation();
-          const r = w.sim.body.rotation();
-          const heading = 180 - THREE.MathUtils.radToDeg(Math.atan2(2 * (r.w * r.y + r.x * r.z), 1 - 2 * (r.y * r.y + r.x * r.x)));
-          if (e.shiftKey) w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
-          else setDown(w, p.x, p.z, heading);
+          if (e.shiftKey) toStart(w);
+          else resetVehicle(w);
         }
         break;
       default:
@@ -391,6 +567,7 @@ async function start(): Promise<void> {
   let frames = 0;
   let fpsSince = last;
   let owed = 0;
+  let startHeld = false;
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -398,10 +575,20 @@ async function start(): Promise<void> {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
 
+    // The gamepad's Start button opens and closes the menu.
+    const pad = navigator.getGamepads?.().find((p) => p?.connected && p.mapping === 'standard');
+    const start = pad?.buttons[9]?.pressed ?? false;
+    if (start && !startHeld && world) {
+      if (paused) resume();
+      else pause();
+    }
+    startHeld = start;
+
     const w = world;
     if (w) {
-      const controls = flying ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
-      owed += dt;
+      // While paused nothing moves: no input, no physics, no flying mud.
+      const controls = flying || paused ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
+      if (!paused) owed += dt;
       let steps = 0;
       while (owed >= STEP && steps < 4) {
         owed -= STEP;
@@ -409,7 +596,15 @@ async function start(): Promise<void> {
         const p = w.sim.body.translation();
         // Physics waits until the ground under the vehicle has arrived.
         if (!w.ground.update(p.x, p.z)) continue;
-        if (w.unplaced) w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
+        if (w.unplaced) {
+          w.unplaced = !setDown(w, w.arrival.x, w.arrival.z, w.arrival.heading);
+          if (!w.unplaced) {
+            // From now on, falling off the world means back to the spawn point.
+            w.arrival = w.spawn;
+            hintUntil = now + 8000;
+            drawHud();
+          }
+        }
         w.sim.step(controls, STEP);
         w.felling.before();
         w.physics.step(w.felling.events);
@@ -446,9 +641,13 @@ async function start(): Promise<void> {
         w.vegetation.shading.impostorLight.value = env.daylight;
       }
       // Mud, dust and water off the tyres.
-      w.spray.update(w.unplaced ? 0 : dt, w.sim, w.view.group, camera, env.weather.wetness, (x, z) => w.terrain.heightAt(x, z));
+      w.spray.update(w.unplaced || paused ? 0 : dt, w.sim, w.view.group, camera, env.weather.wetness, (x, z) => w.terrain.heightAt(x, z));
       const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
+
+      dash.visible = !flying && !w.unplaced;
+      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding });
+      hint.style.opacity = now < hintUntil && !paused ? '1' : '0';
     }
     renderer.render(scene, camera);
     frameMs += (performance.now() - began - frameMs) * 0.05;
