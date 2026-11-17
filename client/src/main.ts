@@ -26,6 +26,9 @@ import { Spray } from './vehicle/spray';
 import { VehicleView } from './vehicle/view';
 import { Dashboard } from './ui/dashboard';
 import { Menu } from './ui/menu';
+import { Look, type Grade } from './sky/look';
+
+const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
 /** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
 const STEP = 1 / 60;
@@ -152,6 +155,8 @@ async function start(): Promise<void> {
   const startView = resumeAt?.camera ?? params.get('camera');
   if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
   const input = new DriveInput();
+  const look = new Look(renderer, scene, camera, settings.glow > 0);
+  const plain = params.get('look') === '0';
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -268,10 +273,11 @@ async function start(): Promise<void> {
     scene.add(terrain.group, horizon);
 
     // Time and weather come from the server. For a look at a particular moment, the URL can
-    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|overcast|rain.
+    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|cloudy|overcast|rain.
     const fixedTime = params.get('time');
     const sky: Record<string, Weather> = {
       clear: { state: 'clear', cloud: 0.15, rain: 0, wind: 0.2, windDirection: 100, wetness: 0 },
+      cloudy: { state: 'clear', cloud: 0.45, rain: 0, wind: 0.25, windDirection: 100, wetness: 0 },
       overcast: { state: 'overcast', cloud: 0.9, rain: 0, wind: 0.4, windDirection: 100, wetness: 0 },
       rain: { state: 'rain', cloud: 1, rain: 0.8, wind: 0.6, windDirection: 100, wetness: 1 },
     };
@@ -451,6 +457,9 @@ async function start(): Promise<void> {
             break;
           case 'terrainSplit':
             if (world) world.terrain.split = settings.terrainSplit;
+            break;
+          case 'glow':
+            look.glow = settings.glow > 0;
             break;
           case 'objectRange':
             if (world?.features) world.features.rangeScale = settings.objectRange;
@@ -649,7 +658,9 @@ async function start(): Promise<void> {
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding });
       hint.style.opacity = now < hintUntil && !paused ? '1' : '0';
     }
-    renderer.render(scene, camera);
+    // ?look=0 draws the plain picture, without the grade and glow.
+    if (plain) renderer.render(scene, camera);
+    else look.render(world?.environment.grade ?? NEUTRAL);
     frameMs += (performance.now() - began - frameMs) * 0.05;
 
     frames++;

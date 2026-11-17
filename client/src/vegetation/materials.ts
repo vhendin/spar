@@ -7,6 +7,7 @@ import * as THREE from 'three/webgpu';
 import {
   attribute, float, fract, mix, normalViewGeometry, positionGeometry, positionLocal, select, sin, smoothstep, texture, time, uniform, vec2, vec3,
 } from 'three/tsl';
+import { cloudShadow } from '../sky/clouds';
 import { FADE_END, FADE_START, JITTER_MIN, JITTER_SPAN } from './coverage';
 
 /** Side of an impostor picture in units of tree height, and the empty margin below the tree. */
@@ -91,7 +92,8 @@ export class VegetationShading {
     const material = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.5 });
     // Small pictures blur their outline; firm it up so thin crowns do not dissolve with distance.
     material.positionNode = origin.xyz.add(across).add(up);
-    material.colorNode = texel.xyz.mul(info.w).mul(this.impostorLight);
+    // Their baked light is mostly sunlight, so a passing cloud's shadow darkens them too.
+    material.colorNode = texel.xyz.mul(info.w).mul(this.impostorLight).mul(mix(1, cloudShadow.light, 0.75));
     material.opacityNode = texel.w.mul(1.8).min(1);
     return material;
   }

@@ -20,12 +20,14 @@ export interface Settings {
   objectRange: number;
   /** Vertical field of view in degrees. */
   fov: number;
+  /** 1 for a soft glow around the sun, headlights and other bright things, 0 for none. */
+  glow: number;
 }
 
 export const PRESETS: Record<PresetName, Settings> = {
-  low: { pixelRatio: 1, shadows: 0, plantRange: 0.6, farTreeRange: 0.5, terrainSplit: 1.2, objectRange: 0.6, fov: 60 },
-  medium: { pixelRatio: 1.5, shadows: 1024, plantRange: 0.8, farTreeRange: 0.75, terrainSplit: 1.4, objectRange: 0.8, fov: 60 },
-  high: { pixelRatio: 2, shadows: 2048, plantRange: 1, farTreeRange: 1, terrainSplit: 1.6, objectRange: 1, fov: 60 },
+  low: { pixelRatio: 1, shadows: 0, plantRange: 0.6, farTreeRange: 0.5, terrainSplit: 1.2, objectRange: 0.6, fov: 60, glow: 0 },
+  medium: { pixelRatio: 1.5, shadows: 1024, plantRange: 0.8, farTreeRange: 0.75, terrainSplit: 1.4, objectRange: 0.8, fov: 60, glow: 1 },
+  high: { pixelRatio: 2, shadows: 2048, plantRange: 1, farTreeRange: 1, terrainSplit: 1.6, objectRange: 1, fov: 60, glow: 1 },
 };
 
 /** The settings that only take effect when the world is built again. */
@@ -39,6 +41,7 @@ export const CHOICES: Record<keyof Settings, { label: string; options: [string, 
   plantRange: { label: 'Plant detail', options: [['Low', 0.6], ['Medium', 0.8], ['High', 1], ['Very high', 1.25]] },
   objectRange: { label: 'Building draw distance', options: [['Near', 0.6], ['Medium', 0.8], ['Far', 1], ['Very far', 1.5]] },
   terrainSplit: { label: 'Ground detail', options: [['Low', 1.2], ['Medium', 1.4], ['High', 1.6], ['Very high', 2]] },
+  glow: { label: 'Glow', options: [['Off', 0], ['On', 1]] },
   fov: { label: 'Field of view', options: [['50°', 50], ['60°', 60], ['70°', 70], ['80°', 80], ['90°', 90]] },
 };
 
