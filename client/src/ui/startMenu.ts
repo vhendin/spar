@@ -100,7 +100,36 @@ export class StartMenu {
     this.box.className = 'box';
     this.preview = document.createElement('canvas');
     this.preview.className = 'preview';
+    // The dots on the map are start points too: click one to start there.
+    this.preview.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const i = this.startAt(e);
+      if (i < 0) return;
+      this.start = i;
+      this.render();
+    });
+    this.preview.addEventListener('mousemove', (e) => {
+      const i = this.startAt(e);
+      this.preview.style.cursor = i >= 0 ? 'pointer' : '';
+      this.preview.title = i >= 0 ? this.starts[i]!.name : '';
+    });
     root.replaceChildren(this.box);
+  }
+
+  /** The start point under the pointer on the map, or -1. */
+  private startAt(e: MouseEvent): number {
+    const r = this.preview.getBoundingClientRect();
+    const k = r.width / this.index.size;
+    let best = -1;
+    let bestDist = 12; // pixels: easy to hit
+    this.starts.forEach((s, i) => {
+      const d = Math.hypot(r.left + s.x * k - e.clientX, r.top + s.z * k - e.clientY);
+      if (d < bestDist) {
+        bestDist = d;
+        best = i;
+      }
+    });
+    return best;
   }
 
   get open(): boolean {
