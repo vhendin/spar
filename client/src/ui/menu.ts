@@ -1,6 +1,7 @@
 // The menu (Esc): pauses the game and holds the settings, the controls, the choice of vehicle
 // and the way back to the start.
 
+import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../vehicle/gamepad';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
 
 export interface MenuActions {
@@ -38,7 +39,6 @@ const CONTROLS: [string, string][] = [
   ['T', 'Time and weather'],
   ['C', 'Credits'],
   ['Esc', 'Menu and pause'],
-  ['Gamepad', 'Sticks steer and look, triggers drive and brake, A handbrake, Y back on the wheels, Start menu, Back map'],
 ];
 
 export class Menu {
@@ -54,6 +54,7 @@ export class Menu {
     private readonly settings: Settings,
     /** The settings the world was built with. */
     private readonly built: Settings,
+    private readonly gamepad: PadControls,
   ) {
     this.box = document.createElement('div');
     this.box.className = 'box';
@@ -76,6 +77,20 @@ export class Menu {
     this.root.style.display = 'flex';
   }
 
+  /** The gamepad action waiting for its new button, if any. */
+  private binding: PadAction | null = null;
+
+  /** Waits for the next gamepad button for `action`; null stops waiting. */
+  private rebind(action: PadAction | null): void {
+    this.binding = action;
+    this.gamepad.listen(action ? (button) => {
+      this.gamepad.bind(action, button);
+      this.binding = null;
+      this.render();
+    } : null);
+    this.render();
+  }
+
   /** Leaves a page opened by itself, if that is what is showing. Returns true if it did. */
   private leave(): boolean {
     const exit = this.exit;
@@ -94,6 +109,10 @@ export class Menu {
   }
 
   hide(): void {
+    if (this.binding) {
+      this.binding = null;
+      this.gamepad.listen(null);
+    }
     this.root.style.display = 'none';
   }
 
@@ -109,6 +128,10 @@ export class Menu {
   }
 
   private render(): void {
+    if (this.page !== 'controls' && this.binding) {
+      this.binding = null;
+      this.gamepad.listen(null);
+    }
     const box = this.box;
     box.replaceChildren();
     const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
@@ -160,14 +183,34 @@ export class Menu {
     }
 
     if (this.page === 'controls') {
-      add('h2', 'Controls');
+      add('h2', 'Keyboard');
       const table = add('table', '', box, 'keys');
       for (const [key, what] of CONTROLS) {
         const tr = add('tr', '', table);
         add('td', key, tr, 'key');
         add('td', what, tr);
       }
-      button('Back', () => go('main'), box, 'back');
+      add('h2', 'Gamepad');
+      const pad = this.gamepad;
+      add('p', pad.pad ? `${pad.pad.id.replace(/\s*\(.*$/, '')}. Left stick steers, right stick looks around. Click an action, then press the button for it.` : 'No gamepad found: connect one and press any of its buttons. Left stick steers, right stick looks around.', box, 'hint');
+      const padTable = add('table', '', box, 'keys');
+      for (const { id, label } of PAD_ACTIONS) {
+        const tr = add('tr', '', padTable);
+        const cell = add('td', '', tr, 'key');
+        const waiting = this.binding === id;
+        button(waiting ? 'Press a button…' : buttonName(pad.bindings[id]), () => this.rebind(waiting ? null : id), cell, waiting ? 'on bind' : 'bind');
+        add('td', label, tr);
+      }
+      const row = add('div', '', box, 'row');
+      button('Back', () => {
+        this.rebind(null);
+        go('main');
+      }, row, 'back');
+      button('Reset gamepad', () => {
+        this.rebind(null);
+        pad.reset();
+        this.render();
+      }, row, 'back');
       return;
     }
 

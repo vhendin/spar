@@ -19,6 +19,7 @@ import { driverEye } from './vehicle/body';
 import { Felling } from './vehicle/felling';
 import { GroundStore } from './vehicle/groundStore';
 import { DriveInput } from './vehicle/input';
+import { PadControls } from './vehicle/gamepad';
 import { Obstacles } from './vehicle/obstacles';
 import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
@@ -164,10 +165,13 @@ async function start(): Promise<void> {
   const chase = new ChaseCamera(camera, canvas, () => !flying);
   // Trees, rocks and buildings between the camera and the vehicle turn see-through.
   const seeThrough = new SeeThrough();
+  const vehicleSize = new THREE.Vector3();
+  const vehicleCentre = new THREE.Vector3();
   // ?camera=orbit|cab starts in another view.
   const startView = resumeAt?.camera ?? params.get('camera');
   if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
-  const input = new DriveInput();
+  const gamepad = new PadControls();
+  const input = new DriveInput(gamepad);
   const look = new Look(renderer, scene, camera, settings.glow > 0);
   const plain = params.get('look') === '0';
   const snowOverride = params.has('snow') && Number.isFinite(Number(params.get('snow'))) ? Number(params.get('snow')) : null;
@@ -212,7 +216,6 @@ async function start(): Promise<void> {
   let lastSaved = 0;
   /** Seconds the vehicle has lain on its side or roof; after a moment the way back is offered. */
   let overturned = 0;
-  let rightHeld = false;
   const prompt = document.createElement('div');
   prompt.id = 'prompt';
   prompt.innerHTML = 'Overturned · press <kbd>R</kbd> to get back on the wheels';
@@ -623,6 +626,7 @@ async function start(): Promise<void> {
     },
     settings,
     built,
+    gamepad,
   );
 
   // Switching to another tab or window pauses too.
@@ -742,8 +746,6 @@ async function start(): Promise<void> {
   let frames = 0;
   let fpsSince = last;
   let owed = 0;
-  let startHeld = false;
-  let backHeld = false;
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -752,21 +754,31 @@ async function start(): Promise<void> {
     last = now;
 
     // The gamepad's Start button opens and closes the menu.
-    const pad = navigator.getGamepads?.().find((p) => p?.connected && p.mapping === 'standard');
-    const start = pad?.buttons[9]?.pressed ?? false;
-    if (start && !startHeld && world && !starting) {
-      if (paused) resume();
+    gamepad.poll();
+    if (gamepad.tapped('menu') && world) {
+      if (starting) {
+        if (world.start.open) world.start.drive();
+      } else if (paused) resume();
       else pause();
     }
-    startHeld = start;
-    // Back (Select) opens and closes the map.
-    const back = pad?.buttons[8]?.pressed ?? false;
-    if (back && !backHeld && world && !paused && !starting) toggleMap();
-    backHeld = back;
-    // Y rights an overturned vehicle.
-    const rightButton = pad?.buttons[3]?.pressed ?? false;
-    if (rightButton && !rightHeld && world && !paused && !starting && !flying) resetVehicle(world);
-    rightHeld = rightButton;
+    const w0 = world;
+    if (w0 && !paused && !starting) {
+      if (gamepad.tapped('map')) toggleMap();
+      if (gamepad.tapped('minimap')) minimap.cycle();
+      if (!flying && !w0.map.open) {
+        if (gamepad.tapped('right')) resetVehicle(w0);
+        if (gamepad.tapped('toStart')) toStart(w0);
+        if (gamepad.tapped('camera')) chase.cycle();
+        if (gamepad.tapped('lights')) lamps = lamps === null ? true : lamps ? false : null;
+        if (gamepad.tapped('range')) w0.sim.toggleRange();
+        if (gamepad.tapped('locks')) {
+          // All lockable axles together: lock them all, or free them all if they already are.
+          const lockable = w0.sim.def.axles.map((a, i) => (a.differential === 'lockable' ? i : -1)).filter((i) => i >= 0);
+          const lock = lockable.some((i) => !w0.sim.locks[i]);
+          for (const i of lockable) if (w0.sim.locks[i] !== lock) w0.sim.toggleLock(i);
+        }
+      }
+    }
 
     const w = world;
     if (w) {
@@ -818,6 +830,14 @@ async function start(): Promise<void> {
       } else if (flying) fly.update(dt);
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
       seeThrough.strength.value = flying || chase.mode === 'cab' ? 0 : 1;
+      seeThrough.cab.value = !flying && !starting && chase.mode === 'cab' ? 1 : 0;
+      // The vehicle's own space, from just above the ground to the roof: plants there are not drawn.
+      const body = w.sim.def.body;
+      w.view.group.updateMatrixWorld();
+      vehicleSize.set(body.width + 0.1, body.height - 0.2, body.length + 0.1);
+      vehicleCentre.set(0, 0.2 + vehicleSize.y / 2, w.sim.def.chassis.box.center[2]!);
+      if (w.unplaced) vehicleCentre.y = -1e6;
+      seeThrough.setVehicle(w.view.group.matrixWorld, vehicleSize, vehicleCentre);
       w.view.setInside(!flying && chase.mode === 'cab');
       seeThrough.eye.value.copy(camera.position);
       seeThrough.focus.value.copy(chase.target);

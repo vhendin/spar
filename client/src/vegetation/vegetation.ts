@@ -237,7 +237,8 @@ export class Vegetation {
         const fullMaterial = this.shading.meshMaterial({ ...options, near: 0, far: full, fadeOut: low === undefined });
         const lowMaterial = low === undefined ? null : this.shading.meshMaterial({ ...options, near: full, far: low, fadeOut: layer.ranges.impostor === undefined });
         // Trees and rocks can hide the vehicle; ground cover is too low to matter.
-        if (this.seeThrough && layer.batch === 'tile') for (const m of [fullMaterial, lowMaterial]) if (m) this.seeThrough.apply(m);
+        // Ground cover only vanishes inside the vehicle and in front of the cab's eye.
+        if (this.seeThrough) for (const m of [fullMaterial, lowMaterial]) if (m) this.seeThrough.apply(m, layer.batch === 'tile');
         perDetail.full[species] = [];
         perDetail.low[species] = [];
         for (let v = 0; v < def.variants; v++) {

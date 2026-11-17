@@ -205,7 +205,8 @@ export class StartMenu {
     button('Credits', () => this.actions.credits(), foot, 'link');
   }
 
-  private drive(): void {
+  /** Drives off with what is chosen (the Drive button, Enter, or Start on a gamepad). */
+  drive(): void {
     const start = this.starts[this.start]!;
     write(START_KEY, start.name);
     this.actions.drive({ start, vehicle: this.vehicle, name: this.name });
