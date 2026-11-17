@@ -5,6 +5,7 @@ import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type
 
 export interface MenuActions {
   resume(): void;
+  map(): void;
   timeAndWeather(): void;
   resetVehicle(): void;
   toStart(): void;
@@ -30,10 +31,11 @@ const CONTROLS: [string, string][] = [
   ['Drag, wheel', 'Look around, camera distance'],
   ['R', 'Back on the wheels'],
   ['Shift R', 'Back to the start'],
+  ['M', 'Map: choose a destination, or another start point'],
   ['T', 'Time and weather'],
   ['C', 'Credits'],
   ['Esc', 'Menu and pause'],
-  ['Gamepad', 'Sticks steer and look, triggers drive and brake, A handbrake, Start menu'],
+  ['Gamepad', 'Sticks steer and look, triggers drive and brake, A handbrake, Start menu, Back map'],
 ];
 
 export class Menu {
@@ -109,6 +111,7 @@ export class Menu {
       add('p', 'Paused', box, 'sub');
       const list = add('div', '', box, 'list');
       button('Resume', () => this.actions.resume(), list, 'primary');
+      button('Map', () => this.actions.map(), list);
       button('Time and weather', () => this.actions.timeAndWeather(), list);
       button('Settings', () => go('settings'), list);
       button('Controls', () => go('controls'), list);

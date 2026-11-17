@@ -31,6 +31,8 @@ import { Look, type Grade } from './sky/look';
 import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
 import { VehicleAudio } from './audio/vehicleAudio';
+import { Guide } from './ui/guide';
+import { MapScreen, type MapState } from './ui/map';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -118,6 +120,7 @@ interface World {
   tracks: Tracks;
   felling: Felling;
   sound: VehicleAudio;
+  map: MapScreen;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
@@ -166,6 +169,9 @@ async function start(): Promise<void> {
   // Sound starts with the first key or click; ?sound=0 keeps it off for this visit.
   const audio = new AudioOut(params.get('sound') === '0' ? 0 : settings.volume);
   const ambience = new Ambience(audio);
+  // The way to the destination chosen on the map.
+  const guide = new Guide(document.body);
+  scene.add(guide.beacon);
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -190,7 +196,7 @@ async function start(): Promise<void> {
   let groundView = Number(params.get('view')) || 0;
   let detailed = params.get('wheels') !== '0';
   // F3, or ?debug=1, shows the developer read-out and allows the developer keys
-  // (F fly, M masks, K colliders, G wheels).
+  // (F fly, B masks, K colliders, G wheels).
   let debug = params.get('debug') === '1';
   let paused = false;
   const dash = new Dashboard(document.body);
@@ -241,8 +247,8 @@ async function start(): Promise<void> {
       flying
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
-          : 'click to fly · F drive · M masks · F3 hide'
-        : `view ${chase.mode} · G wheels · K colliders · M masks · F fly · F3 hide`,
+          : 'click to fly · F drive · B masks · M map · F3 hide'
+        : `view ${chase.mode} · G wheels · K colliders · B masks · M map · F fly · F3 hide`,
     );
     hud.textContent = lines.join('\n');
   };
@@ -353,7 +359,17 @@ async function start(): Promise<void> {
     // After a rebuild for new settings, the vehicle goes back where it was.
     const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
     const sound = new VehicleAudio(audio);
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, spawn, arrival, obstacles, unplaced: true };
+    const map = new MapScreen(document.body, index, vectors, {
+      setDestination: (d) => {
+        guide.destination = d;
+      },
+      travel: (s) => {
+        if (world) travel(world, s);
+        toggleMap();
+      },
+      close: () => toggleMap(),
+    });
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -367,7 +383,7 @@ async function start(): Promise<void> {
     scene.getObjectByName('atlas')?.position.set(pos[0]!, pos[1]!, pos[2]! - 30);
   };
 
-  // M steps through the raw mask views; ?view=n starts in one.
+  // B steps through the raw mask views; ?view=n starts in one.
   const setView = (n: number): void => {
     groundView = ((n % GROUND_VIEWS.length) + GROUND_VIEWS.length) % GROUND_VIEWS.length;
     if (world) world.shading.view.value = groundView;
@@ -382,6 +398,30 @@ async function start(): Promise<void> {
   const resetVehicle = (w: World): void => {
     const p = w.sim.body.translation();
     setDown(w, p.x, p.z, headingOf(w));
+  };
+  /** Off to another start point, which then becomes the one to go back to. */
+  const travel = (w: World, s: World['spawn']): void => {
+    w.spawn = { name: s.name, x: s.x, z: s.z, heading: s.heading };
+    w.arrival = w.spawn;
+    // Moved there first, so the ground around it loads; set down properly once it has.
+    const y = w.map.heightAt(s.x, s.z) ?? w.terrain.heightAt(s.x, s.z) ?? w.index.heights.max;
+    w.sim.place(s.x, y + 1, s.z, s.heading);
+    w.tracks.break();
+    w.unplaced = true;
+  };
+  /** Where the vehicle is and faces, or the camera when flying. */
+  const mapState = (w: World): MapState => {
+    if (flying) {
+      const f = camera.getWorldDirection(new THREE.Vector3());
+      return { x: camera.position.x, z: camera.position.z, heading: THREE.MathUtils.radToDeg(Math.atan2(f.x, -f.z)), destination: guide.destination };
+    }
+    const p = w.sim.body.translation();
+    return { x: p.x, z: p.z, heading: headingOf(w), destination: guide.destination };
+  };
+  const toggleMap = (): void => {
+    if (!world) return;
+    if (document.pointerLockElement) document.exitPointerLock();
+    world.map.toggle(mapState(world));
   };
   const toStart = (w: World): void => {
     w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
@@ -431,6 +471,10 @@ async function start(): Promise<void> {
     menuRoot,
     {
       resume,
+      map: () => {
+        resume();
+        toggleMap();
+      },
       timeAndWeather: () => {
         panel.toggle();
         if (world) panel.refresh(world.environment);
@@ -501,6 +545,7 @@ async function start(): Promise<void> {
     if (e.code === 'Escape') {
       // Close whatever is on top: credits, then the time and weather panel, then the menu.
       if (credits.style.display === 'flex') showCredits(false);
+      else if (w?.map.open) toggleMap();
       else if (panel.open) panel.toggle();
       else if (menu.open) {
         if (menu.back()) resume();
@@ -516,9 +561,12 @@ async function start(): Promise<void> {
     }
     if (paused) return;
     // The developer's keys work only while the developer read-out shows (F3).
-    if (!debug && ['KeyM', 'KeyF', 'KeyK', 'KeyG'].includes(e.code)) return;
+    if (!debug && ['KeyB', 'KeyF', 'KeyK', 'KeyG'].includes(e.code)) return;
     switch (e.code) {
       case 'KeyM':
+        toggleMap();
+        break;
+      case 'KeyB':
         setView(groundView + (e.shiftKey ? -1 : 1));
         break;
       case 'KeyF':
@@ -595,6 +643,7 @@ async function start(): Promise<void> {
   let fpsSince = last;
   let owed = 0;
   let startHeld = false;
+  let backHeld = false;
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -610,11 +659,15 @@ async function start(): Promise<void> {
       else pause();
     }
     startHeld = start;
+    // Back (Select) opens and closes the map.
+    const back = pad?.buttons[8]?.pressed ?? false;
+    if (back && !backHeld && world && !paused) toggleMap();
+    backHeld = back;
 
     const w = world;
     if (w) {
       // While paused nothing moves: no input, no physics, no flying mud.
-      const controls = flying || paused ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
+      const controls = flying || paused || w.map.open ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
       if (!paused) owed += dt;
       let steps = 0;
       while (owed >= STEP && steps < 4) {
@@ -690,6 +743,12 @@ async function start(): Promise<void> {
         speed: flying ? 0 : Math.abs(w.sim.speed),
         inside,
       }, camera.position);
+
+      // The map, and the way to the destination.
+      const where = mapState(w);
+      if (!w.unplaced && !flying) w.map.record(where.x, where.z);
+      w.map.update(where, now);
+      guide.update(now, camera, flying ? camera.position : w.view.group.position, (x, z) => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z), !w.unplaced && !w.map.open);
 
       dash.visible = !flying && !w.unplaced;
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding });
