@@ -67,6 +67,24 @@ class FlatMesh {
     }
   }
 
+  /** A ring of square section standing in the x-y plane, facing along z. */
+  ring(cx: number, cy: number, cz: number, radius: number, thick: number, segments: number, color: THREE.Color): void {
+    const t = thick / 2;
+    const at = (k: number, r: number, z: number): P3 => {
+      const a = (k / segments) * Math.PI * 2;
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, cz + z];
+    };
+    for (let k = 0; k < segments; k++) {
+      const a = ((k + 0.5) / segments) * Math.PI * 2;
+      const inside: P3 = [cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, cz];
+      const corners: [number, number][] = [[radius - t, -t], [radius + t, -t], [radius + t, t], [radius - t, t]];
+      for (let c = 0; c < 4; c++) {
+        const [r0, z0] = corners[c]!, [r1, z1] = corners[(c + 1) % 4]!;
+        this.quad(at(k, r0, z0), at(k + 1, r0, z0), at(k + 1, r1, z1), at(k, r1, z1), color, inside);
+      }
+    }
+  }
+
   build(): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
@@ -79,11 +97,62 @@ class FlatMesh {
 export interface VehicleMeshes {
   /** The body, with its origin on the ground under the middle of the vehicle. */
   body: THREE.Mesh;
+  /** The windows, drawn from outside only. */
+  glass: THREE.Mesh;
   /** One wheel, centred on its hub; clone it per wheel. */
   wheel: THREE.Mesh;
   /** Lamp glasses, separate so they can be lit. */
   headlights: THREE.Mesh;
   taillights: THREE.Mesh;
+  /**
+   * The inside of the cab, seen from the driver's seat. Every face of the body faces
+   * outwards, so from inside the body is invisible and only this is drawn.
+   */
+  interior: THREE.Mesh;
+}
+
+/** The driver's eyes in the vehicle's frame (x left, y up, z forward): left-hand drive. */
+export function driverEye(def: VehicleDef): P3 {
+  const b = def.body;
+  return [b.width * 0.22, Math.min(b.beltline + 0.36, b.height - 0.4), b.length / 2 - b.windscreenRake - 0.6];
+}
+
+function buildInterior(def: VehicleDef, c: Record<string, THREE.Color>): THREE.BufferGeometry {
+  const b = def.body;
+  const m = new FlatMesh();
+  // Kept a little inside the body's own faces, so the two never fight over a pixel.
+  const half = b.length / 2 - 0.03, hw = b.width / 2 - 0.03, top = b.height - 0.03;
+  const cabBack = b.length / 2 - b.cabLength;
+  const lean = b.windscreenRake;
+  const front = half - 0.06;
+  const [ex, , ez] = driverEye(def);
+  const dash = c.trim!, panel = c.body!, roof = c.roof!;
+
+  // Floor, roof lining and the wall behind the seats, with a window in it.
+  m.box(-hw, b.floor, cabBack, hw, b.floor + 0.04, front, dash);
+  m.box(-hw, top - 0.05, cabBack, hw, top, front - lean - 0.1, roof);
+  m.box(-hw, b.floor, cabBack - 0.04, hw, b.beltline + 0.1, cabBack, panel);
+  m.box(-hw, top - 0.28, cabBack - 0.04, hw, top, cabBack, panel);
+  for (const side of [1, -1]) m.box(Math.min(side * 0.5, side * hw), b.beltline + 0.1, cabBack - 0.04, Math.max(side * 0.5, side * hw), top - 0.28, cabBack, panel);
+
+  // Dashboard under the windscreen, a hood over the instruments and the steering wheel.
+  m.box(-hw, b.beltline - 0.3, front - 0.42, hw, b.beltline + 0.02, front, dash);
+  m.box(ex - 0.24, b.beltline + 0.02, front - 0.4, ex + 0.24, b.beltline + 0.09, front - 0.22, dash);
+  const wheelZ = Math.min(ez + 0.42, front - 0.5);
+  m.ring(ex, b.beltline - 0.05, wheelZ, 0.19, 0.03, 20, dash);
+  m.box(ex - 0.012, b.beltline - 0.24, wheelZ - 0.012, ex + 0.012, b.beltline + 0.14, wheelZ + 0.012, dash);
+  m.cylinder('z', ex, b.beltline - 0.05, wheelZ + 0.15, 0.035, 0.15, 8, dash, dash);
+
+  for (const side of [1, -1]) {
+    const x0 = Math.min(side * (hw - 0.09), side * hw), x1 = Math.max(side * (hw - 0.09), side * hw);
+    // Windscreen pillars following its lean, the header above it and the door frames.
+    m.prism([[front, b.beltline], [front - lean, top], [front - lean - 0.08, top], [front - 0.08, b.beltline]], Math.min(side * (hw - 0.07), side * hw), Math.max(side * (hw - 0.07), side * hw), panel);
+    m.box(x0, b.floor, cabBack, x1, b.beltline + 0.06, front, panel);
+    m.box(x0, b.beltline + 0.06, cabBack, x1, top, cabBack + 0.14, panel);
+    m.box(x0, top - 0.16, cabBack, x1, top, front - lean, panel);
+  }
+  m.box(-hw, top - 0.15, front - lean - 0.3, hw, top, front - lean - 0.02, panel);
+  return m.build();
 }
 
 export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
@@ -117,16 +186,18 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
   if (b.rear !== 'canvas') m.box(-hw + 0.05, top - 0.02, -half + 0.05, hw - 0.05, top + 0.015, half - lean - 0.2, c.roof);
   else m.box(-hw + 0.05, top - 0.02, cabBack, hw - 0.05, top + 0.015, half - lean - 0.2, c.roof);
 
-  // Glass: windscreen following the lean, door windows, and side windows on a hard top.
+  // Glass, a mesh of its own: from inside the cab it would block the view.
+  const glass = new FlatMesh();
+  // Windscreen following the lean, door windows, and side windows on a hard top.
   const g = 0.012;
-  m.prism([[half + g, b.beltline + 0.09], [half - lean + g, top - 0.14], [half - lean - 0.02, top - 0.14], [half - 0.02, b.beltline + 0.09]], -hw + 0.1, hw - 0.1, c.glass);
+  glass.prism([[half + g, b.beltline + 0.09], [half - lean + g, top - 0.14], [half - lean - 0.02, top - 0.14], [half - 0.02, b.beltline + 0.09]], -hw + 0.1, hw - 0.1, c.glass);
   for (const side of [1, -1]) {
     const x0 = side * (hw - 0.01), x1 = side * (hw + g);
-    m.box(Math.min(x0, x1), b.beltline + 0.06, cabBack + 0.14, Math.max(x0, x1), top - 0.16, half - lean - 0.22, c.glass);
+    glass.box(Math.min(x0, x1), b.beltline + 0.06, cabBack + 0.14, Math.max(x0, x1), top - 0.16, half - lean - 0.22, c.glass);
     if (b.rear === 'hardtop') {
       const length = cabBack + half;
       for (const [f0, f1] of [[0.08, 0.46], [0.54, 0.92]] as const) {
-        m.box(Math.min(x0, x1), b.beltline + 0.1, -half + length * f0, Math.max(x0, x1), top - 0.2, -half + length * f1, c.glass);
+        glass.box(Math.min(x0, x1), b.beltline + 0.1, -half + length * f0, Math.max(x0, x1), top - 0.2, -half + length * f1, c.glass);
       }
     }
     // Wheel arches: dark panels over each wheel.
@@ -135,7 +206,7 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
       m.prism([[axle.z - r - 0.1, b.floor - 0.02], [axle.z + r + 0.1, b.floor - 0.02], [axle.z + r * 0.7, r * 2 + 0.1], [axle.z - r * 0.7, r * 2 + 0.1]], Math.min(x0, x1), Math.max(x0, x1), c.trim);
     }
   }
-  if (b.rear === 'hardtop') m.box(-hw + 0.25, b.beltline + 0.12, -half - g, hw - 0.25, top - 0.22, -half + 0.01, c.glass);
+  if (b.rear === 'hardtop') glass.box(-hw + 0.25, b.beltline + 0.12, -half - g, hw - 0.25, top - 0.22, -half + 0.01, c.glass);
 
   // Front: grille panel and bumpers; underneath: frame and axle beams.
   m.box(-0.48, b.floor + 0.26, half - 0.01, 0.48, b.beltline - 0.16, half + g, c.trim);
@@ -173,5 +244,6 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
     for (const p of points) l.cylinder('z', p[0]!, p[1]!, p[2]! + facing * 0.02, 0.085, 0.03, 12, lit, lit);
     return new THREE.Mesh(l.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, emissive: color, emissiveIntensity: 0 }));
   };
-  return { body, wheel, headlights: lamps(b.headlights, 1, 0xfff4d6), taillights: lamps(b.taillights, -1, 0xb01818) };
+  const interior = new THREE.Mesh(buildInterior(def, c), material);
+  return { body, glass: new THREE.Mesh(glass.build(), material), wheel, headlights: lamps(b.headlights, 1, 0xfff4d6), taillights: lamps(b.taillights, -1, 0xb01818), interior };
 }

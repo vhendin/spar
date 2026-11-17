@@ -3,6 +3,7 @@
 // shown up to that kind's own distance.
 
 import * as THREE from 'three/webgpu';
+import type { SeeThrough } from '../seeThrough';
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 import type { BuiltPart, BuiltTile } from './build';
 import { OBJECTS } from './defs';
@@ -49,8 +50,10 @@ export class Features {
     private readonly index: RegionIndex,
     vectors: RegionVectors,
     seed: number,
+    seeThrough: SeeThrough | null = null,
   ) {
     this.group.name = 'features';
+    seeThrough?.apply(this.material);
     this.reach = Math.max(...Object.values(OBJECTS).map((d) => d.range));
     this.worker.onmessage = (ev: MessageEvent<FeatureResponse>) => {
       const msg = ev.data;

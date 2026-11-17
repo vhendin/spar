@@ -6,6 +6,7 @@ import { Features } from './features/features';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
 import { chooseQuality, nextQuality, saveQuality } from './quality';
+import { SeeThrough } from './seeThrough';
 import { Environment } from './sky/environment';
 import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
@@ -13,6 +14,7 @@ import { loadRegionIndex, RegionMissingError, regionUrl } from './terrain/region
 import { Terrain } from './terrain/terrain';
 import { Vegetation } from './vegetation/vegetation';
 import { ChaseCamera } from './vehicle/chaseCamera';
+import { driverEye } from './vehicle/body';
 import { GroundStore } from './vehicle/groundStore';
 import { DriveInput } from './vehicle/input';
 import { Obstacles } from './vehicle/obstacles';
@@ -98,6 +100,11 @@ async function start(): Promise<void> {
   let flying = params.get('fly') === '1' || params.has('pos');
   fly.enabled = flying;
   const chase = new ChaseCamera(camera, canvas, () => !flying);
+  // Trees, rocks and buildings between the camera and the vehicle turn see-through.
+  const seeThrough = new SeeThrough();
+  // ?camera=orbit|cab starts in another view.
+  const startView = params.get('camera');
+  if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
   const input = new DriveInput();
 
   const resize = (): void => {
@@ -163,7 +170,7 @@ async function start(): Promise<void> {
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
           : 'click to fly · F drive · M masks · C credits'
-        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · G wheels · K colliders · F fly · C credits',
+        : `W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · V view (${chase.mode}) · drag to look · G wheels · K colliders · F fly · C credits`,
     );
     hud.textContent = lines.join('\n');
   };
@@ -210,7 +217,7 @@ async function start(): Promise<void> {
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
-      vegetation = await Vegetation.create(renderer, index, welcome.seed, quality.plantRange, quality.farTreeRange);
+      vegetation = await Vegetation.create(renderer, index, welcome.seed, quality.plantRange, quality.farTreeRange, seeThrough);
       scene.add(vegetation.group);
       // ?atlas=1 stands the far-tree pictures up in front of the start position.
       if (params.get('atlas') === '1') {
@@ -223,7 +230,7 @@ async function start(): Promise<void> {
     // ?objects=0 leaves out buildings, power lines, fences and log piles.
     let features: Features | null = null;
     if (params.get('objects') !== '0') {
-      features = new Features(index, vectors, welcome.seed);
+      features = new Features(index, vectors, welcome.seed, seeThrough);
       features.rangeScale = quality.objectRange;
       scene.add(features.group);
     }
@@ -242,6 +249,7 @@ async function start(): Promise<void> {
     const ground = new GroundStore(RAPIER, physics, index);
     const sim = new VehicleSim(RAPIER, physics, def, ground);
     const view = new VehicleView(sim);
+    chase.eye.set(...driverEye(def));
     scene.add(view.group);
     sim.place(spawn.x, (terrain.heightAt(spawn.x, spawn.z) ?? index.heights.max) + 1, spawn.z, spawn.heading);
     view.snap();
@@ -305,6 +313,10 @@ async function start(): Promise<void> {
         location.search = next.toString();
         break;
       }
+      case 'KeyV':
+        // Views: chase, orbit, cab.
+        if (!flying) chase.cycle();
+        break;
       case 'KeyK':
         if (w?.obstacles) w.obstacles.debug.visible = !w.obstacles.debug.visible;
         break;
@@ -390,6 +402,10 @@ async function start(): Promise<void> {
 
       if (flying) fly.update(dt);
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
+      seeThrough.strength.value = flying || chase.mode === 'cab' ? 0 : 1;
+      w.view.setInside(!flying && chase.mode === 'cab');
+      seeThrough.eye.value.copy(camera.position);
+      seeThrough.focus.value.copy(chase.target);
       w.terrain.update(camera.position);
       w.vegetation?.update(camera.position);
       w.features?.update(camera.position);

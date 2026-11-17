@@ -10,6 +10,7 @@ export class VehicleView {
   readonly group = new THREE.Group();
   readonly headlights: THREE.Mesh;
   readonly taillights: THREE.Mesh;
+  private readonly glass: THREE.Mesh;
   private readonly wheels: THREE.Mesh[] = [];
   private readonly beams: THREE.SpotLight[] = [];
   private readonly from = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
@@ -19,8 +20,10 @@ export class VehicleView {
     const meshes = buildVehicleMeshes(sim.def);
     this.headlights = meshes.headlights;
     this.taillights = meshes.taillights;
-    this.group.add(meshes.body, meshes.headlights, meshes.taillights);
+    this.glass = meshes.glass;
+    this.group.add(meshes.body, meshes.glass, meshes.headlights, meshes.taillights, meshes.interior);
     meshes.body.castShadow = meshes.body.receiveShadow = true;
+    meshes.interior.receiveShadow = true;
     for (const at of sim.def.body.headlights) {
       // Present from the start, at zero strength: adding lights later makes every material rebuild.
       const beam = new THREE.SpotLight(0xfff0d2, 0, 160, 0.62, 0.7, 1);
@@ -44,6 +47,11 @@ export class VehicleView {
     for (const beam of this.beams) beam.intensity = on ? HEADLIGHT : 0;
     (this.headlights.material as THREE.MeshStandardMaterial).emissiveIntensity = on ? 3 : 0;
     (this.taillights.material as THREE.MeshStandardMaterial).emissiveIntensity = braking ? 4 : on ? 1.2 : 0;
+  }
+
+  /** From the driver's seat the windows are left out: they are tinted panels, not see-through. */
+  setInside(inside: boolean): void {
+    this.glass.visible = !inside;
   }
 
   /** Jumps to the body's current pose, after placing or resetting the vehicle. */

@@ -4,6 +4,7 @@ import { RULES, SPECIES } from './defs';
 import { generate, type Detail, type MeshData } from './generators';
 import { copyReach, needsCopy, REFILL_MOVE, shownBy } from './coverage';
 import { bakeImpostors, type ImpostorAtlas } from './impostors';
+import type { SeeThrough } from '../seeThrough';
 import { VegetationShading } from './materials';
 import { STRIDE } from './placement';
 import { compileRules, type CompiledLayer } from './rules';
@@ -157,8 +158,9 @@ export class Vegetation {
    * `range` scales the distances plants change detail and disappear; `farRange` the
    * distance far-tree pictures reach.
    */
-  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number, range = 1, farRange = 1): Promise<Vegetation> {
-    const vegetation = new Vegetation(index, seed, range, farRange);
+  /** With `seeThrough`, trees and rocks between the camera and the vehicle turn see-through. */
+  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number, range = 1, farRange = 1, seeThrough: SeeThrough | null = null): Promise<Vegetation> {
+    const vegetation = new Vegetation(index, seed, range, farRange, seeThrough);
     await vegetation.prepare(renderer);
     return vegetation;
   }
@@ -168,6 +170,7 @@ export class Vegetation {
     private readonly seed: number,
     range: number,
     farRange: number,
+    private readonly seeThrough: SeeThrough | null,
   ) {
     this.group.name = 'vegetation';
     this.layers = compileRules(RULES, SPECIES, index.masks.biomes).map((l) => ({
@@ -209,6 +212,8 @@ export class Vegetation {
         // Without a further representation to hand over to, the last one shrinks away.
         const fullMaterial = this.shading.meshMaterial({ ...options, near: 0, far: full, fadeOut: low === undefined });
         const lowMaterial = low === undefined ? null : this.shading.meshMaterial({ ...options, near: full, far: low, fadeOut: layer.ranges.impostor === undefined });
+        // Trees and rocks can hide the vehicle; ground cover is too low to matter.
+        if (this.seeThrough && layer.batch === 'tile') for (const m of [fullMaterial, lowMaterial]) if (m) this.seeThrough.apply(m);
         perDetail.full[species] = [];
         perDetail.low[species] = [];
         for (let v = 0; v < def.variants; v++) {
