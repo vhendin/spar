@@ -9,6 +9,7 @@ import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
 import type { Features } from '../features/features';
 import type { Vegetation } from '../vegetation/vegetation';
+import { Felling } from './felling';
 import { GROUP_OBSTACLE, GROUP_VEHICLE, groups } from './sim';
 
 const RADIUS = 28;
@@ -33,6 +34,8 @@ export class Obstacles {
   readonly debug = new THREE.Group();
   /** Plants that are solid but not drawn: now, and different ones since the start. */
   undrawn = 0;
+  /** Trees the vehicle has knocked over. */
+  felled = 0;
   readonly undrawnEver = new Set<string>();
 
   private readonly colliders = new Map<string, Entry>();
@@ -45,13 +48,15 @@ export class Obstacles {
     private readonly world: RAPIER.World,
     private readonly vegetation: Vegetation | null,
     private readonly features: Features | null,
+    /** With this, thin trunks give way when the vehicle hits them hard enough. */
+    private readonly felling: Felling | null = null,
   ) {
     this.debug.name = 'colliders';
     this.debug.visible = false;
     this.debug.renderOrder = 10;
   }
 
-  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, plant: boolean): void {
+  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, plant: boolean): RAPIER.Collider {
     const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
     const wire = new THREE.Mesh(geometry, plant ? this.materials.plant : this.materials.object);
     const t = desc.translation, r = desc.rotation;
@@ -62,6 +67,29 @@ export class Obstacles {
     this.debug.add(wire);
     this.colliders.set(key, { collider, seen: this.pass, wire, drawn: true });
     if (plant) this.mark(key, this.colliders.get(key)!, drawn);
+    return collider;
+  }
+
+  /**
+   * Call after each physics step (stepped with `felling.events`): trunks that gave way lose
+   * their collider and fall over on screen.
+   */
+  afterStep(dt: number): void {
+    if (!this.felling) return;
+    for (const f of this.felling.after(dt)) {
+      const entry = this.colliders.get(f.key);
+      const p = f.collider.translation();
+      this.vegetation?.fell(f.key, p.x, p.z, f.dx, f.dz);
+      this.felled++;
+      if (entry) this.drop(f.key, entry);
+    }
+  }
+
+  private drop(key: string, entry: Entry): void {
+    this.felling?.untrack(entry.collider);
+    this.world.removeCollider(entry.collider, false);
+    this.debug.remove(entry.wire);
+    this.colliders.delete(key);
   }
 
   /** Records whether a plant's collider has something drawn to go with it. */
@@ -108,8 +136,11 @@ export class Obstacles {
       if (shape === 'trunk') {
         const half = Math.min(size, 6) / 2 + 0.2;
         const radius = Math.max(0.07, radiusPerHeight * size);
-        const desc = this.R.ColliderDesc.cylinder(half, radius).setTranslation(px, py + half - 0.4, pz);
-        this.add(key, desc, UNIT_CYLINDER, [radius, half, radius], drawn, true);
+        let desc = this.R.ColliderDesc.cylinder(half, radius).setTranslation(px, py + half - 0.4, pz);
+        const breakable = this.felling && Felling.breakable(radius * 2);
+        if (breakable) desc = this.felling!.listen(desc, this.R);
+        const collider = this.add(key, desc, UNIT_CYLINDER, [radius, half, radius], drawn, true);
+        if (breakable) this.felling!.track(collider, { key, diameter: radius * 2 });
       } else {
         if (size < MIN_ROCK) return;
         const radius = radiusPerHeight * size;
@@ -119,11 +150,8 @@ export class Obstacles {
     });
     let undrawn = 0;
     for (const [key, entry] of this.colliders) {
-      if (entry.seen !== this.pass) {
-        this.world.removeCollider(entry.collider, false);
-        this.debug.remove(entry.wire);
-        this.colliders.delete(key);
-      } else if (!entry.drawn) undrawn++;
+      if (entry.seen !== this.pass) this.drop(key, entry);
+      else if (!entry.drawn) undrawn++;
     }
     this.undrawn = undrawn;
   }

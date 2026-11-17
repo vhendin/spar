@@ -16,6 +16,7 @@ import { Terrain } from './terrain/terrain';
 import { Vegetation } from './vegetation/vegetation';
 import { ChaseCamera } from './vehicle/chaseCamera';
 import { driverEye } from './vehicle/body';
+import { Felling } from './vehicle/felling';
 import { GroundStore } from './vehicle/groundStore';
 import { DriveInput } from './vehicle/input';
 import { Obstacles } from './vehicle/obstacles';
@@ -72,6 +73,7 @@ interface World {
   sim: VehicleSim;
   view: VehicleView;
   spray: Spray;
+  felling: Felling;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** True until the vehicle has been set down on loaded ground. */
@@ -158,7 +160,7 @@ async function start(): Promise<void> {
         lines.push(
           `plants ${(v.meshes / 1000).toFixed(1)}k meshes (${(v.full / 1000).toFixed(1)}k full) · ${(v.impostors / 1000).toFixed(0)}k far trees in ${v.tiles} tiles` +
             (v.loading ? ` · placing ${v.loading}` : '') +
-            (obstacles ? ` · ${obstacles.count} solid nearby` : '') +
+            (obstacles ? ` · ${obstacles.count} solid nearby` + (obstacles.felled ? ` · ${obstacles.felled} knocked down` : '') : '') +
             (obstacles && obstacles.undrawnEver.size ? ` · ${obstacles.undrawn} NOT DRAWN (${obstacles.undrawnEver.size} so far)` : ''),
         );
       }
@@ -263,12 +265,14 @@ async function start(): Promise<void> {
     view.snap();
 
     // K, or ?colliders=1, shows the wireframes of the colliders around the vehicle.
-    const obstacles = vegetation || features ? new Obstacles(RAPIER, physics, vegetation, features) : null;
+    // Thin trunks give way when hit hard enough.
+    const felling = new Felling(RAPIER, sim.body);
+    const obstacles = vegetation || features ? new Obstacles(RAPIER, physics, vegetation, features, felling) : null;
     if (obstacles) {
       obstacles.debug.visible = params.get('colliders') === '1';
       scene.add(obstacles.debug);
     }
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, spawn, obstacles, unplaced: true };
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, felling, spawn, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -407,7 +411,9 @@ async function start(): Promise<void> {
         if (!w.ground.update(p.x, p.z)) continue;
         if (w.unplaced) w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
         w.sim.step(controls, STEP);
-        w.physics.step();
+        w.felling.before();
+        w.physics.step(w.felling.events);
+        w.obstacles?.afterStep(STEP);
         w.view.capture();
         // Off the edge of the world or under it: start over.
         if (w.sim.body.translation().y < w.index.heights.min - 50) w.unplaced = true;

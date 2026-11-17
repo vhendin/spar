@@ -33,6 +33,13 @@ function toGeometry(data: MeshData): THREE.BufferGeometry {
   return geometry;
 }
 
+const tilt = new THREE.Matrix4();
+const turn = new THREE.Quaternion();
+const lean = new THREE.Quaternion();
+const axis = new THREE.Vector3();
+const at = new THREE.Vector3();
+const scale = new THREE.Vector3();
+
 /** All instances of one species variant at one detail level, drawn in one call. */
 class Batch {
   mesh: THREE.InstancedMesh | null = null;
@@ -70,17 +77,28 @@ class Batch {
     this.group.add(this.mesh);
   }
 
-  /** Adds one placed object: six floats starting at `at` (x, y, z, size, yaw, rand). */
-  add(data: Float32Array, at: number): void {
+  /**
+   * Adds one placed object: six floats starting at `from` (x, y, z, size, yaw, rand). A
+   * `fallen` one lies over towards that direction on the ground.
+   */
+  add(data: Float32Array, from: number, fallen?: [number, number]): void {
     const n = this.filled++;
-    const x = data[at]!, y = data[at + 1]!, z = data[at + 2]!, size = data[at + 3]!, yaw = data[at + 4]!, rand = data[at + 5]!;
-    const c = Math.cos(yaw) * size, s = Math.sin(yaw) * size;
+    const x = data[from]!, y = data[from + 1]!, z = data[from + 2]!, size = data[from + 3]!, yaw = data[from + 4]!, rand = data[from + 5]!;
     const m = this.mesh!.instanceMatrix.array;
     const o = n * 16;
-    m[o] = c; m[o + 1] = 0; m[o + 2] = -s; m[o + 3] = 0;
-    m[o + 4] = 0; m[o + 5] = size; m[o + 6] = 0; m[o + 7] = 0;
-    m[o + 8] = s; m[o + 9] = 0; m[o + 10] = c; m[o + 11] = 0;
-    m[o + 12] = x; m[o + 13] = y; m[o + 14] = z; m[o + 15] = 1;
+    if (fallen) {
+      // Tipped over about its foot, nearly flat; each comes to rest a little differently.
+      turn.setFromAxisAngle(axis.set(0, 1, 0), yaw);
+      lean.setFromAxisAngle(axis.set(fallen[1], 0, -fallen[0]), (1.2 + 0.2 * ((rand * 7.31) % 1)));
+      tilt.compose(at.set(x, y, z), lean.multiply(turn), scale.setScalar(size));
+      for (let i = 0; i < 16; i++) m[o + i] = tilt.elements[i]!;
+    } else {
+      const c = Math.cos(yaw) * size, s = Math.sin(yaw) * size;
+      m[o] = c; m[o + 1] = 0; m[o + 2] = -s; m[o + 3] = 0;
+      m[o + 4] = 0; m[o + 5] = size; m[o + 6] = 0; m[o + 7] = 0;
+      m[o + 8] = s; m[o + 9] = 0; m[o + 10] = c; m[o + 11] = 0;
+      m[o + 12] = x; m[o + 13] = y; m[o + 14] = z; m[o + 15] = 1;
+    }
     this.origins[n * 4] = x;
     this.origins[n * 4 + 1] = y;
     this.origins[n * 4 + 2] = z;
@@ -152,6 +170,8 @@ export class Vegetation {
   private tilesDirty = false;
   private patchesDirty = false;
   private warned = false;
+  /** Trees knocked over by a vehicle, by permanent name, with the way they fell. */
+  private readonly felled = new Map<string, [number, number]>();
 
   /** Generates every plant mesh, draws the far-tree pictures and starts the placement worker. */
   /**
@@ -296,15 +316,33 @@ export class Vegetation {
             const at = k * STRIDE;
             const px = placed.data[at]!, pz = placed.data[at + 2]!;
             if ((px - x) * (px - x) + (pz - z) * (pz - z) > radius * radius) continue;
+            const key = Vegetation.keyOf(placed, k);
+            if (this.felled.has(key)) continue;
             const py = placed.data[at + 1]!;
             // Drawn if the copy the shader picks for it holds it.
             const copy = shownBy(Math.hypot(px - viewer.x, py - viewer.y, pz - viewer.z), placed.data[at + 5]!, this.layers[placed.layer]!.ranges);
             const drawn = copy === 'impostor' ? tile.impostor !== null : copy !== null && this.filled.has(`${tile.x},${tile.z}|${placed.layer}|${c}|${copy}`);
-            visit(`${placed.layer}:${placed.cells[k * 2]}:${placed.cells[k * 2 + 1]}`, collider.shape, px, py, pz, placed.data[at + 3]!, collider.radiusPerHeight, drawn);
+            visit(key, collider.shape, px, py, pz, placed.data[at + 3]!, collider.radiusPerHeight, drawn);
           }
         }
       }
     }
+  }
+
+  /** Knocks a tree over for good: it lies towards (dx, dz) and is no longer solid. */
+  fell(key: string, x: number, z: number, dx: number, dz: number): void {
+    this.felled.set(key, [dx, dz]);
+    this.tilesDirty = true;
+    const size = this.index.tileSize;
+    const tile = this.tiles.get(`${Math.floor(x / size)},${Math.floor(z / size)}`);
+    if (tile?.state === 'ready') {
+      this.dropImpostor(tile);
+      this.buildImpostor(tile);
+    }
+  }
+
+  private static keyOf(placed: PlacedLayer, k: number): string {
+    return `${placed.layer}:${placed.cells[k * 2]}:${placed.cells[k * 2 + 1]}`;
   }
 
   /** The sheet of far-tree pictures on a board, for checking how they came out. */
@@ -408,6 +446,8 @@ export class Vegetation {
         const cell = this.atlasCell[species]![placed.variant[k]!]!;
         const rand = placed.data[at + 5]!;
         origins.set(placed.data.subarray(at, at + 4), n * 4);
+        // A felled tree has no picture: zero height.
+        if (this.felled.size && this.felled.has(Vegetation.keyOf(placed, k))) origins[n * 4 + 3] = 0;
         info[n * 4] = cell % this.atlas.columns;
         info[n * 4 + 1] = Math.floor(cell / this.atlas.columns);
         info[n * 4 + 2] = rand;
@@ -451,7 +491,9 @@ export class Vegetation {
     for (const layer of layers) for (const detail of ['full', 'low'] as const) this.batches[layer.id]![detail].forEach((v) => v.forEach((b) => (b.wanted = 0)));
     for (const span of spans) for (let k = span.from; k < span.to; k++) { const b = batchOf(span, k); if (b) b.wanted++; }
     for (const layer of layers) for (const detail of ['full', 'low'] as const) this.batches[layer.id]![detail].forEach((v) => v.forEach((b) => b.begin()));
-    for (const span of spans) for (let k = span.from; k < span.to; k++) batchOf(span, k)?.add(span.placed.data, k * STRIDE);
+    const fallen = (placed: PlacedLayer, k: number): [number, number] | undefined =>
+      this.felled.size && SPECIES[placed.species[k]!]!.collider ? this.felled.get(Vegetation.keyOf(placed, k)) : undefined;
+    for (const span of spans) for (let k = span.from; k < span.to; k++) batchOf(span, k)?.add(span.placed.data, k * STRIDE, fallen(span.placed, k));
     for (const layer of layers) for (const detail of ['full', 'low'] as const) this.batches[layer.id]![detail].forEach((v) => v.forEach((b) => b.end()));
   }
 
