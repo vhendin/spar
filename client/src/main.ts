@@ -21,6 +21,7 @@ import { DriveInput } from './vehicle/input';
 import { Obstacles } from './vehicle/obstacles';
 import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
+import { Spray } from './vehicle/spray';
 import { VehicleView } from './vehicle/view';
 
 /** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
@@ -70,6 +71,7 @@ interface World {
   obstacles: Obstacles | null;
   sim: VehicleSim;
   view: VehicleView;
+  spray: Spray;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** True until the vehicle has been set down on loaded ground. */
@@ -255,7 +257,8 @@ async function start(): Promise<void> {
     const sim = new VehicleSim(RAPIER, physics, def, ground);
     const view = new VehicleView(sim);
     chase.eye.set(...driverEye(def));
-    scene.add(view.group);
+    const spray = new Spray();
+    scene.add(view.group, spray.group);
     sim.place(spawn.x, (terrain.heightAt(spawn.x, spawn.z) ?? index.heights.max) + 1, spawn.z, spawn.heading);
     view.snap();
 
@@ -265,7 +268,7 @@ async function start(): Promise<void> {
       obstacles.debug.visible = params.get('colliders') === '1';
       scene.add(obstacles.debug);
     }
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spawn, obstacles, unplaced: true };
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, spawn, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -436,6 +439,8 @@ async function start(): Promise<void> {
         w.vegetation.shading.windDirection.value.copy(env.windVector);
         w.vegetation.shading.impostorLight.value = env.daylight;
       }
+      // Mud, dust and water off the tyres.
+      w.spray.update(w.unplaced ? 0 : dt, w.sim, w.view.group, camera, env.weather.wetness, (x, z) => w.terrain.heightAt(x, z));
       const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
     }

@@ -40,6 +40,10 @@ export interface WheelTelemetry {
   grip: number;
   /** 0 = gripping, up to 1 = drive force at least twice what the tyre can hold. */
   spin: number;
+  /** 0 = rolling, up to 1 = the brakes ask far more than the tyre can hold, so it slides. */
+  skid: number;
+  /** Sideways speed of the tyre over the ground, m/s (positive towards the vehicle's left, +x). */
+  slide: number;
   /** Current length of the suspension strut, metres. */
   suspension: number;
   /** Steering angle and accumulated roll, radians. */
@@ -53,6 +57,12 @@ export interface GroundProbe {
   groundAt(x: number, z: number): string;
   /** 0 dry to 1 soaked. */
   wetness(): number;
+}
+
+/** Turns a vector by a unit quaternion. */
+function rotate(q: { x: number; y: number; z: number; w: number }, x: number, y: number, z: number): [number, number, number] {
+  const tx = 2 * (q.y * z - q.z * y), ty = 2 * (q.z * x - q.x * z), tz = 2 * (q.x * y - q.y * x);
+  return [x + q.w * tx + (q.y * tz - q.z * ty), y + q.w * ty + (q.z * tx - q.x * tz), z + q.w * tz + (q.x * ty - q.y * tx)];
 }
 
 export class VehicleSim {
@@ -135,7 +145,7 @@ export class VehicleSim {
         this.controller.setWheelMaxSuspensionTravel(i, s.travel);
         this.controller.setWheelMaxSuspensionForce(i, staticLoad * 8);
         this.controller.setWheelSideFrictionStiffness(i, 1);
-        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, suspension: rest, steer: 0, rotation: 0 });
+        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, steer: 0, rotation: 0 });
         void a;
       }
     });
@@ -229,6 +239,11 @@ export class VehicleSim {
         let hold = (brake * def.brakes.force * axle.brakeShare) / 2 + tire.rollingResistance * wheel.load;
         if (axle.driven) hold += out.engineBrakeForce / (driven.length * 2);
         if (input.handbrake && (axle.handbrake || handbraked === this.wheels.length)) hold += (0.7 * weight) / handbraked;
+        // How far the brakes outdo the tyre, counted only while really moving.
+        const holds = wheel.grip * wheel.load;
+        wheel.skid = wheel.contact && holds > 0
+          ? Math.min(1, Math.max(0, (hold / holds - 0.8) / 1.2)) * Math.min(1, Math.max(0, (Math.abs(this.speed) - 1) / 3))
+          : 0;
         if (this.holding) hold += (0.8 * weight) / this.wheels.length;
         c.setWheelBrake(i, hold * dt); // Rapier takes the brake as an impulse per step
         c.setWheelEngineForce(i, axle.driven ? split.forces[d]! : 0);
@@ -241,10 +256,18 @@ export class VehicleSim {
     });
 
     c.updateVehicle(dt, undefined, groups(0xffff, GROUP_GROUND));
+    const w = this.body.angvel();
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i]!;
       wheel.suspension = c.wheelSuspensionLength(i) ?? this.restLength[i]!;
       wheel.rotation = c.wheelRotation(i) ?? 0;
+      // Velocity of the contact patch (body velocity plus spin about the centre), along the
+      // tyre's own sideways axis.
+      const at = this.wheelPosition(i);
+      const [ox, oy, oz] = rotate(r, at.x, at.y - def.wheels.radius, at.z);
+      const vx = v.x + w.y * oz - w.z * oy, vy = v.y + w.z * ox - w.x * oz, vz = v.z + w.x * oy - w.y * ox;
+      const [sx, sy, sz] = rotate(r, Math.cos(wheel.steer), 0, -Math.sin(wheel.steer));
+      wheel.slide = wheel.contact ? vx * sx + vy * sy + vz * sz : 0;
     }
   }
 
