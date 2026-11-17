@@ -49,6 +49,9 @@ export interface WheelTelemetry {
   /** Steering angle and accumulated roll, radians. */
   steer: number;
   rotation: number;
+  /** Where the tyre touches the ground, and the ground's normal there (world frame); valid while in contact. */
+  point: { x: number; y: number; z: number };
+  normal: { x: number; y: number; z: number };
 }
 
 /** Tells the vehicle what it is driving on. */
@@ -145,7 +148,7 @@ export class VehicleSim {
         this.controller.setWheelMaxSuspensionTravel(i, s.travel);
         this.controller.setWheelMaxSuspensionForce(i, staticLoad * 8);
         this.controller.setWheelSideFrictionStiffness(i, 1);
-        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, steer: 0, rotation: 0 });
+        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, steer: 0, rotation: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
         void a;
       }
     });
@@ -199,12 +202,17 @@ export class VehicleSim {
     const brake = state.gear > 0 ? input.brake : input.throttle;
 
     const wet = this.ground.wetness();
-    const point = { x: 0, y: 0, z: 0 };
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i]!;
       wheel.contact = c.wheelIsInContact(i);
       wheel.load = wheel.contact ? (c.wheelSuspensionForce(i) ?? 0) : 0;
-      if (wheel.contact && c.wheelContactPoint(i, point)) wheel.ground = this.ground.groundAt(point.x, point.z);
+      const point = wheel.contact ? c.wheelContactPoint(i) : null;
+      const normal = wheel.contact ? c.wheelContactNormal(i) : null;
+      if (point) {
+        Object.assign(wheel.point, { x: point.x, y: point.y, z: point.z });
+        wheel.ground = this.ground.groundAt(point.x, point.z);
+      }
+      if (normal) Object.assign(wheel.normal, { x: normal.x, y: normal.y, z: normal.z });
       wheel.grip = tireOnGround(def, wheel.ground, wet).grip;
     }
 

@@ -23,6 +23,7 @@ import { Obstacles } from './vehicle/obstacles';
 import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
 import { Spray } from './vehicle/spray';
+import { Tracks } from './vehicle/tracks';
 import { VehicleView } from './vehicle/view';
 import { Dashboard } from './ui/dashboard';
 import { Menu } from './ui/menu';
@@ -111,6 +112,7 @@ interface World {
   sim: VehicleSim;
   view: VehicleView;
   spray: Spray;
+  tracks: Tracks;
   felling: Felling;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
@@ -253,6 +255,7 @@ async function start(): Promise<void> {
   const setDown = (w: World, x: number, z: number, heading: number): boolean => {
     const y = w.ground.heightAt(x, z);
     if (y === null) return false;
+    w.tracks.break();
     w.sim.place(x, y + 0.25, z, heading);
     w.view.snap();
     chase.reset();
@@ -273,10 +276,11 @@ async function start(): Promise<void> {
     scene.add(terrain.group, horizon);
 
     // Time and weather come from the server. For a look at a particular moment, the URL can
-    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|cloudy|overcast|rain.
+    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|cloudy|wet|overcast|rain.
     const fixedTime = params.get('time');
     const sky: Record<string, Weather> = {
       clear: { state: 'clear', cloud: 0.15, rain: 0, wind: 0.2, windDirection: 100, wetness: 0 },
+      wet: { state: 'clear', cloud: 0.3, rain: 0, wind: 0.2, windDirection: 100, wetness: 1 },
       cloudy: { state: 'clear', cloud: 0.45, rain: 0, wind: 0.25, windDirection: 100, wetness: 0 },
       overcast: { state: 'overcast', cloud: 0.9, rain: 0, wind: 0.4, windDirection: 100, wetness: 0 },
       rain: { state: 'rain', cloud: 1, rain: 0.8, wind: 0.6, windDirection: 100, wetness: 1 },
@@ -326,7 +330,8 @@ async function start(): Promise<void> {
     const view = new VehicleView(sim);
     chase.eye.set(...driverEye(def));
     const spray = new Spray();
-    scene.add(view.group, spray.group);
+    const tracks = new Tracks();
+    scene.add(view.group, spray.group, tracks.mesh);
     sim.place(spawn.x, (terrain.heightAt(spawn.x, spawn.z) ?? index.heights.max) + 1, spawn.z, spawn.heading);
     view.snap();
 
@@ -340,7 +345,7 @@ async function start(): Promise<void> {
     }
     // After a rebuild for new settings, the vehicle goes back where it was.
     const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, felling, spawn, arrival, obstacles, unplaced: true };
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, spawn, arrival, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -650,6 +655,9 @@ async function start(): Promise<void> {
         w.vegetation.shading.impostorLight.value = env.daylight;
       }
       // Mud, dust and water off the tyres.
+      // Ruts behind the wheels, and mud on the vehicle.
+      if (!w.unplaced) w.tracks.update(w.sim, env.weather.wetness, now);
+      w.view.grime.update(w.unplaced || paused ? 0 : dt, w.sim, env.weather.wetness, env.weather.rain);
       w.spray.update(w.unplaced || paused ? 0 : dt, w.sim, w.view.group, camera, env.weather.wetness, (x, z) => w.terrain.heightAt(x, z));
       const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);

@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { buildVehicleMeshes } from './body';
+import { Grime } from './grime';
 import type { VehicleSim } from './sim';
 
 /** Strength of one headlight beam. */
@@ -10,6 +11,8 @@ export class VehicleView {
   readonly group = new THREE.Group();
   readonly headlights: THREE.Mesh;
   readonly taillights: THREE.Mesh;
+  /** Mud on the body and tyres. */
+  readonly grime: Grime;
   private readonly glass: THREE.Mesh;
   private readonly wheels: THREE.Mesh[] = [];
   private readonly beams: THREE.SpotLight[] = [];
@@ -22,6 +25,10 @@ export class VehicleView {
     this.taillights = meshes.taillights;
     this.glass = meshes.glass;
     this.group.add(meshes.body, meshes.glass, meshes.headlights, meshes.taillights, meshes.interior);
+    meshes.body.geometry.computeBoundingBox();
+    this.grime = new Grime(meshes.body.geometry.boundingBox!.max.y);
+    meshes.body.material = this.grime.body;
+    meshes.wheel.material = this.grime.wheel;
     meshes.body.castShadow = meshes.body.receiveShadow = true;
     meshes.interior.receiveShadow = true;
     for (const at of sim.def.body.headlights) {
