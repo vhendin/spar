@@ -839,10 +839,13 @@ async function start(): Promise<void> {
         tour += dt * 0.012;
         const mid = w.index.size / 2;
         const below = w.terrain.heightAt(mid, mid) ?? (w.index.heights.min + w.index.heights.max) / 2;
-        const cx = mid + Math.cos(tour) * 2600, cz = mid + Math.sin(tour) * 2600;
+        // Sized to the area: a quarter of the way in from the edge, at a height that shows it all.
+        const k = Math.min(1, w.index.size / 10240);
+        const radius = mid * 0.5;
+        const cx = mid + Math.cos(tour) * radius, cz = mid + Math.sin(tour) * radius;
         // High over the valley, and never into a fellside on the way round.
-        camera.position.set(cx, Math.max(below + 650, (w.terrain.heightAt(cx, cz) ?? below) + 300), cz);
-        camera.lookAt(mid, below + 150, mid);
+        camera.position.set(cx, Math.max(below + 650 * k + 60, (w.terrain.heightAt(cx, cz) ?? below) + 300 * k + 30), cz);
+        camera.lookAt(mid, below + 150 * k, mid);
         w.start.setPicture(w.map.picture);
       } else if (flying) fly.update(dt);
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));

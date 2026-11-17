@@ -1,0 +1,7 @@
+{
+  "name": "hammarby",
+  "title": "Hammarbybacken",
+  "crs": "EPSG:3006",
+  "origin": { "easting": 674500, "northing": 6578700 },
+  "size": 2048
+}
