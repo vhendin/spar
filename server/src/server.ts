@@ -82,6 +82,14 @@ export function createGameServer(config: ServerConfig): GameServer {
           send(ws, world.message());
           joined.add(ws);
           break;
+        case 'set_world': {
+          // Anyone who has joined may change the clock and weather; everyone sees it at once.
+          if (!joined.has(ws)) return;
+          world.set(msg);
+          const update = JSON.stringify(world.message());
+          for (const other of joined) other.send(update);
+          break;
+        }
       }
     });
   });

@@ -1,14 +1,18 @@
-import { createRng, newWeather, stepWeather, type ServerMessage, type WeatherModel } from '@spar/shared';
+import { atLocalHour, createRng, holdWeather, newWeather, stepWeather, type ClientMessage, type ServerMessage, type WeatherModel } from '@spar/shared';
 import type { ServerConfig } from './config';
 
 type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
+type SetWorld = Extract<ClientMessage, { type: 'set_world' }>;
 
 /** The parts of the world every player must agree on: what time it is and what the weather is doing. */
 export class WorldState {
   private readonly weather: WeatherModel;
   private readonly rng;
-  private readonly rate: number;
-  private readonly startedAt: number;
+  /** In-game seconds per real second. */
+  private rate: number;
+  /** The in-game instant `anchorAt` (real milliseconds) belongs to. */
+  private anchorUtc: number;
+  private anchorAt: number;
   private lastStep: number;
 
   constructor(
@@ -19,7 +23,22 @@ export class WorldState {
     this.rng = createRng((config.seed ^ Math.floor(now() / 1000)) >>> 0);
     this.weather = newWeather(this.rng, config.weather);
     this.rate = config.dayLengthMinutes > 0 ? 86400 / (config.dayLengthMinutes * 60) : 0;
-    this.startedAt = this.lastStep = now();
+    this.anchorAt = this.lastStep = now();
+    this.anchorUtc = config.startUtc;
+  }
+
+  /** The in-game instant now, as UTC milliseconds. */
+  utc(): number {
+    return Math.round(this.anchorUtc + (this.now() - this.anchorAt) * this.rate);
+  }
+
+  /** A player changed the clock or the weather; fields left out stay as they are. */
+  set(change: SetWorld): void {
+    const utc = this.utc();
+    this.anchorAt = this.now();
+    this.anchorUtc = change.hour === undefined ? utc : atLocalHour(utc, this.config.utcOffset, change.hour);
+    if (change.dayMinutes !== undefined) this.rate = change.dayMinutes > 0 ? 86400 / (change.dayMinutes * 60) : 0;
+    if (change.weather !== undefined) holdWeather(this.weather, change.weather === 'auto' ? null : change.weather, this.rng);
   }
 
   /** Brings the weather up to date; call about once a second. */
@@ -40,7 +59,7 @@ export class WorldState {
     const round = (v: number): number => Math.round(v * 1000) / 1000;
     return {
       type: 'world',
-      time: { utc: Math.round(this.config.startUtc + (this.now() - this.startedAt) * this.rate), rate: this.rate, utcOffset: this.config.utcOffset },
+      time: { utc: this.utc(), rate: this.rate, utcOffset: this.config.utcOffset },
       weather: { state: w.state, cloud: round(w.cloud), rain: round(w.rain), wind: round(w.wind), windDirection: round(w.windDirection), wetness: round(w.wetness) },
     };
   }

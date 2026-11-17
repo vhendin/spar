@@ -5,6 +5,7 @@ import { fillCredits } from './credits';
 import { Features } from './features/features';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
+import { WorldPanel } from './worldPanel';
 import { chooseQuality, nextQuality, saveQuality } from './quality';
 import { SeeThrough } from './seeThrough';
 import { Environment } from './sky/environment';
@@ -31,6 +32,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#view')!;
 const hud = document.querySelector<HTMLDivElement>('#hud')!;
 const fatal = document.querySelector<HTMLDivElement>('#fatal')!;
 const credits = document.querySelector<HTMLDivElement>('#credits')!;
+const worldRoot = document.querySelector<HTMLDivElement>('#world')!;
 
 function showFatal(text: string): void {
   fatal.textContent = text;
@@ -116,6 +118,9 @@ async function start(): Promise<void> {
   resize();
 
   let link: ConnectionState = { status: 'connecting' };
+  let connection: Connection | null = null;
+  // T opens the time and weather panel; the server makes the change for everyone.
+  const panel = new WorldPanel(worldRoot, (msg) => connection?.send(msg));
   let world: World | null = null;
   let loadingRegion: string | null = null;
   let fps: number | null = null;
@@ -169,8 +174,8 @@ async function start(): Promise<void> {
       flying
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
-          : 'click to fly · F drive · M masks · C credits'
-        : `W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · V view (${chase.mode}) · drag to look · G wheels · K colliders · F fly · C credits`,
+          : 'click to fly · F drive · M masks · T time and weather · C credits'
+        : `W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · V view (${chase.mode}) · drag to look · G wheels · K colliders · T time and weather · F fly · C credits`,
     );
     hud.textContent = lines.join('\n');
   };
@@ -313,6 +318,17 @@ async function start(): Promise<void> {
         location.search = next.toString();
         break;
       }
+      case 'KeyT':
+        panel.toggle();
+        if (w) panel.refresh(w.environment);
+        break;
+      case 'Escape':
+        if (panel.open) panel.toggle();
+        break;
+      case 'BracketLeft':
+      case 'BracketRight':
+        if (w) panel.nudge(w.environment, e.code === 'BracketLeft' ? -1 : 1);
+        break;
       case 'KeyV':
         // Views: chase, orbit, cab.
         if (!flying) chase.cycle();
@@ -346,7 +362,7 @@ async function start(): Promise<void> {
     drawHud();
   });
 
-  new Connection((state) => {
+  connection = new Connection((state) => {
     link = state;
     if (state.status === 'online' && loadingRegion === null) {
       enterRegion(state.welcome).catch((err: unknown) => {
@@ -432,6 +448,7 @@ async function start(): Promise<void> {
       frames = 0;
       fpsSince = now;
       drawHud();
+      if (w) panel.refresh(w.environment);
     }
   });
 }

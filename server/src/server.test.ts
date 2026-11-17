@@ -124,6 +124,34 @@ describe('websocket', () => {
     expect(later.time.utc).toBeGreaterThan(first.time.utc + 30000); // well over a real second has passed
   }, 10000);
 
+  it('passes a change to the clock and weather on to every player at once', async () => {
+    const join = (): Promise<{ ws: WebSocket; next: () => Promise<WorldUpdate> }> =>
+      new Promise((resolve, reject) => {
+        const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+        const queue: WorldUpdate[] = [];
+        let waiting: ((m: WorldUpdate) => void) | null = null;
+        ws.on('message', (data) => {
+          const msg = JSON.parse(data.toString()) as ServerMessage;
+          if (msg.type === 'welcome') resolve({ ws, next });
+          if (msg.type !== 'world') return;
+          if (waiting) { waiting(msg); waiting = null; } else queue.push(msg);
+        });
+        const next = (): Promise<WorldUpdate> => new Promise((r) => (queue.length ? r(queue.shift()!) : (waiting = r)));
+        ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION })));
+        ws.on('error', reject);
+      });
+    const [a, b] = await Promise.all([join(), join()]);
+    await Promise.all([a.next(), b.next()]); // the update that follows each welcome
+    a.ws.send(JSON.stringify({ type: 'set_world', hour: 6, dayMinutes: 0, weather: 'clear' }));
+    const seen = await b.next();
+    expect(isServerMessage(seen)).toBe(true);
+    expect(seen.weather.state).toBe('clear');
+    expect(seen.time.rate).toBe(0);
+    expect(seen.time.utc).toBe(Date.UTC(2026, 11, 21, 5, 0)); // 06:00 local, same day
+    a.ws.close();
+    b.ws.close();
+  });
+
   it('gives each connection its own player id', async () => {
     const hello = JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION });
     const [a, b] = (await Promise.all([exchange(hello), exchange(hello)])) as { playerId: string }[];

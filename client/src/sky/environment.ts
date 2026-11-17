@@ -96,6 +96,22 @@ export class Environment {
     this.first = false;
   }
 
+  /** The time of day on the region's clocks, in hours 0..24. */
+  localHour(): number {
+    const day = 86400000;
+    return ((((this.utc + this.clock.utcOffset * 3600000) % day) + day) % day) / 3600000;
+  }
+
+  /** In-game seconds per real second. */
+  get rate(): number {
+    return this.clock.rate;
+  }
+
+  /** True when the URL froze the clock or the weather, so the server's changes do not show. */
+  get frozen(): boolean {
+    return this.options.fixedUtc !== null || this.options.fixedWeather !== null;
+  }
+
   /** "Sat 15 Aug 09:42 · overcast · wind 6 m/s". */
   describe(): string {
     const w = this.weather;

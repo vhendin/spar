@@ -30,6 +30,27 @@ describe('WorldState', () => {
     expect(isServerMessage(after)).toBe(true);
   });
 
+  it('lets players set the time of day, clock speed and weather', () => {
+    let now = 0;
+    const world = new WorldState(loadConfig({ START_TIME: '2026-08-15T21:30', DAY_LENGTH_MINUTES: '30' }), () => now);
+    now += 60_000;
+    world.set({ type: 'set_world', hour: 12.5, dayMinutes: 0, weather: 'rain' });
+    const noon = world.message();
+    expect(noon.time.utc).toBe(Date.UTC(2026, 7, 15, 11, 30)); // same day, 12:30 local
+    expect(noon.time.rate).toBe(0);
+    expect(noon.weather.state).toBe('rain');
+    expect(noon.weather.rain).toBeGreaterThan(0.4);
+    now += 3_600_000;
+    world.step();
+    expect(world.message().time.utc).toBe(noon.time.utc);
+    expect(world.message().weather.state).toBe('rain');
+
+    world.set({ type: 'set_world', dayMinutes: 1440, weather: 'auto' });
+    now += 60_000;
+    expect(world.message().time.utc).toBe(noon.time.utc + 60_000); // real time
+    expect(isServerMessage(world.message())).toBe(true);
+  });
+
   it('changes the weather as time passes', () => {
     let now = 0;
     const world = new WorldState(loadConfig({}), () => now);

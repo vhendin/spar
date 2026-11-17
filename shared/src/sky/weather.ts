@@ -89,3 +89,20 @@ export function stepWeather(model: WeatherModel, dt: number, rng: Rng): void {
   w.windDirection = (w.windDirection + turn * k + 360) % 360;
   w.wetness = Math.max(0, Math.min(1, w.wetness + (w.rain > 0.05 ? (w.rain * dt) / SOAK : -dt / DRY)));
 }
+
+/**
+ * Holds the weather in `state` from now on, or with null lets it change by itself again.
+ * A held state takes over at once; the clients ease the sky towards it.
+ */
+export function holdWeather(model: WeatherModel, state: WeatherState | null, rng: Rng): void {
+  model.fixed = state;
+  if (!state) return;
+  const w = model.weather;
+  w.state = state;
+  model.target = aim(state, rng, w.windDirection);
+  model.remaining = rng.range(...DURATION[state]);
+  w.cloud = model.target.cloud;
+  w.rain = model.target.rain;
+  w.wind = model.target.wind;
+  // The ground soaks or dries on its own time.
+}

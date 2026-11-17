@@ -36,3 +36,10 @@ export function parseLocalTime(text: string, utcOffset: number): number | null {
   const utc = Date.UTC(year, month - 1, day, hour, minute, second) - utcOffset * 3600000;
   return Number.isFinite(utc) ? utc : null;
 }
+
+/** The instant on the same local day as `utcMs` at `hour` o'clock (fractions allowed), as UTC milliseconds. */
+export function atLocalHour(utcMs: number, utcOffset: number, hour: number): number {
+  const local = utcMs + utcOffset * 3600000;
+  const midnight = Math.floor(local / 86400000) * 86400000;
+  return midnight + Math.round(hour * 3600000) - utcOffset * 3600000;
+}

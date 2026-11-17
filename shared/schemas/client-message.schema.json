@@ -2,17 +2,70 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ClientMessage",
   "description": "Every message a client may send to the server.",
-  "oneOf": [{ "$ref": "#/definitions/Hello" }],
+  "oneOf": [
+    {
+      "$ref": "#/definitions/Hello"
+    },
+    {
+      "$ref": "#/definitions/SetWorld"
+    }
+  ],
   "definitions": {
     "Hello": {
       "title": "Hello",
       "description": "First message on a new connection.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "protocol"],
+      "required": [
+        "type",
+        "protocol"
+      ],
       "properties": {
-        "type": { "type": "string", "const": "hello" },
-        "protocol": { "type": "integer", "minimum": 1 }
+        "type": {
+          "type": "string",
+          "const": "hello"
+        },
+        "protocol": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "SetWorld": {
+      "title": "SetWorld",
+      "description": "Asks the server to change the clock or the weather for everyone. Any field left out stays as it is.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "set_world"
+        },
+        "hour": {
+          "description": "Local time of day to jump to, in hours (0 midnight, 13.5 half past one). The date stays.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "dayMinutes": {
+          "description": "Real minutes one in-game day takes from now on; 0 stops the clock, 1440 is real time.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1440
+        },
+        "weather": {
+          "description": "A state to hold the weather in, or auto to let it change by itself.",
+          "type": "string",
+          "enum": [
+            "auto",
+            "clear",
+            "overcast",
+            "rain"
+          ]
+        }
       }
     }
   }

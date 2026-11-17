@@ -22,6 +22,23 @@
       #credits h2 { margin: 20px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9fb4bc; }
       #credits ul { margin: 0; padding-left: 18px; }
       #credits p.hint { margin-top: 22px; color: #9fb4bc; font-size: 13px; }
+      #world {
+        position: fixed; bottom: 8px; right: 8px; display: none; width: 340px; padding: 12px 16px 6px;
+        font: 13px/1.4 system-ui, sans-serif; color: #e8eef0; background: rgba(6, 10, 12, 0.82); border-radius: 6px;
+      }
+      #world h2 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+      #world .label { margin: 10px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9fb4bc; }
+      #world .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+      #world input[type=range] { flex: 1; accent-color: #c9a45c; }
+      #world .value { width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+      #world button {
+        padding: 4px 8px; font: inherit; color: #e8eef0; background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 4px; cursor: pointer;
+      }
+      #world button:hover { background: rgba(255, 255, 255, 0.16); }
+      #world button.on { background: #c9a45c; border-color: #c9a45c; color: #111; }
+      #world button.on.dim { background: rgba(201, 164, 92, 0.35); color: #e8eef0; }
+      #world p.hint { margin: 10px 0 6px; color: #9fb4bc; font-size: 12px; }
       #fatal {
         position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
         padding: 24px; font: 16px/1.5 system-ui, sans-serif; color: #e8eef0; text-align: center; white-space: pre-line;
@@ -32,6 +49,7 @@
     <canvas id="view"></canvas>
     <div id="hud"></div>
     <div id="credits"></div>
+    <div id="world"></div>
     <div id="fatal"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
