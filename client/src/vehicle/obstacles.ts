@@ -36,6 +36,8 @@ export class Obstacles {
   undrawn = 0;
   /** Trees the vehicle has knocked over. */
   felled = 0;
+  /** Trees that gave way since the sound last took them: where, and how thick. */
+  readonly cracks: { x: number; y: number; z: number; diameter: number }[] = [];
   readonly undrawnEver = new Set<string>();
 
   private readonly colliders = new Map<string, Entry>();
@@ -81,6 +83,7 @@ export class Obstacles {
       const p = f.collider.translation();
       this.vegetation?.fell(f.key, p.x, p.z, f.dx, f.dz);
       this.felled++;
+      if (this.cracks.length < 8) this.cracks.push({ x: p.x, y: p.y, z: p.z, diameter: f.diameter });
       if (entry) this.drop(f.key, entry);
     }
   }

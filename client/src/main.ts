@@ -28,6 +28,9 @@ import { VehicleView } from './vehicle/view';
 import { Dashboard } from './ui/dashboard';
 import { Menu } from './ui/menu';
 import { Look, type Grade } from './sky/look';
+import { Ambience } from './audio/ambience';
+import { AudioOut } from './audio/output';
+import { VehicleAudio } from './audio/vehicleAudio';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -114,6 +117,7 @@ interface World {
   spray: Spray;
   tracks: Tracks;
   felling: Felling;
+  sound: VehicleAudio;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
@@ -159,6 +163,9 @@ async function start(): Promise<void> {
   const input = new DriveInput();
   const look = new Look(renderer, scene, camera, settings.glow > 0);
   const plain = params.get('look') === '0';
+  // Sound starts with the first key or click; ?sound=0 keeps it off for this visit.
+  const audio = new AudioOut(params.get('sound') === '0' ? 0 : settings.volume);
+  const ambience = new Ambience(audio);
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -345,7 +352,8 @@ async function start(): Promise<void> {
     }
     // After a rebuild for new settings, the vehicle goes back where it was.
     const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, spawn, arrival, obstacles, unplaced: true };
+    const sound = new VehicleAudio(audio);
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, spawn, arrival, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -407,11 +415,13 @@ async function start(): Promise<void> {
   const pause = (): void => {
     if (paused) return;
     paused = true;
+    audio.paused = true;
     if (document.pointerLockElement) document.exitPointerLock();
     menu.show();
   };
   const resume = (): void => {
     paused = false;
+    audio.paused = false;
     menu.hide();
     if (panel.open) panel.toggle();
     showCredits(false);
@@ -465,6 +475,9 @@ async function start(): Promise<void> {
             break;
           case 'glow':
             look.glow = settings.glow > 0;
+            break;
+          case 'volume':
+            audio.volume = settings.volume;
             break;
           case 'objectRange':
             if (world?.features) world.features.rangeScale = settings.objectRange;
@@ -661,6 +674,22 @@ async function start(): Promise<void> {
       w.spray.update(w.unplaced || paused ? 0 : dt, w.sim, w.view.group, camera, env.weather.wetness, (x, z) => w.terrain.heightAt(x, z));
       const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
+
+      // Sound: the vehicle where it is, the world where the camera is.
+      const inside = !flying && chase.mode === 'cab';
+      audio.inside = inside;
+      audio.listen(camera);
+      w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], w.unplaced);
+      ambience.update(paused ? 0 : dt, {
+        sun: THREE.MathUtils.radToDeg(env.sunElevation),
+        hour: env.localHour(),
+        month: env.month(),
+        wind: env.weather.wind,
+        rain: env.weather.rain,
+        ground: w.terrain.heightAt(camera.position.x, camera.position.z),
+        speed: flying ? 0 : Math.abs(w.sim.speed),
+        inside,
+      }, camera.position);
 
       dash.visible = !flying && !w.unplaced;
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding });

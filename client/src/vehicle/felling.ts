@@ -30,6 +30,8 @@ export interface Felled {
   collider: RAPIER.Collider;
   dx: number;
   dz: number;
+  /** Trunk diameter, metres. */
+  diameter: number;
 }
 
 export class Felling {
@@ -102,7 +104,7 @@ export class Felling {
       // It falls the way the vehicle is going, or away from it when pushed from a standstill.
       const speed = Math.hypot(v.x, v.z);
       const [fx, fz] = speed > 0.5 ? [v.x / speed, v.z / speed] : [nx * Math.sign(this.v.x * nx + this.v.z * nz || 1), nz * Math.sign(this.v.x * nx + this.v.z * nz || 1)];
-      felled.push({ key: tree.key, collider: tree.collider, dx: fx, dz: fz });
+      felled.push({ key: tree.key, collider: tree.collider, dx: fx, dz: fz, diameter: tree.diameter });
       this.trees.delete(tree.collider.handle);
     });
     // Contacts that stopped reporting are no longer pushing.

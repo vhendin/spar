@@ -1,7 +1,7 @@
 // The menu (Esc): pauses the game and holds the settings, the controls, the choice of vehicle
 // and the way back to the start.
 
-import { CHOICES, NEEDS_RESTART, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
+import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
 
 export interface MenuActions {
   resume(): void;
@@ -148,8 +148,8 @@ export class Menu {
     const current = presetOf(s);
     for (const name of PRESET_NAMES) {
       button(name[0]!.toUpperCase() + name.slice(1), () => {
-        const fov = s.fov;
-        Object.assign(s, PRESETS[name], { fov });
+        const keep = Object.fromEntries(PERSONAL.map((k) => [k, s[k]]));
+        Object.assign(s, PRESETS[name], keep);
         for (const k of Object.keys(s) as (keyof Settings)[]) this.actions.changed(k);
         this.render();
       }, presets, current === name ? 'on' : '');
@@ -158,6 +158,7 @@ export class Menu {
 
     for (const key of Object.keys(CHOICES) as (keyof Settings)[]) {
       const choice = CHOICES[key];
+      if (key === 'volume') add('h2', 'Sound');
       add('div', choice.label + (NEEDS_RESTART.includes(key) ? ' *' : ''), box, 'label');
       const row = add('div', '', box, 'row');
       // A value set elsewhere (an old preset, say) shows as the nearest choice.

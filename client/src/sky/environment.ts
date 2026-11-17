@@ -132,6 +132,11 @@ export class Environment {
     return ((((this.utc + this.clock.utcOffset * 3600000) % day) + day) % day) / 3600000;
   }
 
+  /** The month on the region's clocks, 0 January to 11 December. */
+  month(): number {
+    return new Date(this.utc + this.clock.utcOffset * 3600000).getUTCMonth();
+  }
+
   /** In-game seconds per real second. */
   get rate(): number {
     return this.clock.rate;

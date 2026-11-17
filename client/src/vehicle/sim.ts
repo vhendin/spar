@@ -76,6 +76,8 @@ export class VehicleSim {
   readonly locks: boolean[];
   /** Speed along the heading in m/s; negative when rolling backwards. */
   speed = 0;
+  /** The pedal driving the engine this step, 0..1: the throttle, or the brake pedal in reverse. */
+  pedal = 0;
   /** True while the vehicle holds itself still with nobody on the pedals, like a parking brake. */
   holding = true;
 
@@ -200,6 +202,7 @@ export class VehicleSim {
     else if (state.gear < 0 && input.throttle > 0.1 && input.brake < 0.1 && this.speed > -0.5) selectDirection(state, false);
     const drive = state.gear > 0 ? input.throttle : input.brake;
     const brake = state.gear > 0 ? input.brake : input.throttle;
+    this.pedal = drive;
 
     const wet = this.ground.wetness();
     for (let i = 0; i < this.wheels.length; i++) {
