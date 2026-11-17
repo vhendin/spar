@@ -53,11 +53,27 @@ class Place:
 
 
 @dataclass
+class Feature:
+    """A building outline, power line or barrier line: kept with its tags for the vectors."""
+
+    id: str
+    geom: ogr.Geometry
+    tags: dict
+
+
+POWER_LINES = ("line", "minor_line")
+BARRIERS = ("fence", "wall", "retaining_wall")
+
+
+@dataclass
 class OsmData:
     areas: list[Area] = field(default_factory=list)
     roads: list[Road] = field(default_factory=list)
     waterways: list[Waterway] = field(default_factory=list)
     places: list[Place] = field(default_factory=list)
+    buildings: list[Feature] = field(default_factory=list)
+    power: list[Feature] = field(default_factory=list)
+    barriers: list[Feature] = field(default_factory=list)
 
 
 def load_osm(path: Path) -> OsmData:
@@ -87,10 +103,17 @@ def load_osm(path: Path) -> OsmData:
                 kind = feature["geometry"]["type"]
                 # A closed way comes out both as a line and as a polygon; take each feature
                 # only in the shape its tags are about.
+                fid = str(feature.get("id", ""))
                 if kind in ("Polygon", "MultiPolygon"):
                     biome = biome_for(tags)
                     if biome:
-                        data.areas.append(Area(biome, _geometry(feature, to_metres), str(feature.get("id", "")), tags))
+                        data.areas.append(Area(biome, _geometry(feature, to_metres), fid, tags))
+                    if tags.get("building") not in (None, "no") and tags.get("location") != "underground":
+                        data.buildings.append(Feature(fid, _geometry(feature, to_metres), tags))
+                elif kind == "LineString" and tags.get("power") in POWER_LINES and tags.get("location") not in ("underground", "underwater"):
+                    data.power.append(Feature(fid, _geometry(feature, to_metres), tags))
+                elif kind == "LineString" and tags.get("barrier") in BARRIERS:
+                    data.barriers.append(Feature(fid, _geometry(feature, to_metres), tags))
                 elif kind == "LineString":
                     road = road_for(tags)
                     if road:

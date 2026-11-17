@@ -1,5 +1,6 @@
 """Builds small regions from synthetic rasters; no network and no real data needed."""
 
+import datetime
 import json
 
 import jsonschema
@@ -76,7 +77,23 @@ OSM_WAYS = [
     ([(300, 300), (900, 900)], {"highway": "path"}),
     ([(300, 900), (900, 300)], {"highway": "path", "snowmobile": "designated"}),
     ([(3000, 100), (3500, 2000)], {"waterway": "stream"}),
+    ([(2200, 2950), (2210, 2950), (2210, 2956), (2200, 2956), (2200, 2950)], {"building": "house", "building:levels": "2"}),
+    ([(100, 2500), (400, 2500), (700, 2520)], {"power": "minor_line", "voltage": "20000"}),
+    ([(1800, 3100), (2300, 3100), (2300, 3400), (1800, 3400), (1800, 3100)], {"landuse": "farmland"}),
 ]
+FELLED = {"fresh": ((1700, 2700, 1900, 2900), "2025-06-01"), "young": ((800, 2300, 1000, 2500), "2012-06-01")}
+
+
+def write_clearcuts(data, region=REGION):
+    """A stored Skogsstyrelsen query: one felling last year, one fourteen years ago."""
+    features = []
+    for n, ((x0, z0, x1, z1), day) in enumerate(FELLED.values(), start=1):
+        ring = [[region.west + x, region.north - z] for x, z in ((x0, z0), (x1, z0), (x1, z1), (x0, z1), (x0, z0))]
+        felled = int(datetime.datetime.fromisoformat(day).replace(tzinfo=datetime.UTC).timestamp() * 1000)
+        features.append({"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]}, "properties": {"OBJECTID": n, "Avvdatum": felled}})
+    path = data / "raw/skogsstyrelsen" / f"{region.name}.geojson"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"type": "FeatureCollection", "fetched": "2026-11-17", "features": features}))
 
 
 def write_osm(data, region=REGION):
@@ -112,6 +129,7 @@ def data(tmp_path, monkeypatch):
     monkeypatch.setenv("SPAR_DATA", str(tmp_path))
     write_copernicus(tmp_path)
     write_osm(tmp_path)
+    write_clearcuts(tmp_path)
     return tmp_path
 
 
@@ -229,7 +247,7 @@ def test_lantmateriet_takes_over_when_it_covers_the_area(data):
     index = read_index(folder)
     assert [lv["level"] for lv in index["heights"]["levels"]] == [0, 1, 2, 3]
     assert index["heights"]["source"] == {"name": "Lantmäteriet Markhöjdmodell", "resolution": 1.0, "kind": "terrain"}
-    assert len(index["attribution"]) == 3
+    assert len(index["attribution"]) == 4  # Lantmäteriet, Copernicus, OpenStreetMap, Skogsstyrelsen
     check_pyramid(folder, index)
     check_heights(folder, index, tolerance=0.1)
 
@@ -238,7 +256,7 @@ def test_partial_lantmateriet_is_ignored(data):
     write_lantmateriet(data, REGION.west, REGION.south, REGION.west + 1000, REGION.north)
     index = read_index(build_region(REGION, offline=True))
     assert index["heights"]["source"]["name"] == "Copernicus DEM GLO-30"
-    assert len(index["attribution"]) == 2
+    assert len(index["attribution"]) == 3  # Copernicus, OpenStreetMap, Skogsstyrelsen
 
 
 def test_forced_source(data):
@@ -263,7 +281,7 @@ def test_missing_osm_is_a_clear_error(tmp_path, monkeypatch):
 def test_masks_follow_the_map(data):
     folder = build_region(REGION, offline=True)
     index = read_index(folder)
-    assert index["formatVersion"] == 3
+    assert index["formatVersion"] == 4
     assert [lv["level"] for lv in index["masks"]["levels"]] == [1, 2, 3]
     assert [c["name"] for c in index["masks"]["channels"]] == ["biome", "surface", "road", "wetness", "canopy", "slope"]
     biome = lambda name: class_id(index, "biomes", name)  # noqa: E731
@@ -309,7 +327,17 @@ def test_masks_follow_the_map(data):
     k = index["horizon"]["margin"] // hb["spacing"]
     assert grid[k + 1200 // hb["spacing"], k + 1200 // hb["spacing"]] == biome("water")
     assert 0 not in grid
-    assert "OpenStreetMap" in index["attribution"][-1]
+    assert any("OpenStreetMap" in a for a in index["attribution"])
+    assert any("Skogsstyrelsen" in a for a in index["attribution"])
+
+    # Clear-cuts from the register: open ground last year's, a young stand the older one's.
+    fresh, young = mask_at(folder, index, 1, 1800, 2800), mask_at(folder, index, 1, 900, 2400)
+    assert fresh["biome"] == biome("clearcut") and fresh["canopy"] == 0
+    assert young["biome"] == biome("regrowth")
+    assert 1.5 <= young["canopy"] * 0.25 <= 5.0  # about 14 years of growth
+    # The power line runs through a cleared strip in the forest.
+    assert mask_at(folder, index, 1, 250, 2500)["canopy"] * 0.25 <= 1.25
+    assert mask_at(folder, index, 1, 250, 2540)["canopy"] * 0.25 > 3
 
 
 def test_vectors(data):
@@ -331,10 +359,47 @@ def test_vectors(data):
     assert abs(lake["level"] - centre) < 15
     assert vectors["places"] == [{"name": "Testby", "kind": "hamlet", "x": 2100.0, "z": 2900.0}]
 
+    (house,) = vectors["buildings"]
+    assert house["kind"] == "house" and house["levels"] == 2 and len(house["outline"]) == 4
+    (line,) = vectors["powerLines"]
+    assert line["kind"] == "minor_line" and line["voltage"] == 20 and line["points"] == [[100.0, 2500.0], [400.0, 2500.0], [700.0, 2520.0]]
+    # The field gets a fence all round, with a gap where the track crosses it.
+    fences = [f for f in vectors["fences"] if f["id"].startswith("field")]
+    assert fences and all(f["kind"] in ("roundpole", "wire") for f in fences)
+    xs = [p[0] for f in fences for p in f["points"]]
+    assert min(xs) == 1800 and max(xs) == 2300
+    crossing = [(a, b) for f in fences for a, b in zip(f["points"], f["points"][1:]) if min(a[0], b[0]) < 2000 < max(a[0], b[0])]
+    assert not crossing, crossing
+    # Logs wait beside the road nearest the fresh clear-cut, not the old one.
+    (pile,) = vectors["objects"]
+    assert pile["kind"] == "log_pile" and pile["id"] == "logs1"
+    assert abs(pile["z"] - 2994.5) < 1 or abs(pile["x"] - 1994.5) < 1.5, pile
+
     spawn = vectors["spawns"][0]
     assert spawn["name"] == "Testby" and spawn["road"] == road["id"]
     assert abs(spawn["x"] - 2100) < 1 and abs(spawn["z"] - 3000) < 1
     assert spawn["heading"] in (90.0, 270.0)
+
+
+def test_bog_pools_fill_hollows_in_mires():
+    from spar_importer.ground import biome_id, surface_id
+    from spar_importer.masks import bog_pools
+
+    n = 80
+    heights = np.full((n, n), 500.0, dtype=np.float32)
+    yy, xx = np.mgrid[0:n, 0:n]
+    hollow = (xx - 30) ** 2 + (yy - 40) ** 2 < 36
+    heights[hollow] -= 0.4
+    dry = (xx - 60) ** 2 + (yy - 40) ** 2 < 36
+    heights[dry] -= 0.4
+    biome = np.full((n, n), biome_id("wetland"), dtype=np.uint8)
+    biome[:, 50:] = biome_id("forest")
+    surface = np.zeros((n, n), dtype=np.uint8)
+    road = np.zeros((n, n), dtype=np.float32)
+    bog_pools(biome, surface, road, heights, np.zeros((n, n), dtype=np.float32))
+    assert surface[40, 30] == surface_id("pool") and road[40, 30] > 0.5
+    # Only in the mire, and not on the level ground around the hollow.
+    assert surface[40, 60] == 0 and surface[10, 10] == 0
 
 
 def test_flow_gathers_in_valleys():

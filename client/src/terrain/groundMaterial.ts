@@ -23,8 +23,11 @@ const BIOME_COLORS: Record<string, number> = {
   farmland: 0x9c9c58,
   water: 0x2b4759,
   scrub: 0x55693c,
-  built_up: 0x857f6c,
+  built_up: 0x6f7d48,
   sand: 0xbfb189,
+  // Fresh clear-cut: churned soil, dead brash and pale stumps; regrowth: young grass and shrubs.
+  clearcut: 0x6e5d43,
+  regrowth: 0x66723f,
 };
 const SURFACE_COLORS: Record<string, number> = {
   none: 0x000000,
@@ -34,15 +37,19 @@ const SURFACE_COLORS: Record<string, number> = {
   trail: 0x7c6b4d,
   boardwalk: 0x93846b,
   stream: 0x2b4759,
+  pool: 0x4a6170,
 };
+// Water in roads' place shines; everything else on that layer is matt.
+const SURFACE_ROUGHNESS: Record<string, number> = { stream: 0.25, pool: 0.15 };
 // Loud colours for the raw mask views.
 const BIOME_KEY: Record<string, number> = {
   unknown: 0xff00ff, forest: 0x1e6b1e, wetland: 0x8a5a2b, bare_rock: 0x808080, scree: 0xb0b0b0, heath: 0xb59a3c,
   grassland: 0x8fd14f, farmland: 0xe6d96a, water: 0x2f6fe0, scrub: 0x4fa37a, built_up: 0xd66a6a, sand: 0xf0e0a0,
+  clearcut: 0xff8c1a, regrowth: 0xb8ff3c,
 };
 const SURFACE_KEY: Record<string, number> = {
   none: 0x202020, asphalt: 0xffffff, gravel: 0xffc34d, dirt: 0xc46a2b, trail: 0xff5fa2, boardwalk: 0x5fd0ff,
-  stream: 0x2f6fe0,
+  stream: 0x2f6fe0, pool: 0x1ad1c4,
 };
 
 type Classes = RegionIndex['masks']['biomes'];
@@ -72,6 +79,7 @@ export class GroundShading {
   private readonly surfaceColors;
   private readonly biomeKey;
   private readonly surfaceKey;
+  private readonly surfaceRoughness;
   private readonly waterId: number;
   private readonly forestId: number;
   private readonly canopyScale: number;
@@ -82,6 +90,7 @@ export class GroundShading {
     this.surfaceColors = uniformArray<'vec3'>(colors(surfaces, SURFACE_COLORS), 'vec3');
     this.biomeKey = uniformArray<'vec3'>(colors(biomes, BIOME_KEY), 'vec3');
     this.surfaceKey = uniformArray<'vec3'>(colors(surfaces, SURFACE_KEY), 'vec3');
+    this.surfaceRoughness = uniformArray<'float'>(byId(surfaces, SURFACE_ROUGHNESS, -1), 'float');
     this.waterId = biomes.find((b) => b.name === 'water')?.id ?? -1;
     this.forestId = biomes.find((b) => b.name === 'forest')?.id ?? -1;
     this.canopyScale = channels.find((c) => c.name === 'canopy')?.scale ?? 0.25;
@@ -140,6 +149,11 @@ export class GroundShading {
       const coverage = packed.sub(surface.mul(32)).div(31);
       return vec4(this.surfaceColors.element(int(surface)).mul(coverage), coverage);
     });
+    /** Fixed roughness of the surface in one mask texel, or -1 when it follows the weather. */
+    const roadRoughness = Fn(([texel]: [THREE.Node<'vec4'>]): THREE.Node<'float'> => {
+      const surface = texel.y.mul(255).add(0.5).floor().div(32).floor();
+      return float(this.surfaceRoughness.element(int(surface)));
+    });
 
     // Blend the four texels around the fragment ourselves: ids cannot be interpolated,
     // but the colours they stand for can. Land cover borders get a noise wobble so they
@@ -170,7 +184,9 @@ export class GroundShading {
     const onRoad = smoothstep(0.4, 0.6, road.w);
     const roadColor = road.xyz.div(road.w.max(0.001)).mul(tint.mul(0.6).add(0.4)).mul(float(1).sub(this.wet.mul(0.35)));
     // A wet road shines far more than wet moss.
-    const shaded = vec4(mix(natural.xyz, roadColor, onRoad), mix(natural.w, float(1).sub(this.wet.mul(0.6)), onRoad));
+    const fixedRough = roadRoughness(r.t00).max(roadRoughness(r.t11));
+    const roadRough = select(fixedRough.greaterThanEqual(0), fixedRough, float(1).sub(this.wet.mul(0.6)));
+    const shaded = vec4(mix(natural.xyz, roadColor, onRoad), mix(natural.w, roadRough, onRoad));
 
     // Raw mask views use the nearest texel, unblended.
     const t00 = r.t00;

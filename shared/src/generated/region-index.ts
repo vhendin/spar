@@ -4,7 +4,7 @@
  * Written by the importer to data/regions/<name>/index.json; everything the game needs to load a region. Local coordinates: x runs east and z runs south from the north-west corner, in metres. Rasters are stored north row first.
  */
 export interface RegionIndex {
-  formatVersion: 3;
+  formatVersion: 4;
   name: string;
   title: string;
   crs: string;

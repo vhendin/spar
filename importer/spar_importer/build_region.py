@@ -11,6 +11,8 @@ import jsonschema
 import numpy as np
 from osgeo import gdal
 
+from .clearcuts import ATTRIBUTION as CLEARCUT_ATTRIBUTION
+from .clearcuts import find_clearcuts
 from .fetch import find_osm
 from .ground import ground_classes
 from .masks import CHANNELS, MASK_LEVELS, MASK_SPACING, build_planes, halve, horizon_biome, level_info, resize_bilinear, to_bytes
@@ -221,12 +223,15 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
     # Masks and vectors from OpenStreetMap, on a 2 m grid whatever the elevation source.
     print(f"reading {osm_path.name}")
     osm = load_osm(osm_path)
+    clearcuts, clearcuts_date = find_clearcuts(region, offline=offline)
+    if clearcuts_date:
+        print(f"  {len(clearcuts)} clear-cut(s) from Skogsstyrelsen, aged to {clearcuts_date}")
     m_n = region.size // MASK_SPACING + 1
     if spacing <= MASK_SPACING:
         heights2 = np.ascontiguousarray(area[:: MASK_SPACING // spacing, :: MASK_SPACING // spacing])
     else:
         heights2 = resize_bilinear(area, m_n, m_n)
-    planes, treeline, lake_levels = build_planes(osm, heights2, west=region.west, north=region.north)
+    planes, treeline, lake_levels = build_planes(osm, heights2, west=region.west, north=region.north, clearcuts=clearcuts)
     mask_levels = write_masks(out, planes, region.size)
 
     hb_n = (region.size + 2 * HORIZON_MARGIN) // HORIZON_BIOME_SPACING + 1
@@ -239,10 +244,14 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
         spacing=HORIZON_BIOME_SPACING,
     ).tofile(out / HORIZON_BIOME_PATH)
 
-    vectors = build_vectors(osm, region, lake_levels)
+    vectors = build_vectors(osm, region, lake_levels, clearcuts)
     jsonschema.validate(vectors, load_schema("region-vectors"))
     (out / VECTORS_PATH).write_text(json.dumps(vectors, ensure_ascii=False, separators=(",", ":")) + "\n")
     print(f"  {len(vectors['roads'])} road part(s), {len(vectors['lakes'])} lake(s), {len(vectors['spawns'])} spawn point(s), treeline {treeline:.0f} m")
+    print(
+        f"  {len(vectors['buildings'])} building(s), {len(vectors['powerLines'])} power line(s), "
+        f"{len(vectors['fences'])} fence line(s), {len(vectors['objects'])} other object(s)"
+    )
 
     latitude, longitude = region.center_wgs84()
     index = {
@@ -282,7 +291,7 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
             "biome": {"path": HORIZON_BIOME_PATH, "samples": hb_n, "spacing": HORIZON_BIOME_SPACING},
         },
         "vectors": {"path": VECTORS_PATH},
-        "attribution": list(dict.fromkeys([s.attribution for s in sources] + [OSM_ATTRIBUTION])),
+        "attribution": list(dict.fromkeys([s.attribution for s in sources] + [OSM_ATTRIBUTION] + ([CLEARCUT_ATTRIBUTION] if clearcuts else []))),
     }
     jsonschema.validate(index, load_schema("region-index"))
     (out / "index.json").write_text(json.dumps(index, indent=2, ensure_ascii=False) + "\n")

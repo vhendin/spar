@@ -8,7 +8,7 @@
   "properties": {
     "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
     "title": { "description": "English name, with the Swedish name in brackets.", "type": "string" },
-    "generator": { "description": "Which mesh generator builds it.", "type": "string", "enum": ["conifer", "broadleaf", "shrub", "grass", "boulder"] },
+    "generator": { "description": "Which mesh generator builds it.", "type": "string", "enum": ["conifer", "broadleaf", "shrub", "grass", "boulder", "stump"] },
     "variants": { "description": "How many different individuals are generated; instances pick one at random.", "type": "integer", "minimum": 1, "maximum": 8 },
     "params": {
       "description": "Shape parameters read by the generator. A [min, max] pair is drawn anew for every variant. Lengths are fractions of the plant's height.",

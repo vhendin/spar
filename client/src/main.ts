@@ -1,8 +1,11 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
 import { parseLocalTime, type RegionIndex, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
+import { fillCredits } from './credits';
+import { Features } from './features/features';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
+import { chooseQuality, nextQuality, saveQuality } from './quality';
 import { Environment } from './sky/environment';
 import { GROUND_VIEWS, GroundShading } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
@@ -25,6 +28,7 @@ const VEHICLES = import.meta.glob<VehicleDef>('../../defs/vehicles/*.json', { ea
 const canvas = document.querySelector<HTMLCanvasElement>('#view')!;
 const hud = document.querySelector<HTMLDivElement>('#hud')!;
 const fatal = document.querySelector<HTMLDivElement>('#fatal')!;
+const credits = document.querySelector<HTMLDivElement>('#credits')!;
 
 function showFatal(text: string): void {
   fatal.textContent = text;
@@ -56,6 +60,7 @@ interface World {
   shading: GroundShading;
   environment: Environment;
   vegetation: Vegetation | null;
+  features: Features | null;
   physics: RAPIER.World;
   ground: GroundStore;
   obstacles: Obstacles | null;
@@ -77,12 +82,14 @@ async function start(): Promise<void> {
   // Falls back to WebGL 2 by itself when the browser has no WebGPU.
   await Promise.all([renderer.init(), RAPIER.init()]);
   const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // ?quality=low|medium|high, or P to step through them (remembered on this computer).
+  const quality = chooseQuality(params);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatio));
 
   // World axes: X east, Y up, Z south, in metres from the region's north-west corner at sea level.
   const scene = new THREE.Scene();
-  // ?shadows=0 turns sun shadows off, for slower machines.
-  const shadows = params.get('shadows') !== '0';
+  // ?shadows=0 turns sun shadows off whatever the quality.
+  const shadows = quality.shadows && params.get('shadows') !== '0';
   renderer.shadowMap.enabled = shadows;
 
   const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 60000);
@@ -105,6 +112,8 @@ async function start(): Promise<void> {
   let world: World | null = null;
   let loadingRegion: string | null = null;
   let fps: number | null = null;
+  /** CPU time of the last frames' work, smoothed, in milliseconds. */
+  let frameMs = 0;
   let latestWorld: Extract<ServerMessage, { type: 'world' }> | null = null;
   /** Headlights: null follows the daylight, true and false are the driver's choice. */
   let lamps: boolean | null = null;
@@ -112,7 +121,11 @@ async function start(): Promise<void> {
   let detailed = params.get('wheels') !== '0';
 
   const drawHud = (): void => {
-    const lines = [`${fps === null ? '–' : fps.toFixed(0)} fps · ${backend}`, describe(link, world?.index ?? null)];
+    const info = renderer.info.render;
+    const lines = [
+      `${fps === null ? '–' : fps.toFixed(0)} fps · ${backend} · ${quality.name} quality (P) · ${frameMs.toFixed(1)} ms CPU · ${info.drawCalls} draws · ${(info.triangles / 1e6).toFixed(2)}M triangles`,
+      describe(link, world?.index ?? null),
+    ];
     if (world) {
       lines.push(world.environment.describe());
       const { terrain, vegetation, index, sim, obstacles } = world;
@@ -134,6 +147,10 @@ async function start(): Promise<void> {
             (obstacles ? ` · ${obstacles.count} solid nearby` : ''),
         );
       }
+      if (world.features) {
+        const f = world.features.stats;
+        lines.push(`buildings, lines and fences: ${f.tiles} tiles · ${(f.triangles / 1000).toFixed(0)}k triangles` + (f.loading ? ` · building ${f.loading}` : ''));
+      }
       if (groundView > 0) lines.push(`view: ${GROUND_VIEWS[groundView]}`);
       lines.push('', world.unplaced ? `${sim.def.title} · waiting for the ground at ${world.spawn.name}…` : `${sim.def.title} · ${driveReadout(sim, detailed)}`);
     } else if (loadingRegion) {
@@ -144,8 +161,8 @@ async function start(): Promise<void> {
       flying
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
-          : 'click to fly · F drive · M masks'
-        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · G wheels · F fly',
+          : 'click to fly · F drive · M masks · C credits'
+        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · G wheels · F fly · C credits',
     );
     hud.textContent = lines.join('\n');
   };
@@ -167,7 +184,7 @@ async function start(): Promise<void> {
     const shading = new GroundShading(index);
     shading.view.value = groundView;
     const [terrain, horizon, vectors] = await Promise.all([
-      Terrain.load(index, shading),
+      Terrain.load(index, shading, quality.terrainSplit),
       loadHorizon(index, shading),
       fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>),
     ]);
@@ -184,7 +201,7 @@ async function start(): Promise<void> {
     const environment = new Environment(
       scene,
       index,
-      { shadows, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null },
+      { shadows, shadowMapSize: quality.shadowMapSize, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null },
       camera.far,
     );
     if (latestWorld) environment.setWorld(latestWorld, performance.now());
@@ -192,7 +209,7 @@ async function start(): Promise<void> {
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
-      vegetation = await Vegetation.create(renderer, index, welcome.seed);
+      vegetation = await Vegetation.create(renderer, index, welcome.seed, quality.plantRange, quality.farTreeRange);
       scene.add(vegetation.group);
       // ?atlas=1 stands the far-tree pictures up in front of the start position.
       if (params.get('atlas') === '1') {
@@ -200,6 +217,14 @@ async function start(): Promise<void> {
         board.name = 'atlas';
         scene.add(board);
       }
+    }
+
+    // ?objects=0 leaves out buildings, power lines, fences and log piles.
+    let features: Features | null = null;
+    if (params.get('objects') !== '0') {
+      features = new Features(index, vectors, welcome.seed);
+      features.rangeScale = quality.objectRange;
+      scene.add(features.group);
     }
 
     // Vehicle: ?vehicle=<name> picks a definition, ?spawn=<name or number> a start point.
@@ -221,8 +246,8 @@ async function start(): Promise<void> {
     view.snap();
 
     world = {
-      index, terrain, shading, environment, vegetation, physics, ground, sim, view, spawn,
-      obstacles: vegetation ? new Obstacles(RAPIER, physics, vegetation) : null,
+      index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spawn,
+      obstacles: vegetation || features ? new Obstacles(RAPIER, physics, vegetation, features) : null,
       unplaced: true,
     };
 
@@ -261,6 +286,22 @@ async function start(): Promise<void> {
           chase.reset();
         }
         break;
+      case 'KeyC':
+        // Credits: the data and software the world is made from.
+        if (credits.style.display === 'flex') credits.style.display = 'none';
+        else {
+          fillCredits(credits, w?.index ?? null);
+          credits.style.display = 'flex';
+        }
+        break;
+      case 'KeyP': {
+        // A new quality takes effect on a fresh start; keep the place and view.
+        saveQuality(nextQuality(quality.name));
+        const next = new URLSearchParams(location.search);
+        next.delete('quality');
+        location.search = next.toString();
+        break;
+      }
       case 'KeyG':
         detailed = !detailed;
         break;
@@ -312,6 +353,7 @@ async function start(): Promise<void> {
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
+    const began = now;
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
 
@@ -342,6 +384,7 @@ async function start(): Promise<void> {
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
       w.terrain.update(camera.position);
       w.vegetation?.update(camera.position);
+      w.features?.update(camera.position);
 
       // The sky sets the light, and the weather reaches into everything else.
       const env = w.environment;
@@ -357,6 +400,7 @@ async function start(): Promise<void> {
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
     }
     renderer.render(scene, camera);
+    frameMs += (performance.now() - began - frameMs) * 0.05;
 
     frames++;
     if (now - fpsSince >= 250) {

@@ -1,0 +1,39 @@
+{
+  "name": "rock_slab",
+  "title": "Rock slab (häll)",
+  "generator": "boulder",
+  "variants": 4,
+  "params": {
+    "flatten": [
+      0.18,
+      0.3
+    ],
+    "stretch": [
+      1.2,
+      2.0
+    ],
+    "rough": [
+      0.08,
+      0.16
+    ],
+    "sink": [
+      0.4,
+      0.5
+    ]
+  },
+  "colors": {
+    "foliage": "#85847e",
+    "accent": "#9a9c80",
+    "variation": 0.14
+  },
+  "seasons": {
+    "spring": "#85847e",
+    "summer": "#85847e",
+    "autumn": "#85847e",
+    "winter": "#85847e"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 1.0
+  }
+}

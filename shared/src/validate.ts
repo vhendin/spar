@@ -9,9 +9,11 @@ import serverSchema from '../schemas/server-message.schema.json' with { type: 'j
 import type { GroundClasses } from './generated/ground-classes';
 import type { RegionDef } from './generated/region-def';
 import type { RegionIndex } from './generated/region-index';
+import objectSchema from '../schemas/object.schema.json' with { type: 'json' };
 import speciesSchema from '../schemas/species.schema.json' with { type: 'json' };
 import vehicleSchema from '../schemas/vehicle.schema.json' with { type: 'json' };
 import vegetationRulesSchema from '../schemas/vegetation-rules.schema.json' with { type: 'json' };
+import type { ObjectDef } from './generated/object';
 import type { Species } from './generated/species';
 import type { VegetationRules } from './generated/vegetation-rules';
 import type { VehicleDef } from './generated/vehicle';
@@ -25,5 +27,6 @@ export const isRegionDef = ajv.compile(regionDefSchema) as ValidateFunction<Regi
 export const isRegionIndex = ajv.compile(regionIndexSchema) as ValidateFunction<RegionIndex>;
 export const isGroundClasses = ajv.compile(groundClassesSchema) as ValidateFunction<GroundClasses>;
 export const isSpecies = ajv.compile(speciesSchema) as ValidateFunction<Species>;
+export const isObjectDef = ajv.compile(objectSchema) as ValidateFunction<ObjectDef>;
 export const isVegetationRules = ajv.compile(vegetationRulesSchema) as ValidateFunction<VegetationRules>;
 export const isVehicleDef = ajv.compile(vehicleSchema) as ValidateFunction<VehicleDef>;

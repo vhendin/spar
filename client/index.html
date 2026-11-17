@@ -13,6 +13,15 @@
         color: #e8eef0; background: rgba(0, 0, 0, 0.55); border-radius: 4px;
         white-space: pre; pointer-events: none;
       }
+      #credits {
+        position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+        background: rgba(6, 10, 12, 0.82); color: #e8eef0; font: 15px/1.6 system-ui, sans-serif;
+      }
+      #credits > div { max-width: 640px; padding: 28px 32px; }
+      #credits h1 { margin: 0 0 4px; font-size: 26px; font-weight: 600; }
+      #credits h2 { margin: 20px 0 6px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9fb4bc; }
+      #credits ul { margin: 0; padding-left: 18px; }
+      #credits p.hint { margin-top: 22px; color: #9fb4bc; font-size: 13px; }
       #fatal {
         position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
         padding: 24px; font: 16px/1.5 system-ui, sans-serif; color: #e8eef0; text-align: center; white-space: pre-line;
@@ -22,6 +31,7 @@
   <body>
     <canvas id="view"></canvas>
     <div id="hud"></div>
+    <div id="credits"></div>
     <div id="fatal"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

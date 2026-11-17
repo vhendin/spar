@@ -1,0 +1,36 @@
+{
+  "name": "stump",
+  "title": "Tree stump (stubbe)",
+  "generator": "stump",
+  "variants": 4,
+  "params": {
+    "radius": [
+      0.45,
+      0.75
+    ],
+    "flare": [
+      1.35,
+      1.7
+    ],
+    "slant": [
+      0.05,
+      0.3
+    ]
+  },
+  "colors": {
+    "bark": "#5a4b3d",
+    "foliage": "#5a4b3d",
+    "accent": "#cdb58a",
+    "variation": 0.15
+  },
+  "seasons": {
+    "spring": "#5a4b3d",
+    "summer": "#5a4b3d",
+    "autumn": "#5a4b3d",
+    "winter": "#5a4b3d"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 1.0
+  }
+}

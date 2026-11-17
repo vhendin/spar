@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import math
+import zlib
 
 from osgeo import ogr
 
+from .clearcuts import Clearcut
 from .osm import OsmData
 from .region import Region
 
@@ -52,7 +54,151 @@ def _clipped(region: Region, box: ogr.Geometry, geom: ogr.Geometry, tolerance: f
     return parts
 
 
-def build_vectors(osm: OsmData, region: Region, levels: dict[str, float]) -> dict:
+def _polygons(geom: ogr.Geometry | None) -> list[ogr.Geometry]:
+    """The polygons inside a geometry of any kind."""
+    if geom is None or geom.IsEmpty():
+        return []
+    kind = ogr.GT_Flatten(geom.GetGeometryType())
+    if kind == ogr.wkbPolygon:
+        return [geom]
+    if kind in (ogr.wkbMultiPolygon, ogr.wkbGeometryCollection):
+        return [p for i in range(geom.GetGeometryCount()) for p in _polygons(geom.GetGeometryRef(i))]
+    return []
+
+
+def _number(text: str | None) -> float | None:
+    """The leading number of a tag value such as "6", "6.5 m" or "2;3"."""
+    if not text:
+        return None
+    head = text.split(";")[0].replace(",", ".").replace("m", "").strip()
+    try:
+        return float(head)
+    except ValueError:
+        return None
+
+
+def _hash(text: str) -> int:
+    return zlib.crc32(text.encode())
+
+
+def buildings(osm: OsmData, region: Region) -> list[dict]:
+    """Footprints of the buildings standing inside the area, with what is known about their height and roof."""
+    out = []
+    for b in osm.buildings:
+        for n, polygon in enumerate(_polygons(b.geom)):
+            if polygon.GetArea() < 4:
+                continue
+            centre = polygon.Centroid()
+            if not (region.west < centre.GetX() < region.east and region.south < centre.GetY() < region.north):
+                continue
+            ring = polygon.GetGeometryRef(0)
+            outline = _local(region, ring.Simplify(0.25) or ring)
+            if len(outline) > 2 and outline[0] == outline[-1]:
+                outline.pop()
+            if len(outline) < 3:
+                continue
+            entry: dict = {"id": b.id if n == 0 else f"{b.id}.{n}", "kind": b.tags.get("building", "yes"), "outline": outline}
+            levels, height = _number(b.tags.get("building:levels")), _number(b.tags.get("height"))
+            if levels and 0 < levels < 30:
+                entry["levels"] = levels
+            if height and 1 < height < 120:
+                entry["height"] = height
+            if b.tags.get("roof:shape"):
+                entry["roof"] = b.tags["roof:shape"]
+            out.append(entry)
+    return out
+
+
+def power_lines(osm: OsmData, region: Region, box: ogr.Geometry) -> list[dict]:
+    """
+    Overhead lines. Every point of a mapped power line is a tower or pole, so the points are
+    kept as they are; one point beyond the edge is kept at each end for the wires to run on.
+    """
+    out = []
+    for line in osm.power:
+        if not line.geom.Intersects(box):
+            continue
+        for part in _lines(line.geom):
+            points = _local(region, part)
+            inside = [0 <= x <= region.size and 0 <= z <= region.size for x, z in points]
+            keep = [i for i in range(len(points)) if inside[i] or (i > 0 and inside[i - 1]) or (i + 1 < len(points) and inside[i + 1])]
+            if len(keep) < 2:
+                continue
+            entry: dict = {"id": line.id, "kind": line.tags["power"], "points": [points[i] for i in keep]}
+            volts = [_number(v) for v in line.tags.get("voltage", "").split(";")]
+            volts = [v for v in volts if v]
+            if volts:
+                entry["voltage"] = round(max(volts) / 1000, 1)
+            out.append(entry)
+    return out
+
+
+FIELD_FENCE_LANDUSE = ("farmland", "meadow")
+OSM_FENCE_KINDS = {"split_rail": "roundpole", "rails": "roundpole", "wood": "roundpole", "log": "roundpole"}
+
+
+def fences(osm: OsmData, region: Region, box: ogr.Geometry) -> list[dict]:
+    """
+    Mapped fences and walls, and fences around fields and meadows, which the map rarely
+    draws: roundpole fences (gärdesgårdar) or wire, chosen by the field's id, with gaps
+    where roads and paths pass.
+    """
+    out = []
+    for barrier in osm.barriers:
+        kind = "stone_wall" if barrier.tags["barrier"] in ("wall", "retaining_wall") else OSM_FENCE_KINDS.get(barrier.tags.get("fence_type", ""), "wire")
+        for n, points in enumerate(_clipped(region, box, barrier.geom, 0.3)):
+            out.append({"id": barrier.id if n == 0 else f"{barrier.id}.{n}", "kind": kind, "points": points})
+
+    gaps = [r.geom.Buffer(r.width / 2 + 3) for r in osm.roads] + [w.geom.Buffer(3) for w in osm.waterways]
+    gaps += [b.geom.Buffer(2) for b in osm.buildings]
+    gap_boxes = [g.GetEnvelope() for g in gaps]
+    for area in osm.areas:
+        if area.tags.get("landuse") not in FIELD_FENCE_LANDUSE or not area.geom.Intersects(box):
+            continue
+        min_e, max_e, min_n, max_n = area.geom.GetEnvelope()
+        edge = area.geom.Boundary()
+        for gap, (g0, g1, g2, g3) in zip(gaps, gap_boxes):
+            if g1 < min_e or g0 > max_e or g3 < min_n or g2 > max_n:
+                continue
+            edge = edge.Difference(gap)
+        kind = "roundpole" if _hash(area.id) % 10 < 6 else "wire"
+        for n, points in enumerate(_clipped(region, box, edge, 0.5)):
+            length = sum(math.dist(a, b) for a, b in zip(points, points[1:]))
+            if length >= 8:
+                out.append({"id": f"field{area.id}.{n}", "kind": kind, "points": points})
+    return out
+
+
+# Log piles wait by the road for a year or two after felling.
+LOG_PILE_YEARS = 3
+LOG_PILE_REACH = 250
+
+
+def log_piles(cuts: list[Clearcut], region: Region, segments: list[tuple]) -> list[dict]:
+    """A pile of logs at the roadside nearest each fresh clear-cut, on the side facing it."""
+    out = []
+    for cut in cuts:
+        if cut.age > LOG_PILE_YEARS:
+            continue
+        centre = cut.geom.Centroid()
+        x, z = centre.GetX() - region.west, region.north - centre.GetY()
+        hit = _nearest_on_roads(x, z, segments)
+        if hit is None or hit[4] > LOG_PILE_REACH:
+            continue
+        px, pz, heading, road, _ = hit
+        # Step off the road towards the clear-cut.
+        a = math.radians(heading)
+        right = (math.cos(a), math.sin(a))  # heading 0 is -z, so its right hand is +x
+        side = 1 if (x - px) * right[0] + (z - pz) * right[1] >= 0 else -1
+        off = 5.5
+        sx, sz = px + right[0] * side * off, pz + right[1] * side * off
+        if not (0 < sx < region.size and 0 < sz < region.size):
+            continue
+        out.append({"id": f"logs{cut.id}", "kind": "log_pile", "x": round(sx, 1), "z": round(sz, 1), "heading": round(heading, 1), "road": road})
+    return out
+
+
+def build_vectors(osm: OsmData, region: Region, levels: dict[str, float], clearcuts: list[Clearcut] | None = None) -> dict:
     box = _box(region)
     roads, drivable_points = [], []
     for road in osm.roads:
@@ -112,7 +258,17 @@ def build_vectors(osm: OsmData, region: Region, levels: dict[str, float]) -> dic
         if region.west <= p.easting <= region.east and region.south <= p.northing <= region.north
     ]
 
-    return {"roads": roads, "waterways": waterways, "lakes": lakes, "places": places, "spawns": _spawns(places, drivable_points, region)}
+    return {
+        "roads": roads,
+        "waterways": waterways,
+        "lakes": lakes,
+        "places": places,
+        "spawns": _spawns(places, drivable_points, region),
+        "buildings": buildings(osm, region),
+        "powerLines": power_lines(osm, region, box),
+        "fences": fences(osm, region, box),
+        "objects": log_piles(clearcuts or [], region, drivable_points),
+    }
 
 
 def _nearest_on_roads(x: float, z: float, segments: list[tuple]) -> tuple[float, float, float, str, float] | None:

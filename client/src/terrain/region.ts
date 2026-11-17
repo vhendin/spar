@@ -7,7 +7,7 @@ export class RegionMissingError extends Error {
 }
 
 /** Region format this client reads; the importer writes the same number. */
-export const REGION_FORMAT = 3;
+export const REGION_FORMAT = 4;
 
 export const regionUrl = (region: string, path: string): string => `/regions/${region}/${path}`;
 

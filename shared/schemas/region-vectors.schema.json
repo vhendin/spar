@@ -4,7 +4,17 @@
   "description": "Line and outline data of a region, written by the importer to vectors.json. All coordinates are [x, z] in metres from the north-west corner: x east, z south.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["roads", "waterways", "lakes", "places", "spawns"],
+  "required": [
+    "roads",
+    "waterways",
+    "lakes",
+    "places",
+    "spawns",
+    "buildings",
+    "powerLines",
+    "fences",
+    "objects"
+  ],
   "properties": {
     "roads": {
       "type": "array",
@@ -12,16 +22,45 @@
         "title": "RoadLine",
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "kind", "surface", "width", "drivable", "points"],
+        "required": [
+          "id",
+          "kind",
+          "surface",
+          "width",
+          "drivable",
+          "points"
+        ],
         "properties": {
-          "id": { "description": "Stable id: OpenStreetMap way id, plus a part number when the way was cut at the area edge.", "type": "string" },
-          "kind": { "description": "OpenStreetMap highway value.", "type": "string" },
-          "surface": { "description": "Name of a surface class.", "type": "string" },
-          "width": { "description": "Metres.", "type": "number", "exclusiveMinimum": 0 },
-          "drivable": { "description": "True for ways meant for motor vehicles.", "type": "boolean" },
-          "bridge": { "type": "boolean" },
-          "name": { "type": "string" },
-          "points": { "$ref": "#/definitions/Line" }
+          "id": {
+            "description": "Stable id: OpenStreetMap way id, plus a part number when the way was cut at the area edge.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "OpenStreetMap highway value.",
+            "type": "string"
+          },
+          "surface": {
+            "description": "Name of a surface class.",
+            "type": "string"
+          },
+          "width": {
+            "description": "Metres.",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "drivable": {
+            "description": "True for ways meant for motor vehicles.",
+            "type": "boolean"
+          },
+          "bridge": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "points": {
+            "$ref": "#/definitions/Line"
+          }
         }
       }
     },
@@ -31,12 +70,25 @@
         "title": "Waterway",
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "kind", "points"],
+        "required": [
+          "id",
+          "kind",
+          "points"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "kind": { "description": "OpenStreetMap waterway value, such as stream or river.", "type": "string" },
-          "name": { "type": "string" },
-          "points": { "$ref": "#/definitions/Line" }
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "OpenStreetMap waterway value, such as stream or river.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "points": {
+            "$ref": "#/definitions/Line"
+          }
         }
       }
     },
@@ -46,12 +98,26 @@
         "title": "Lake",
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "level", "outline"],
+        "required": [
+          "id",
+          "level",
+          "outline"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "level": { "description": "Water surface elevation in metres.", "type": "number" },
-          "outline": { "description": "Outer shoreline, cut at the area edge.", "$ref": "#/definitions/Line" }
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "description": "Water surface elevation in metres.",
+            "type": "number"
+          },
+          "outline": {
+            "description": "Outer shoreline, cut at the area edge.",
+            "$ref": "#/definitions/Line"
+          }
         }
       }
     },
@@ -61,12 +127,25 @@
         "title": "Place",
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "kind", "x", "z"],
+        "required": [
+          "name",
+          "kind",
+          "x",
+          "z"
+        ],
         "properties": {
-          "name": { "type": "string" },
-          "kind": { "type": "string" },
-          "x": { "type": "number" },
-          "z": { "type": "number" }
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          }
         }
       }
     },
@@ -77,13 +156,168 @@
         "title": "SpawnPoint",
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "x", "z", "heading", "road"],
+        "required": [
+          "name",
+          "x",
+          "z",
+          "heading",
+          "road"
+        ],
         "properties": {
-          "name": { "type": "string" },
-          "x": { "type": "number" },
-          "z": { "type": "number" },
-          "heading": { "description": "Direction along the road in degrees: 0 north, 90 east.", "type": "number" },
-          "road": { "description": "Id of the road the point lies on.", "type": "string" }
+          "name": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          },
+          "heading": {
+            "description": "Direction along the road in degrees: 0 north, 90 east.",
+            "type": "number"
+          },
+          "road": {
+            "description": "Id of the road the point lies on.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "buildings": {
+      "description": "Building footprints from OpenStreetMap.",
+      "type": "array",
+      "items": {
+        "title": "Building",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "outline"
+        ],
+        "properties": {
+          "id": {
+            "description": "Stable id: OpenStreetMap id, plus a part number for multipolygons.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "OpenStreetMap building value, such as house, cabin, barn or yes.",
+            "type": "string"
+          },
+          "levels": {
+            "description": "Storeys above ground, when mapped.",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "height": {
+            "description": "Height in metres, when mapped.",
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "roof": {
+            "description": "OpenStreetMap roof:shape, when mapped.",
+            "type": "string"
+          },
+          "outline": {
+            "description": "Footprint corners, not repeating the first.",
+            "$ref": "#/definitions/Line"
+          }
+        }
+      }
+    },
+    "powerLines": {
+      "description": "Overhead power lines. Every point is a tower or pole; points outside the area only carry the wires.",
+      "type": "array",
+      "items": {
+        "title": "PowerLine",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "points"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "OpenStreetMap power value: line or minor_line.",
+            "type": "string"
+          },
+          "voltage": {
+            "description": "Highest voltage in kV, when mapped.",
+            "type": "number"
+          },
+          "points": {
+            "$ref": "#/definitions/Line"
+          }
+        }
+      }
+    },
+    "fences": {
+      "description": "Fences and walls: mapped ones, and fences along field edges.",
+      "type": "array",
+      "items": {
+        "title": "FenceLine",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "points"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "Name of an object definition: roundpole, wire or stone_wall.",
+            "type": "string"
+          },
+          "points": {
+            "$ref": "#/definitions/Line"
+          }
+        }
+      }
+    },
+    "objects": {
+      "description": "Single man-made objects placed by the importer, such as log piles beside fresh clear-cuts.",
+      "type": "array",
+      "items": {
+        "title": "PlacedObject",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "x",
+          "z",
+          "heading"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "Name of an object definition.",
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          },
+          "heading": {
+            "description": "Degrees: 0 north, 90 east.",
+            "type": "number"
+          },
+          "road": {
+            "description": "Id of the road it stands beside.",
+            "type": "string"
+          }
         }
       }
     }
@@ -93,7 +327,14 @@
       "title": "Line",
       "type": "array",
       "minItems": 2,
-      "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } }
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "type": "number"
+        }
+      }
     }
   }
 }

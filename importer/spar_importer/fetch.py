@@ -165,7 +165,7 @@ def find_osm(region: Region, *, offline: bool) -> Path:
     raise SystemExit(f"No OpenStreetMap extract for {region.name} in {folder}. Run `fetch` first.")
 
 
-def fetch(region: Region, *, dem: bool = True, osm: bool = True) -> None:
+def fetch(region: Region, *, dem: bool = True, osm: bool = True, forest: bool = True) -> None:
     if dem:
         tiles = ensure_copernicus(region)
         print(f"elevation: {len(tiles)} Copernicus tile(s) in {data_dir() / 'raw' / 'copernicus'}")
@@ -176,3 +176,8 @@ def fetch(region: Region, *, dem: bool = True, osm: bool = True) -> None:
             print("elevation: no Lantmäteriet login in .env, so the 1 m model is skipped (see .env.example)")
     if osm:
         print(f"osm: {ensure_osm(region)}")
+    if forest:
+        from .clearcuts import fetch_clearcuts, load_clearcuts
+
+        cuts, _ = load_clearcuts(fetch_clearcuts(region))
+        print(f"clear-cuts: {len(cuts)} felling(s) from Skogsstyrelsen")

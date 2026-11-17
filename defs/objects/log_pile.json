@@ -1,0 +1,9 @@
+{
+  "name": "log_pile",
+  "title": "Log pile at the roadside (virkesupplag)",
+  "generator": "log_pile",
+  "params": { "sections": [3, 5], "logLength": [4.2, 5.2], "rows": [5, 7], "radius": [0.11, 0.17] },
+  "colors": { "bark": ["#5f4c3a", "#6b5641", "#57483a", "#7a6a55"], "cut": ["#d8c49a", "#cdb68a", "#e0cfa8"] },
+  "range": 700,
+  "collider": true
+}

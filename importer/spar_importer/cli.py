@@ -13,7 +13,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p_fetch = sub.add_parser("fetch", help="download raw data for a region into data/raw")
     p_fetch.add_argument("region")
-    p_fetch.add_argument("--only", choices=["dem", "osm"], help="fetch just elevation or just OpenStreetMap")
+    p_fetch.add_argument("--only", choices=["dem", "osm", "forest"], help="fetch just elevation, OpenStreetMap or clear-cuts")
 
     p_build = sub.add_parser("build", help="write data/regions/<region> from the raw data")
     p_build.add_argument("region")
@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "fetch":
         from .fetch import fetch
 
-        fetch(region, dem=args.only != "osm", osm=args.only != "dem")
+        fetch(region, dem=args.only in (None, "dem"), osm=args.only in (None, "osm"), forest=args.only in (None, "forest"))
     elif args.command == "build":
         from .build_region import build_region
 

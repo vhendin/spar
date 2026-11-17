@@ -9,6 +9,7 @@ import numpy as np
 from osgeo import gdal, ogr, osr
 
 from .ground import BIOME_ORDER, SURFACE_ORDER, biome_id, surface_id
+from .clearcuts import GROWTH_DELAY, GROWTH_PER_YEAR, OPEN_YEARS, REGROWTH_YEARS, Clearcut
 from .osm import OsmData
 from .region import CRS
 
@@ -365,7 +366,80 @@ def to_bytes(planes: dict[str, np.ndarray]) -> np.ndarray:
     return np.stack(stack)
 
 
-def build_planes(osm: OsmData, heights2: np.ndarray, *, west: float, north: float) -> tuple[dict[str, np.ndarray], float, dict[str, float]]:
+def box_mean(a: np.ndarray, radius: int) -> np.ndarray:
+    """Mean over a (2 radius + 1) square around every sample, edges repeated."""
+    width = 2 * radius + 1
+    p = np.pad(a.astype(np.float64), radius, mode="edge")
+    s = np.zeros((p.shape[0] + 1, p.shape[1] + 1))
+    s[1:, 1:] = p.cumsum(0).cumsum(1)
+    total = s[width:, width:] - s[:-width, width:] - s[width:, :-width] + s[:-width, :-width]
+    return (total / (width * width)).astype(np.float32)
+
+
+# Bog pools: hollows at least this deep below the ground around them, within this many samples.
+POOL_DEPTH = 0.13
+POOL_RADIUS = 7
+
+
+def bog_pools(biome: np.ndarray, surface: np.ndarray, road: np.ndarray, heights2: np.ndarray, slope2: np.ndarray) -> int:
+    """
+    Open water in mires (gölar): wetland ground lying in a hollow below its surroundings,
+    as the elevation model shows them. Painted into the surface planes like a stream, with a
+    soft coverage edge that follows the hollow's depth. Returns how many samples became pool.
+    """
+    relief = heights2 - box_mean(heights2, POOL_RADIUS)
+    depth = np.clip((-relief - POOL_DEPTH + 0.05) / 0.1, 0, 1)
+    wetland = biome == biome_id("wetland")
+    # Only near-level ground holds water; keep the pools off roads and streams.
+    depth[~wetland | (slope2 > 4) | (surface != 0)] = 0
+    depth = _blur(depth) * (wetland & (surface == 0))
+    pool = depth > 0.02
+    surface[pool] = surface_id("pool")
+    road[pool] = np.maximum(road[pool], depth[pool])
+    return int((depth > 0.5).sum())
+
+
+def apply_clearcuts(cuts: list[Clearcut], biome: np.ndarray, canopy: np.ndarray, **grid) -> int:
+    """
+    Fellings from the register: open clear-cut for the first years, then young forest whose
+    height grows with its age. Only forest ground is changed. Returns the samples touched.
+    """
+    if not cuts:
+        return 0
+    order = sorted(range(len(cuts)), key=lambda i: -cuts[i].age)  # newest felling drawn last
+    labels = rasterize([(cuts[i].geom, i + 1) for i in order], dtype=gdal.GDT_Int32, **grid)
+    ages = np.array([np.inf] + [c.age for c in cuts], dtype=np.float32)[labels]
+    forest = (biome == biome_id("forest")) | (biome == biome_id("scrub"))
+    felled = forest & (labels > 0)
+    rows, cols = biome.shape
+    patch = smooth_noise(rows, cols, 6, 3)  # some planted spots grow better than others
+    young = np.clip((ages - GROWTH_DELAY) * GROWTH_PER_YEAR, 0, None) * (0.7 + 0.6 * patch)
+    open_cut = felled & (ages < OPEN_YEARS)
+    regrowing = felled & (ages >= OPEN_YEARS) & (ages < REGROWTH_YEARS)
+    older = felled & (ages >= REGROWTH_YEARS)
+    biome[open_cut] = biome_id("clearcut")
+    canopy[open_cut] = 0
+    biome[regrowing] = biome_id("regrowth")
+    canopy[regrowing] = np.maximum(young[regrowing], 0.8)
+    canopy[older] = np.minimum(canopy[older], young[older])
+    return int(felled.sum())
+
+
+# Half width in metres of the strip kept clear of trees under overhead lines.
+POWER_CORRIDOR = {"line": 14.0, "minor_line": 5.0}
+
+
+def clear_corridors(osm: OsmData, canopy: np.ndarray, **grid) -> int:
+    """Power lines run through cleared strips (ledningsgator): only low scrub grows there."""
+    shapes = [(f.geom.Buffer(POWER_CORRIDOR.get(f.tags.get("power", ""), 5.0)), 1) for f in osm.power]
+    corridor = rasterize(shapes, **grid) > 0
+    canopy[corridor] = np.minimum(canopy[corridor], 1.2)
+    return int(corridor.sum())
+
+
+def build_planes(
+    osm: OsmData, heights2: np.ndarray, *, west: float, north: float, clearcuts: list[Clearcut] | None = None
+) -> tuple[dict[str, np.ndarray], float, dict[str, float]]:
     """All mask channels on the 2 m grid of the area, the treeline elevation and lake levels by id."""
     size = heights2.shape[0]
     grid = dict(west=west, north=north, spacing=MASK_SPACING, size=size)
@@ -380,6 +454,10 @@ def build_planes(osm: OsmData, heights2: np.ndarray, *, west: float, north: floa
     wetness = wetness_index(heights2, slope, biome)
     wetness[surface == surface_id("stream")] = 1.0
     canopy = canopy_estimate(biome, heights2, wetness, treeline)
+    felled = apply_clearcuts(clearcuts or [], biome, canopy, **grid)
+    clear_corridors(osm, canopy, **grid)
+    pools = bog_pools(biome, surface, road, heights2, slope)
+    print(f"  clear-cuts cover {felled * MASK_SPACING**2 / 1e4:.0f} ha; bog pools {pools * MASK_SPACING**2 / 1e4:.1f} ha")
     planes = {"biome": biome, "surface": surface, "road": road, "wetness": wetness, "canopy": canopy, "slope": slope}
     return planes, treeline, levels
 

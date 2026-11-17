@@ -1,0 +1,9 @@
+{
+  "name": "power_pole",
+  "title": "Wooden power pole (stolpe)",
+  "generator": "pole",
+  "params": { "height": [9, 10.5], "radius": 0.13, "arm": 2.2, "wires": 3, "sag": 0.0018 },
+  "colors": { "wood": ["#4f4236", "#5a4b3c", "#463b30"], "insulator": ["#d6d4cc"], "steel": ["#5e6062"], "wire": ["#262626"] },
+  "range": 1500,
+  "collider": true
+}

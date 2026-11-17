@@ -1,0 +1,9 @@
+{
+  "name": "roundpole",
+  "title": "Roundpole fence (gärdesgård)",
+  "generator": "fence",
+  "params": { "style": "roundpole", "spacing": [1.5, 1.9], "height": [1.1, 1.3], "rails": 4, "lean": 32 },
+  "colors": { "wood": ["#8a8274", "#7c7568", "#958c7b", "#6f685c"], "band": ["#5b5547"] },
+  "range": 380,
+  "collider": true
+}

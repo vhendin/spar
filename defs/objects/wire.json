@@ -1,0 +1,9 @@
+{
+  "name": "wire",
+  "title": "Wire fence (taggtrådsstängsel)",
+  "generator": "fence",
+  "params": { "style": "wire", "spacing": [3.2, 4], "height": [1.05, 1.2], "wires": 3 },
+  "colors": { "wood": ["#6b5d4a", "#5e5242", "#776852"], "wire": ["#55575a"] },
+  "range": 260,
+  "collider": true
+}

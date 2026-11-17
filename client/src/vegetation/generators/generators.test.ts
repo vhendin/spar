@@ -40,7 +40,7 @@ describe.each(all.map((s) => [s.name, s] as const))('%s', (_, species) => {
         const b = bounds(m.positions);
         expect(b.maxY, `${detail} top`).toBeGreaterThan(0.8);
         expect(b.maxY, `${detail} top`).toBeLessThan(1.2);
-        expect(b.minY, `${detail} base`).toBeGreaterThan(species.generator === 'boulder' ? -0.7 : -0.3);
+        expect(b.minY, `${detail} base`).toBeGreaterThan(species.generator === 'boulder' ? -1.05 : -0.3);
         expect(b.minY, `${detail} base`).toBeLessThanOrEqual(0.05);
       }
     }

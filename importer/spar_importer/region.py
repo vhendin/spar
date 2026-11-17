@@ -9,7 +9,7 @@ from pathlib import Path
 
 from osgeo import osr
 
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 CRS = "EPSG:3006"  # SWEREF 99 TM
 TILE_SIZE = 256  # metres, world tile used for object placement
 SAMPLES = 257  # height samples per file side, edges shared with neighbours

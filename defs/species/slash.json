@@ -1,0 +1,32 @@
+{
+  "name": "slash",
+  "title": "Felling slash (ris)",
+  "generator": "shrub",
+  "variants": 3,
+  "params": {
+    "form": "mound",
+    "lobes": [
+      4,
+      7
+    ],
+    "spread": [
+      2.2,
+      3.4
+    ]
+  },
+  "colors": {
+    "foliage": "#6b5a44",
+    "accent": "#8a7356",
+    "variation": 0.18
+  },
+  "seasons": {
+    "spring": "#6b5a44",
+    "summer": "#6e5c45",
+    "autumn": "#5f5140",
+    "winter": "#5a4d3e"
+  },
+  "deciduous": false,
+  "wind": {
+    "stiffness": 0.9
+  }
+}

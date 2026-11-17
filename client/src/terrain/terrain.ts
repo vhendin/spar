@@ -13,7 +13,7 @@ const MAX_IN_FLIGHT = 6;
 /** Unused finer nodes are dropped after this many updates. */
 const KEEP_FRAMES = 240;
 /** When mask samples are skipped, the surface that wins: roads over tracks over footpaths over streams. */
-const SURFACE_IMPORTANCE = ['none', 'stream', 'trail', 'boardwalk', 'dirt', 'gravel', 'asphalt'];
+const SURFACE_IMPORTANCE = ['none', 'pool', 'stream', 'trail', 'boardwalk', 'dirt', 'gravel', 'asphalt'];
 
 const enum State {
   Empty,
@@ -71,6 +71,7 @@ export class Terrain {
   private constructor(
     readonly index: RegionIndex,
     shading: GroundShading,
+    private readonly split: number,
   ) {
     this.layout = terrainLayout(index);
     this.material = shading.material(MASK_TEXELS + 1, null);
@@ -100,8 +101,9 @@ export class Terrain {
   }
 
   /** Loads the coarsest level for the whole area, so there is always something to draw. */
-  static async load(index: RegionIndex, shading: GroundShading): Promise<Terrain> {
-    const t = new Terrain(index, shading);
+  /** `split`: a patch is divided while the camera is nearer than this many times its size. */
+  static async load(index: RegionIndex, shading: GroundShading, split = SPLIT_FACTOR): Promise<Terrain> {
+    const t = new Terrain(index, shading, split);
     const { rootsPerSide, rootSize, rootLevel } = t.layout;
     const h = index.heights;
     const side = h.samples + 2 * h.apron;
@@ -204,7 +206,7 @@ export class Terrain {
       node.x0, node.minY, node.z0,
       node.x0 + node.size, node.maxY, node.z0 + node.size,
     );
-    if (node.depth < this.layout.maxDepth && node.distance < SPLIT_FACTOR * node.size) {
+    if (node.depth < this.layout.maxDepth && node.distance < this.split * node.size) {
       node.children ??= [0, 1, 2, 3].map((q) =>
         this.makeNode(node.depth + 1, node.ix * 2 + (q & 1), node.iz * 2 + (q >> 1), node.minY, node.maxY),
       );

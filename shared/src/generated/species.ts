@@ -26,7 +26,7 @@ export interface Species {
   /**
    * Which mesh generator builds it.
    */
-  generator: 'conifer' | 'broadleaf' | 'shrub' | 'grass' | 'boulder';
+  generator: 'conifer' | 'broadleaf' | 'shrub' | 'grass' | 'boulder' | 'stump';
   /**
    * How many different individuals are generated; instances pick one at random.
    */

@@ -5,6 +5,7 @@ export type * from './generated/region-def';
 export type * from './generated/region-index';
 export type * from './generated/region-vectors';
 export type * from './generated/species';
+export type { ObjectDef } from './generated/object';
 export type * from './generated/vegetation-rules';
 export type * from './generated/vehicle';
 export * from './vehicle/drivetrain';

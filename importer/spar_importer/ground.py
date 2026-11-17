@@ -70,7 +70,7 @@ def biome_for(tags: dict) -> str | None:
 
 
 # Narrow features: streams, paths and roads. Later entries are drawn over earlier ones.
-SURFACE_ORDER = ["stream", "trail", "boardwalk", "dirt", "gravel", "asphalt"]
+SURFACE_ORDER = ["pool", "stream", "trail", "boardwalk", "dirt", "gravel", "asphalt"]
 
 # highway value -> (default surface, default width in metres, meant for motor vehicles)
 HIGHWAYS: dict[str, tuple[str, float, bool]] = {

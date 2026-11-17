@@ -22,7 +22,7 @@
   "properties": {
     "formatVersion": {
       "type": "integer",
-      "const": 3
+      "const": 4
     },
     "name": {
       "type": "string",

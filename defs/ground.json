@@ -12,7 +12,9 @@
     { "id": 8, "name": "water", "ground": "water" },
     { "id": 9, "name": "scrub", "ground": "grass" },
     { "id": 10, "name": "built_up", "ground": "gravel" },
-    { "id": 11, "name": "sand", "ground": "sand" }
+    { "id": 11, "name": "sand", "ground": "sand" },
+    { "id": 12, "name": "clearcut", "ground": "dirt" },
+    { "id": 13, "name": "regrowth", "ground": "grass" }
   ],
   "surfaces": [
     { "id": 0, "name": "none" },
@@ -21,6 +23,7 @@
     { "id": 3, "name": "dirt", "ground": "dirt" },
     { "id": 4, "name": "trail", "ground": "dirt" },
     { "id": 5, "name": "boardwalk", "ground": "gravel" },
-    { "id": 6, "name": "stream", "ground": "water" }
+    { "id": 6, "name": "stream", "ground": "water" },
+    { "id": 7, "name": "pool", "ground": "water" }
   ]
 }

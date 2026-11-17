@@ -23,6 +23,8 @@ const GALE = 22;
 
 export interface EnvironmentOptions {
   shadows: boolean;
+  /** Texels per side of the sun's shadow map. */
+  shadowMapSize?: number;
   /** Freeze the clock at this in-game instant (UTC ms) instead of following the server. */
   fixedUtc: number | null;
   /** Use this weather instead of the server's. */
@@ -67,7 +69,7 @@ export class Environment {
 
     if (options.shadows) {
       this.sun.castShadow = true;
-      this.sun.shadow.mapSize.set(2048, 2048);
+      this.sun.shadow.mapSize.set(options.shadowMapSize ?? 2048, options.shadowMapSize ?? 2048);
       const cam = this.sun.shadow.camera;
       cam.left = cam.bottom = -SHADOW_REACH;
       cam.right = cam.top = SHADOW_REACH;

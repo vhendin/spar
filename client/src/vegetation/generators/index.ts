@@ -5,9 +5,10 @@ import { conifer } from './conifer';
 import { grass } from './grass';
 import { hexColor, type Detail, type Generator, type GeneratorColors, type MeshData, type Params } from './mesh';
 import { shrub } from './shrub';
+import { stump } from './stump';
 
 /** To add a kind of plant shape: write a generator and list it here and in the species schema. */
-export const GENERATORS: Record<Species['generator'], Generator> = { conifer, broadleaf, shrub, grass, boulder };
+export const GENERATORS: Record<Species['generator'], Generator> = { conifer, broadleaf, shrub, grass, boulder, stump };
 
 /** Which season's foliage colour to use; the game clock will choose this in a later step. */
 export type Season = keyof Species['seasons'];

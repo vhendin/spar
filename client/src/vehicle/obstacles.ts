@@ -1,7 +1,8 @@
-// Trees and boulders near the vehicle as physics colliders. They come and go as the
-// vehicle moves; each keeps the permanent name the vegetation gave it.
+// Trees, boulders, buildings, poles and fences near the vehicle as physics colliders. They
+// come and go as the vehicle moves; each keeps the permanent name it was placed with.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
+import type { Features } from '../features/features';
 import type { Vegetation } from '../vegetation/vegetation';
 import { GROUP_OBSTACLE, GROUP_VEHICLE, groups } from './sim';
 
@@ -17,7 +18,8 @@ export class Obstacles {
   constructor(
     private readonly R: typeof RAPIER,
     private readonly world: RAPIER.World,
-    private readonly vegetation: Vegetation,
+    private readonly vegetation: Vegetation | null,
+    private readonly features: Features | null,
   ) {}
 
   get count(): number {
@@ -29,7 +31,21 @@ export class Obstacles {
     if (now < this.next) return;
     this.next = now + 0.2;
     this.pass++;
-    this.vegetation.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight) => {
+    const solid = this.R.ColliderDesc;
+    this.features?.forEachSolid(x, z, RADIUS, (s) => {
+      const known = this.colliders.get(s.key);
+      if (known) {
+        known.seen = this.pass;
+        return;
+      }
+      const desc = solid
+        .cuboid(s.hx, s.hy, s.hz)
+        .setTranslation(s.x, s.y, s.z)
+        .setRotation({ x: 0, y: Math.sin(s.yaw / 2), z: 0, w: Math.cos(s.yaw / 2) });
+      const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
+      this.colliders.set(s.key, { collider, seen: this.pass });
+    });
+    this.vegetation?.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight) => {
       const known = this.colliders.get(key);
       if (known) {
         known.seen = this.pass;

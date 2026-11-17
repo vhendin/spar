@@ -152,8 +152,12 @@ export class Vegetation {
   private warned = false;
 
   /** Generates every plant mesh, draws the far-tree pictures and starts the placement worker. */
-  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number): Promise<Vegetation> {
-    const vegetation = new Vegetation(index, seed);
+  /**
+   * `range` scales the distances plants change detail and disappear; `farRange` the
+   * distance far-tree pictures reach.
+   */
+  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number, range = 1, farRange = 1): Promise<Vegetation> {
+    const vegetation = new Vegetation(index, seed, range, farRange);
     await vegetation.prepare(renderer);
     return vegetation;
   }
@@ -161,9 +165,18 @@ export class Vegetation {
   private constructor(
     private readonly index: RegionIndex,
     private readonly seed: number,
+    range: number,
+    farRange: number,
   ) {
     this.group.name = 'vegetation';
-    this.layers = compileRules(RULES, SPECIES, index.masks.biomes);
+    this.layers = compileRules(RULES, SPECIES, index.masks.biomes).map((l) => ({
+      ...l,
+      ranges: {
+        full: l.ranges.full * range,
+        ...(l.ranges.low !== undefined ? { low: l.ranges.low * range } : {}),
+        ...(l.ranges.impostor !== undefined ? { impostor: Math.max(l.ranges.impostor * farRange, (l.ranges.low ?? l.ranges.full) * range * 1.5) } : {}),
+      },
+    }));
     this.tileLayers = this.layers.filter((l) => l.batch === 'tile');
     this.patchLayers = this.layers.filter((l) => l.batch === 'patch');
     this.impostorRange = Math.max(0, ...this.tileLayers.map((l) => l.ranges.impostor ?? 0));
@@ -189,7 +202,7 @@ export class Vegetation {
       for (const species of used) {
         const def: Species = SPECIES[species]!;
         const { full, low } = layer.ranges;
-        const options = { stiffness: def.wind.stiffness, doubleSided: def.generator !== 'boulder' };
+        const options = { stiffness: def.wind.stiffness, doubleSided: def.generator !== 'boulder' && def.generator !== 'stump' };
         // Without a further representation to hand over to, the last one shrinks away.
         const fullMaterial = this.shading.meshMaterial({ ...options, near: 0, far: full, fadeOut: low === undefined });
         const lowMaterial = low === undefined ? null : this.shading.meshMaterial({ ...options, near: full, far: low, fadeOut: layer.ranges.impostor === undefined });

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isGroundClasses, isRegionDef, isSpecies, isVegetationRules, isVehicleDef } from './validate';
+import { isGroundClasses, isObjectDef, isRegionDef, isSpecies, isVegetationRules, isVehicleDef } from './validate';
 
 const defs = join(import.meta.dirname, '../../defs');
 
@@ -41,6 +41,16 @@ describe('defs/ground.json', () => {
     for (const biome of ground.biomes) expect(ground.grounds, biome.name).toContain(biome.ground);
     for (const surface of ground.surfaces) if (surface.ground !== undefined) expect(ground.grounds, surface.name).toContain(surface.ground);
     expect(ground.surfaces[0]!.ground).toBeUndefined();
+  });
+});
+
+describe('defs/objects', () => {
+  const files = readdirSync(join(defs, 'objects')).filter((f) => f.endsWith('.json'));
+
+  it.each(files)('%s matches the schema and its file name', (file) => {
+    const def: unknown = JSON.parse(readFileSync(join(defs, 'objects', file), 'utf8'));
+    expect(isObjectDef(def), JSON.stringify(isObjectDef.errors)).toBe(true);
+    expect((def as { name: string }).name).toBe(basename(file, '.json'));
   });
 });
 

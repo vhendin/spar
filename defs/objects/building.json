@@ -1,0 +1,28 @@
+{
+  "name": "building",
+  "title": "Building (hus, stuga, lada, bod)",
+  "generator": "building",
+  "params": {
+    "storey": 2.6,
+    "cabinStorey": 2.3,
+    "pitch": [26, 38],
+    "largePitch": [8, 14],
+    "eaves": 0.4,
+    "foundation": [0.3, 0.6],
+    "shedArea": 16,
+    "largeArea": 260,
+    "windowSpacing": 3.2,
+    "chimney": 0.7
+  },
+  "colors": {
+    "walls": ["#8a2c22", "#8a2c22", "#8a2c22", "#7c2a20", "#94321f", "#8a2c22", "#d8c58e", "#e8e2d2", "#6a4a32"],
+    "large": ["#a3a8a8", "#7f8b86", "#8a2c22", "#d9d4c4"],
+    "trim": ["#ece6d6", "#ece6d6", "#ece6d6", "#3b3b38"],
+    "roof": ["#2a2a2c", "#36383a", "#2a2a2c", "#5b2a22", "#45474a"],
+    "door": ["#2f4a3a", "#3b3b38", "#5a3b26", "#ece6d6"],
+    "glass": ["#1b2228"],
+    "stone": ["#7f7d77"]
+  },
+  "range": 1800,
+  "collider": true
+}
