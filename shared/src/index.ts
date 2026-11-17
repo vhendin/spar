@@ -13,3 +13,4 @@ export * from './vehicle/tires';
 export * from './sky/clock';
 export * from './sky/solar';
 export * from './sky/weather';
+export * from './sweref';

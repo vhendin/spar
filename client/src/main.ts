@@ -35,6 +35,7 @@ import { VehicleAudio } from './audio/vehicleAudio';
 import { Guide } from './ui/guide';
 import { MapScreen, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
+import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu } from './ui/startMenu';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
@@ -402,17 +403,33 @@ async function start(): Promise<void> {
     });
     // The minimap needs the map's picture from the start.
     map.prepare();
+    const goToRegion = (name: string): void => {
+      try {
+        localStorage.setItem(REGION_KEY, name);
+      } catch {
+        // Then only the URL carries it.
+      }
+      const url = new URL(location.href);
+      url.searchParams.set('region', name);
+      location.href = url.toString();
+    };
+    const areaRoot = document.createElement('div');
+    areaRoot.id = 'areas';
+    document.body.append(areaRoot);
+    const areaMaker = new AreaMaker(
+      areaRoot,
+      listed.regions,
+      { easting: index.origin.easting, northing: index.origin.northing, size: index.size },
+      goToRegion,
+      () => start.show(),
+    );
     const start = new StartMenu(startRoot, index, vectors, defs, def.name, listed.regions, {
-      region: (name) => {
-        try {
-          localStorage.setItem(REGION_KEY, name);
-        } catch {
-          // Then only the URL carries it.
-        }
-        const url = new URL(location.href);
-        url.searchParams.set('region', name);
-        location.href = url.toString();
+      region: goToRegion,
+      newArea: () => {
+        start.hide();
+        void areaMaker.show();
       },
+      removeArea,
       drive: (choice) => {
         const w = world;
         if (!w) return;
@@ -435,6 +452,8 @@ async function start(): Promise<void> {
       },
       credits: () => showCredits(true),
     });
+    // Only the computer running the server may make and remove areas.
+    void areasInfo().then((info) => start.setMaker(info?.enabled ?? false));
     world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';

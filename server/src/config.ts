@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseLocalTime, type WeatherState } from '@spar/shared';
 
@@ -20,6 +21,14 @@ export interface ServerConfig {
   dayLengthMinutes: number;
   /** Pins the weather to one state; null lets it change. */
   weather: WeatherState | null;
+  /** Folder of region definitions, where new areas are written. */
+  defsDir: string;
+  /** Folder of raw downloads. */
+  rawDir: string;
+  /** Command that runs the importer, before `fetch <name>`; empty turns making areas off. */
+  importer: string[];
+  /** Folder the importer command runs in. */
+  importerCwd: string;
 }
 
 /** Central European standard time; the game does not follow summer time. */
@@ -54,5 +63,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     seed: int(env.SEED, 20261116, 'SEED') >>> 0,
     clientDist: resolve(env.CLIENT_DIST ?? '../client/dist'),
     regionsDir: resolve(env.REGIONS_DIR ?? '../data/regions'),
+    defsDir: resolve(env.DEFS_DIR ?? '../defs/regions'),
+    rawDir: resolve(env.RAW_DIR ?? '../data/raw'),
+    // Making areas runs the importer through Docker from the repository; inside the game's own
+    // container there is no Docker, so it is off there unless IMPORTER says how.
+    importer: (env.IMPORTER ?? (existsSync('/.dockerenv') ? '' : 'docker compose run --rm importer')).split(' ').filter(Boolean),
+    importerCwd: resolve(env.IMPORTER_CWD ?? '..'),
   };
 }

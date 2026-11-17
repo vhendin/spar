@@ -144,6 +144,49 @@
       #start .card.on { border-color: #c9a45c; background: rgba(201, 164, 92, 0.16); }
       #start .card .title { font-weight: 600; }
       #start .card .detail { color: #9fb4bc; font-size: 12px; }
+      #start .card { position: relative; }
+      #start .card .remove { position: absolute; top: 8px; right: 10px; font-size: 12px; color: #9fb4bc; text-decoration: underline; cursor: pointer; }
+      #start .card .remove:hover { color: #e8a090; }
+      #start button.add { margin-top: 6px; }
+      #areas {
+        position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 13;
+        background: rgba(6, 10, 12, 0.6); font: 14px/1.4 system-ui, sans-serif; color: #e8eef0;
+      }
+      #areas .box {
+        display: flex; flex-direction: column; width: min(1100px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px));
+        box-sizing: border-box; padding: 20px 24px; background: rgba(10, 15, 18, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px;
+      }
+      #areas h2 { margin: 0 0 12px; font-size: 22px; font-weight: 600; }
+      #areas .body { flex: 1; display: flex; gap: 18px; min-height: 0; }
+      #areas .map { flex: 1; min-width: 0; border-radius: 6px; }
+      #areas .side { width: 280px; display: flex; flex-direction: column; overflow-y: auto; }
+      #areas .hint, #areas .note { margin: 0 0 8px; color: #9fb4bc; }
+      #areas .label { margin: 12px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9fb4bc; }
+      #areas .list { display: flex; flex-wrap: wrap; gap: 4px; }
+      #areas input.name {
+        width: 100%; box-sizing: border-box; padding: 7px 10px; font: inherit; color: #e8eef0;
+        background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 4px;
+      }
+      #areas .note { margin-top: 12px; }
+      #areas pre.progress {
+        margin: 0 0 8px; padding: 8px; max-height: 160px; overflow: auto; white-space: pre-wrap; font: 11px/1.35 ui-monospace, monospace;
+        color: #c8d4d8; background: rgba(255, 255, 255, 0.05); border-radius: 4px;
+      }
+      #areas .foot { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; }
+      #areas button {
+        padding: 6px 14px; font: inherit; color: #e8eef0; cursor: pointer;
+        background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 4px;
+      }
+      #areas button:hover { background: rgba(255, 255, 255, 0.16); }
+      #areas button.on { background: #c9a45c; border-color: #c9a45c; color: #111; }
+      #areas button.primary { font-weight: 600; background: #c9a45c; border-color: #c9a45c; color: #111; }
+      #areas button:disabled { opacity: 0.5; cursor: default; }
+      #areas .leaflet-container { font: 12px system-ui, sans-serif; background: #2a3236; }
+      @media (max-width: 700px) {
+        #areas .body { flex-direction: column; }
+        #areas .side { width: auto; }
+        #areas .map { min-height: 260px; }
+      }
       #start canvas.preview { display: block; width: 240px; height: 240px; max-width: 100%; margin-top: 8px; border-radius: 6px; }
       #start input.name {
         width: 100%; box-sizing: border-box; padding: 7px 10px; font: inherit; color: #e8eef0;

@@ -1,9 +1,10 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
+import { AREA_SIZES, AreaMaker, checkRequest, fromHost, type AreaRequest } from './areas';
 import { listRegions } from './regions';
 import { serveFile } from './static';
 import { WorldState } from './world';
@@ -18,8 +19,82 @@ export interface GameServer {
 }
 
 /** Builds the HTTP and WebSocket server without starting to listen. */
+/** Answers with JSON. */
+function json(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(body));
+}
+
+/** Reads a small JSON request body. */
+function readBody(req: IncomingMessage, limit = 4096): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let text = '';
+    req.on('data', (chunk: Buffer) => {
+      text += chunk.toString();
+      if (text.length > limit) {
+        reject(new Error('too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(text));
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+/** /api/areas: what can be made, making one, how it is going, and removing one. */
+async function handleAreas(req: IncomingMessage, res: ServerResponse, path: string, maker: AreaMaker, config: ServerConfig): Promise<void> {
+  const host = fromHost(req);
+  if (path === '/api/areas' && req.method === 'GET') {
+    json(res, 200, { enabled: maker.enabled && host, sizes: AREA_SIZES, job: maker.job });
+    return;
+  }
+  if (!host) return json(res, 403, { error: 'Areas can only be made and removed on the computer running the server.' });
+  if (!maker.enabled) return json(res, 403, { error: 'Making areas is off on this server (no importer).' });
+  if (path === '/api/areas' && req.method === 'POST') {
+    let body: Partial<AreaRequest>;
+    try {
+      body = (await readBody(req)) as Partial<AreaRequest>;
+    } catch {
+      return json(res, 400, { error: 'Bad request.' });
+    }
+    const problem = checkRequest(body);
+    if (problem) return json(res, 400, { error: problem });
+    try {
+      const name = await maker.create(body as AreaRequest);
+      return json(res, 202, { name });
+    } catch (err) {
+      return json(res, 409, { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  const remove = /^\/api\/areas\/([a-z0-9_-]+)$/.exec(path);
+  if (remove && req.method === 'DELETE') {
+    try {
+      await maker.remove(remove[1]!, config.region);
+      return json(res, 200, { removed: remove[1] });
+    } catch (err) {
+      return json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  json(res, 404, { error: 'Not found.' });
+}
+
 export function createGameServer(config: ServerConfig): GameServer {
+  const maker = new AreaMaker({ defsDir: config.defsDir, regionsDir: config.regionsDir, rawDir: config.rawDir, importer: config.importer, cwd: config.importerCwd });
   const http = createServer((req, res) => {
+    const apiPath = (req.url ?? '/').split('?')[0] ?? '/';
+    if (apiPath.startsWith('/api/areas')) {
+      handleAreas(req, res, apiPath, maker, config).catch((err: unknown) => {
+        console.error('request failed', apiPath, err);
+        if (!res.headersSent) json(res, 500, { error: 'Server error.' });
+      });
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { Allow: 'GET, HEAD' }).end();
       return;

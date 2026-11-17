@@ -20,6 +20,10 @@ export interface StartChoice {
 export interface StartActions {
   /** Switch to another region: the page loads again with it. */
   region(name: string): void;
+  /** Open the screen for making a new area. */
+  newArea(): void;
+  /** Remove an area for good; resolves with an error message, or null when it is gone. */
+  removeArea(name: string): Promise<string | null>;
   drive(choice: StartChoice): void;
   settings(): void;
   controls(): void;
@@ -84,6 +88,8 @@ export class StartMenu {
   private vehicle: string;
   private name: string;
   private picture: HTMLCanvasElement | null = null;
+  /** Whether this computer may make and remove areas (it runs the server). */
+  private maker = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -153,6 +159,13 @@ export class StartMenu {
     this.root.style.display = 'none';
   }
 
+  /** Offers making and removing areas, once the server says this computer may. */
+  setMaker(enabled: boolean): void {
+    if (enabled === this.maker) return;
+    this.maker = enabled;
+    if (this.open) this.render();
+  }
+
   /** The map's picture of the ground, once drawn, for the preview. */
   setPicture(picture: HTMLCanvasElement | null): void {
     if (!picture || picture === this.picture) return;
@@ -199,7 +212,24 @@ export class StartMenu {
         e.stopPropagation();
         if (!here) this.actions.region(r.name);
       });
+      // Areas you are done with can go, to free the disk; not the one being played.
+      if (this.maker && !here) {
+        const remove = add('span', 'Remove', c, 'remove');
+        remove.title = `Remove ${r.title} from this computer`;
+        remove.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!window.confirm(`Remove ${r.title}? Its map files and downloads are deleted; it can be made again later.`)) return;
+          void this.actions.removeArea(r.name).then((error) => {
+            if (error) window.alert(error);
+            else {
+              this.regions.splice(this.regions.indexOf(r), 1);
+              this.render();
+            }
+          });
+        });
+      }
     }
+    if (this.maker) button('New area…', () => this.actions.newArea(), left, 'add');
     left.append(this.preview);
     this.drawPreview();
 

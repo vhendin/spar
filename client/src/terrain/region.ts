@@ -15,6 +15,7 @@ export interface RegionListing {
   name: string;
   title: string;
   size: number;
+  origin?: { easting: number; northing: number };
 }
 
 /** The regions imported on the host, and the one the server was started with. */

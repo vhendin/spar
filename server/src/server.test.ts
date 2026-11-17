@@ -21,6 +21,17 @@ beforeAll(async () => {
   await writeFile(join(dir, 'client/assets/app.js'), 'console.log(1)');
   await writeFile(join(dir, 'regions/demo/index.json'), '{"name":"demo"}');
   await writeFile(join(dir, 'secret.txt'), 'nope');
+  // Stands in for the importer: says what it does, and `build` writes the area's index.
+  await writeFile(
+    join(dir, 'importer.mjs'),
+    `import { mkdirSync, writeFileSync } from 'node:fs';
+const [step, name] = process.argv.slice(2);
+console.log(step + ' ' + name);
+if (step === 'build') {
+  mkdirSync('regions/' + name, { recursive: true });
+  writeFileSync('regions/' + name + '/index.json', JSON.stringify({ name, title: 'Made', size: 2048 }));
+}`,
+  );
   server = createGameServer({
     host: '127.0.0.1',
     port: 0,
@@ -32,6 +43,10 @@ beforeAll(async () => {
     utcOffset: 1,
     dayLengthMinutes: 30,
     weather: 'rain',
+    defsDir: join(dir, 'defs'),
+    rawDir: join(dir, 'raw'),
+    importer: [process.execPath, join(dir, 'importer.mjs')],
+    importerCwd: dir,
   });
   port = (await server.listen()).port;
 });
@@ -94,6 +109,53 @@ describe('http', () => {
   it('answers 404 for missing files and 405 for writes', async () => {
     expect((await fetch(`http://127.0.0.1:${port}/missing.js`)).status).toBe(404);
     expect((await fetch(`http://127.0.0.1:${port}/`, { method: 'POST' })).status).toBe(405);
+  });
+});
+
+describe('areas', () => {
+  const url = (path: string): string => `http://127.0.0.1:${port}${path}`;
+
+  it('makes an area, reports progress, and removes it again', async () => {
+    const res = await fetch(url('/api/areas'), {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Hammarbybacken Öst', west: 676016, north: 6578463, size: 2048 }),
+    });
+    expect(res.status).toBe(202);
+    const { name } = (await res.json()) as { name: string };
+    expect(name).toBe('hammarbybacken-ost');
+    type Progress = { state: string; lines: string[] } | null;
+    const progress = async (): Promise<Progress> => ((await (await fetch(url('/api/areas'))).json()) as { job: Progress }).job;
+    let job = await progress();
+    for (let i = 0; i < 50 && job?.state !== 'done'; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      job = await progress();
+    }
+    expect(job?.state).toBe('done');
+    expect(job?.lines).toEqual(['fetch hammarbybacken-ost', 'build hammarbybacken-ost']);
+    const listed = (await (await fetch(url('/regions/list.json'))).json()) as { regions: { name: string }[] };
+    expect(listed.regions.map((r) => r.name)).toContain(name);
+
+    expect((await fetch(url(`/api/areas/${name}`), { method: 'DELETE' })).status).toBe(200);
+    const after = (await (await fetch(url('/regions/list.json'))).json()) as { regions: { name: string }[] };
+    expect(after.regions.map((r) => r.name)).not.toContain(name);
+  });
+
+  it('refuses areas outside Sweden, odd sizes, and the running area', async () => {
+    const post = (body: object): Promise<Response> => fetch(url('/api/areas'), { method: 'POST', body: JSON.stringify(body) });
+    expect((await post({ title: 'Oslo', west: 100000, north: 6650000, size: 2048 })).status).toBe(400);
+    expect((await post({ title: 'Odd', west: 676016, north: 6578463, size: 3000 })).status).toBe(400);
+    expect((await fetch(url('/api/areas/demo'), { method: 'DELETE' })).status).toBe(400);
+  });
+
+  it('only lets the host make areas', async () => {
+    const res = await fetch(url('/api/areas'), {
+      method: 'POST',
+      headers: { 'X-Forwarded-For': '192.168.1.20' },
+      body: JSON.stringify({ title: 'Sneaky', west: 676016, north: 6578463, size: 2048 }),
+    });
+    expect(res.status).toBe(403);
+    const info = (await (await fetch(url('/api/areas'), { headers: { 'X-Forwarded-For': '192.168.1.20' } })).json()) as { enabled: boolean };
+    expect(info.enabled).toBe(false);
   });
 });
 

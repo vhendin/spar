@@ -10,6 +10,8 @@ export default defineConfig({
     proxy: {
       '/ws': { target: gameServer, ws: true },
       '/regions': gameServer,
+      // xfwd tells the server who is really asking: only the host may make areas.
+      '/api': { target: gameServer, xfwd: true },
     },
   },
 });
