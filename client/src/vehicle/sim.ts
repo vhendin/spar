@@ -62,6 +62,29 @@ export interface GroundProbe {
   wetness(): number;
 }
 
+/** Seconds the vehicle takes to roll back onto its wheels. */
+const RIGHTING_TIME = 1.2;
+/** How high it is lifted on the way, metres. */
+const RIGHTING_LIFT = 1.2;
+
+type Quat = { x: number; y: number; z: number; w: number };
+
+/** Spherical blend between two unit quaternions. */
+function slerp(a: Quat, b: Quat, t: number): Quat {
+  let d = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+  const s = d < 0 ? -1 : 1;
+  d = Math.abs(d);
+  let ka = 1 - t, kb = t;
+  if (d < 0.9995) {
+    const angle = Math.acos(d);
+    ka = Math.sin((1 - t) * angle) / Math.sin(angle);
+    kb = Math.sin(t * angle) / Math.sin(angle);
+  }
+  const q = { x: a.x * ka + b.x * kb * s, y: a.y * ka + b.y * kb * s, z: a.z * ka + b.z * kb * s, w: a.w * ka + b.w * kb * s };
+  const n = Math.hypot(q.x, q.y, q.z, q.w);
+  return { x: q.x / n, y: q.y / n, z: q.z / n, w: q.w / n };
+}
+
 /** Turns a vector by a unit quaternion. */
 function rotate(q: { x: number; y: number; z: number; w: number }, x: number, y: number, z: number): [number, number, number] {
   const tx = 2 * (q.y * z - q.z * y), ty = 2 * (q.z * x - q.x * z), tz = 2 * (q.x * y - q.y * x);
@@ -85,6 +108,8 @@ export class VehicleSim {
   private readonly restLength: number[] = [];
   private readonly connectionY: number[] = [];
   private steerAngle = 0;
+  /** While being put back on its wheels: where from, where to, and how far along (0..1). */
+  private righting: { from: { p: { x: number; y: number; z: number }; q: Quat }; to: { p: { x: number; y: number; z: number }; q: Quat }; t: number } | null = null;
 
   constructor(
     private readonly R: Rapier,
@@ -168,6 +193,58 @@ export class VehicleSim {
     this.steerAngle = 0;
     this.drivetrain.gear = 1;
     this.holding = true;
+    this.righting = null;
+  }
+
+  /** How upright the vehicle stands: 1 on its wheels, 0 on its side, -1 on its roof. */
+  get upright(): number {
+    const r = this.body.rotation();
+    return 1 - 2 * (r.x * r.x + r.z * r.z);
+  }
+
+  /** True while it is being rolled back onto its wheels. */
+  get beingRighted(): boolean {
+    return this.righting !== null;
+  }
+
+  /**
+   * Rolls the vehicle back onto its wheels where it lies, keeping the way it was pointing:
+   * lifted a little, turned upright and set down on `groundY` over about a second.
+   */
+  right(groundY: number): void {
+    const p = this.body.translation();
+    const r = this.body.rotation();
+    // Its heading, from the nose; from the roof's direction if it lies nose-down.
+    let [fx, , fz] = rotate(r, 0, 0, 1);
+    if (Math.hypot(fx, fz) < 0.3) [fx, , fz] = rotate(r, 0, 1, 0);
+    const heading = (Math.atan2(fx, -fz) * 180) / Math.PI;
+    const half = ((180 - heading) * Math.PI) / 360;
+    this.righting = {
+      from: { p: { x: p.x, y: p.y, z: p.z }, q: { x: r.x, y: r.y, z: r.z, w: r.w } },
+      to: { p: { x: p.x, y: Math.max(groundY + 0.25, p.y - 0.5), z: p.z }, q: { x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) } },
+      t: 0,
+    };
+    this.drivetrain.gear = 1;
+    this.holding = true;
+  }
+
+  /** Moves the righting along; true while it is still going. */
+  private stepRighting(dt: number): boolean {
+    const r = this.righting;
+    if (!r) return false;
+    r.t = Math.min(1, r.t + dt / RIGHTING_TIME);
+    const k = r.t * r.t * (3 - 2 * r.t);
+    const lift = Math.sin(Math.PI * r.t) * RIGHTING_LIFT;
+    this.body.setTranslation({
+      x: r.from.p.x + (r.to.p.x - r.from.p.x) * k,
+      y: r.from.p.y + (r.to.p.y - r.from.p.y) * k + lift,
+      z: r.from.p.z + (r.to.p.z - r.from.p.z) * k,
+    }, true);
+    this.body.setRotation(slerp(r.from.q, r.to.q, k), true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    if (r.t >= 1) this.righting = null;
+    return true;
   }
 
   toggleRange(): void {
@@ -187,6 +264,8 @@ export class VehicleSim {
 
   /** Works out this step's wheel forces from the driver's input. Call before stepping the world. */
   step(input: VehicleInput, dt: number): void {
+    // Being put back on its wheels: no driving until it is down.
+    if (this.stepRighting(dt)) input = { throttle: 0, brake: 0, steer: 0, handbrake: false };
     const { def, controller: c } = this;
     const v = this.body.linvel();
     const r = this.body.rotation();

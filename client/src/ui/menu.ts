@@ -38,7 +38,7 @@ const CONTROLS: [string, string][] = [
   ['T', 'Time and weather'],
   ['C', 'Credits'],
   ['Esc', 'Menu and pause'],
-  ['Gamepad', 'Sticks steer and look, triggers drive and brake, A handbrake, Start menu, Back map'],
+  ['Gamepad', 'Sticks steer and look, triggers drive and brake, A handbrake, Y back on the wheels, Start menu, Back map'],
 ];
 
 export class Menu {

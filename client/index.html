@@ -112,6 +112,13 @@
       #world button.on { background: #c9a45c; border-color: #c9a45c; color: #111; }
       #world button.on.dim { background: rgba(201, 164, 92, 0.35); color: #e8eef0; }
       #world p.hint { margin: 10px 0 6px; color: #9fb4bc; font-size: 12px; }
+      #prompt {
+        position: fixed; left: 50%; top: 62%; transform: translateX(-50%); padding: 8px 16px; border-radius: 6px;
+        font: 600 15px/1.4 system-ui, sans-serif; color: #e8eef0; background: rgba(6, 10, 12, 0.7);
+        opacity: 0; transition: opacity 0.4s; pointer-events: none; white-space: nowrap;
+      }
+      #prompt kbd { padding: 1px 7px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 3px; font: 13px ui-monospace, Menlo, monospace; }
+
       /* Start screen */
       #start {
         position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 12;

@@ -210,6 +210,13 @@ async function start(): Promise<void> {
   /** Where the camera is in its slow turn round the valley behind the start screen. */
   let tour = 0;
   let lastSaved = 0;
+  /** Seconds the vehicle has lain on its side or roof; after a moment the way back is offered. */
+  let overturned = 0;
+  let rightHeld = false;
+  const prompt = document.createElement('div');
+  prompt.id = 'prompt';
+  prompt.innerHTML = 'Overturned · press <kbd>R</kbd> to get back on the wheels';
+  document.body.append(prompt);
   const startRoot = document.createElement('div');
   startRoot.id = 'start';
   document.body.append(startRoot);
@@ -436,8 +443,15 @@ async function start(): Promise<void> {
     const r = w.sim.body.rotation();
     return 180 - THREE.MathUtils.radToDeg(Math.atan2(2 * (r.w * r.y + r.x * r.z), 1 - 2 * (r.y * r.y + r.x * r.x)));
   };
-  /** Back on its wheels where it stands. */
+  /** Rolled back onto its wheels where it lies, keeping its heading. */
   const resetVehicle = (w: World): void => {
+    if (w.unplaced || w.sim.beingRighted) return;
+    const p = w.sim.body.translation();
+    w.sim.right(w.ground.heightAt(p.x, p.z) ?? p.y - 1);
+    overturned = 0;
+  };
+  /** Straight down on its wheels where it is, at once: after swapping vehicles. */
+  const setDownHere = (w: World): void => {
     const p = w.sim.body.translation();
     setDown(w, p.x, p.z, headingOf(w));
   };
@@ -577,7 +591,7 @@ async function start(): Promise<void> {
         if (!w || !def || def === w.sim.def) return;
         // Swapped where it stands, set down on its wheels.
         setVehicle(w, def);
-        if (!w.unplaced) resetVehicle(w);
+        if (!w.unplaced) setDownHere(w);
         resume();
       },
       changed: (key) => {
@@ -749,6 +763,10 @@ async function start(): Promise<void> {
     const back = pad?.buttons[8]?.pressed ?? false;
     if (back && !backHeld && world && !paused && !starting) toggleMap();
     backHeld = back;
+    // Y rights an overturned vehicle.
+    const rightButton = pad?.buttons[3]?.pressed ?? false;
+    if (rightButton && !rightHeld && world && !paused && !starting && !flying) resetVehicle(world);
+    rightHeld = rightButton;
 
     const w = world;
     if (w) {
@@ -861,6 +879,11 @@ async function start(): Promise<void> {
       w.map.update(where, now);
       minimap.update(dt, w.map, where, !w.unplaced && !w.map.open);
       guide.update(now, camera, flying ? camera.position : w.view.group.position, (x, z) => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z), !w.unplaced && !w.map.open);
+
+      // On its side or roof and not going anywhere: say how to get back on the wheels.
+      const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;
+      overturned = lying && !paused ? overturned + dt : lying ? overturned : 0;
+      prompt.style.opacity = overturned > 1.5 && !paused && !w.map.open ? '1' : '0';
 
       dash.visible = !flying && !w.unplaced;
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding });
