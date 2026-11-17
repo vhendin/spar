@@ -1,0 +1,7 @@
+{
+  "name": "are",
+  "title": "Åre–Duved",
+  "crs": "EPSG:3006",
+  "origin": { "easting": 395800, "northing": 7037000 },
+  "size": 10240
+}

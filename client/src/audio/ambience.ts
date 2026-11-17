@@ -6,8 +6,6 @@ import type * as THREE from 'three/webgpu';
 import { song, sing, type Species } from './birds';
 import { AudioOut, ease, place } from './output';
 
-/** Roughly where the forest gives way to bare fell here, metres above sea level. */
-const TREELINE = 880;
 
 export interface AmbienceState {
   /** Sun's height in degrees, hours on the local clock, month 0..11. */
@@ -34,6 +32,9 @@ export class Ambience {
   /** Seconds until the next bird may start. */
   private nextBird = 2;
   private singing = 0;
+
+  /** Where the forest gives way to bare fell in this region, metres above sea level. */
+  treeline = 880;
 
   constructor(private readonly out: AudioOut) {
     const ctx = out.ctx;
@@ -70,9 +71,9 @@ export class Ambience {
     const s = this.time;
     // Gusts: slow, uneven swells.
     const gust = 0.55 + 0.25 * Math.sin(s * 0.31) * Math.sin(s * 0.13 + 1.7) + 0.2 * Math.sin(s * 0.71 + Math.sin(s * 0.23) * 2);
-    const forest = state.ground === null ? 0.5 : Math.min(1, Math.max(0, (TREELINE + 40 - state.ground) / 80));
+    const forest = state.ground === null ? 0.5 : Math.min(1, Math.max(0, (this.treeline + 40 - state.ground) / 80));
     // Higher up the wind is stronger and nothing breaks it.
-    const exposed = state.ground === null ? 1 : 1 + 0.6 * Math.min(1, Math.max(0, (state.ground - TREELINE) / 300));
+    const exposed = state.ground === null ? 1 : 1 + 0.6 * Math.min(1, Math.max(0, (state.ground - this.treeline) / 300));
     const wind = Math.min(1, state.wind * exposed);
     const air = Math.min(1, state.speed / 25);
     ease(this.windLevel.gain, (0.04 + 0.5 * wind * gust) * (1 - 0.4 * forest) + (state.inside ? 0.05 : 0.6) * air * air, t, 0.3);

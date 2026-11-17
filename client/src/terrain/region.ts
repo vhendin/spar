@@ -11,6 +11,23 @@ export const REGION_FORMAT = 4;
 
 export const regionUrl = (region: string, path: string): string => `/regions/${region}/${path}`;
 
+export interface RegionListing {
+  name: string;
+  title: string;
+  size: number;
+}
+
+/** The regions imported on the host, and the one the server was started with. */
+export async function loadRegionList(): Promise<{ default: string; regions: RegionListing[] }> {
+  try {
+    const res = await fetch('/regions/list.json');
+    if (res.ok) return (await res.json()) as { default: string; regions: RegionListing[] };
+  } catch {
+    // An older server: only its own region.
+  }
+  return { default: '', regions: [] };
+}
+
 export async function loadRegionIndex(region: string): Promise<RegionIndex> {
   const res = await fetch(regionUrl(region, 'index.json'));
   if (res.status === 404) throw new RegionMissingError(region);

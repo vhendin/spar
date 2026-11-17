@@ -11,7 +11,7 @@ import { SeeThrough } from './seeThrough';
 import { Environment } from './sky/environment';
 import { GROUND_VIEWS, GroundShading, snowLine } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
-import { loadRegionIndex, RegionMissingError, regionUrl } from './terrain/region';
+import { loadRegionIndex, loadRegionList, RegionMissingError, regionUrl } from './terrain/region';
 import { Terrain } from './terrain/terrain';
 import { Vegetation } from './vegetation/vegetation';
 import { ChaseCamera } from './vehicle/chaseCamera';
@@ -57,6 +57,7 @@ const hint = document.querySelector<HTMLDivElement>('#hint')!;
 const RESUME_KEY = 'spar.resume';
 /** The vehicle last chosen in the menu. */
 const VEHICLE_KEY = 'spar.vehicle';
+const REGION_KEY = 'spar.region';
 interface Resume {
   x: number;
   z: number;
@@ -300,9 +301,15 @@ async function start(): Promise<void> {
   };
 
   const enterRegion = async (welcome: Welcome): Promise<void> => {
-    loadingRegion = welcome.region;
+    // Playing alone, the region is ours to choose (?region=<name>, or the last one picked);
+    // the server's choice is the fallback. With others along, the host's choice will rule.
+    const listed = await loadRegionList();
+    const chosenRegion = params.get('region') ?? stored(REGION_KEY);
+    const regionName = listed.regions.some((r) => r.name === chosenRegion) ? chosenRegion! : welcome.region;
+    loadingRegion = regionName;
     drawHud();
-    const index = await loadRegionIndex(welcome.region);
+    const index = await loadRegionIndex(regionName);
+    ambience.treeline = index.masks.treeline;
     const shading = new GroundShading(index);
     shading.view.value = groundView;
     const [terrain, horizon, vectors] = await Promise.all([
@@ -395,7 +402,17 @@ async function start(): Promise<void> {
     });
     // The minimap needs the map's picture from the start.
     map.prepare();
-    const start = new StartMenu(startRoot, index, vectors, defs, def.name, {
+    const start = new StartMenu(startRoot, index, vectors, defs, def.name, listed.regions, {
+      region: (name) => {
+        try {
+          localStorage.setItem(REGION_KEY, name);
+        } catch {
+          // Then only the URL carries it.
+        }
+        const url = new URL(location.href);
+        url.searchParams.set('region', name);
+        location.href = url.toString();
+      },
       drive: (choice) => {
         const w = world;
         if (!w) return;

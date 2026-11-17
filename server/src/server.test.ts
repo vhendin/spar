@@ -69,6 +69,11 @@ describe('http', () => {
     expect(await res.json()).toEqual({ name: 'demo' });
   });
 
+  it('lists the imported regions', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/regions/list.json`);
+    expect(await res.json()).toEqual({ default: 'demo', regions: [{ name: 'demo', title: 'demo', size: 0 }] });
+  });
+
   it('answers 304 when the browser already has the current file', async () => {
     const url = `http://127.0.0.1:${port}/regions/demo/index.json`;
     const etag = (await fetch(url)).headers.get('etag')!;

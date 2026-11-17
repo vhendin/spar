@@ -4,6 +4,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
+import { listRegions } from './regions';
 import { serveFile } from './static';
 import { WorldState } from './world';
 
@@ -24,6 +25,17 @@ export function createGameServer(config: ServerConfig): GameServer {
       return;
     }
     const path = (req.url ?? '/').split('?')[0] ?? '/';
+    // Region names are letters, digits, - and _, so this never shadows a region's folder.
+    if (path === '/regions/list.json') {
+      listRegions(config.regionsDir)
+        .then((regions) => {
+          const body = JSON.stringify({ default: config.region, regions });
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+          res.end(req.method === 'HEAD' ? undefined : body);
+        })
+        .catch(() => res.writeHead(500).end());
+      return;
+    }
     const handled = path.startsWith('/regions/')
       ? serveFile(req, res, config.regionsDir, path.slice('/regions/'.length))
       : serveFile(req, res, config.clientDist, path, { immutable: path.startsWith('/assets/') });

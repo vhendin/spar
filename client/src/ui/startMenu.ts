@@ -2,6 +2,7 @@
 // driver's name for when others join. The world loads and slowly turns behind it.
 
 import type { RegionIndex, RegionVectors, VehicleDef } from '@spar/shared';
+import type { RegionListing } from '../terrain/region';
 
 export interface StartPoint {
   name: string;
@@ -17,6 +18,8 @@ export interface StartChoice {
 }
 
 export interface StartActions {
+  /** Switch to another region: the page loads again with it. */
+  region(name: string): void;
   drive(choice: StartChoice): void;
   settings(): void;
   controls(): void;
@@ -88,6 +91,7 @@ export class StartMenu {
     private readonly vectors: RegionVectors,
     private readonly vehicles: VehicleDef[],
     vehicle: string,
+    private readonly regions: RegionListing[],
     private readonly actions: StartActions,
   ) {
     this.vehicle = vehicle;
@@ -154,9 +158,19 @@ export class StartMenu {
     const right = add('div', '', columns, 'column');
 
     add('div', 'Map', left, 'label');
-    const card = add('div', '', left, 'card on');
-    add('div', this.index.title, card, 'title');
-    add('div', `${(this.index.size / 1000).toFixed(0)} × ${(this.index.size / 1000).toFixed(0)} km · chosen by the host`, card, 'detail');
+    const maps = add('div', '', left, 'cards');
+    const listed = this.regions.some((r) => r.name === this.index.name) ? this.regions : [{ name: this.index.name, title: this.index.title, size: this.index.size }];
+    for (const r of listed) {
+      const here = r.name === this.index.name;
+      const c = add('button', '', maps, `card${here ? ' on' : ''}`);
+      add('div', r.title, c, 'title');
+      const km = (r.size / 1000).toFixed(0);
+      add('div', here ? `${km} × ${km} km` : `${km} × ${km} km · loads the map`, c, 'detail');
+      c.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!here) this.actions.region(r.name);
+      });
+    }
     left.append(this.preview);
     this.drawPreview();
 
