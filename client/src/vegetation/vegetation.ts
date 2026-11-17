@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import type { RegionIndex, Species } from '@spar/shared';
 import { RULES, SPECIES } from './defs';
 import { generate, type Detail, type MeshData } from './generators';
+import { copyReach, needsCopy, REFILL_MOVE, shownBy } from './coverage';
 import { bakeImpostors, type ImpostorAtlas } from './impostors';
 import { VegetationShading } from './materials';
 import { STRIDE } from './placement';
@@ -10,8 +11,6 @@ import { CHUNK, PATCH, type PlacedLayer, type VegetationRequest, type Vegetation
 
 /** Placement jobs running in the worker at once. */
 const MAX_IN_FLIGHT = 4;
-/** Instances switch representation within 10 % of the nominal distance; collect a little wider. */
-const REACH = 1.12;
 
 export interface VegetationStats {
   /** Instances handed to the GPU as meshes, and those among them drawn in full detail. */
@@ -145,8 +144,10 @@ export class Vegetation {
   private nextId = 1;
   private inFlight = 0;
   private lastScan = new THREE.Vector3(Infinity, 0, Infinity);
-  private chunkKey = '';
-  private patchKey = '';
+  /** Where the camera was at the last refill of the mesh copies. */
+  private lastFill = new THREE.Vector3(Infinity, 0, Infinity);
+  /** Which chunks went into which mesh copy at the last refill: "tileX,tileZ|layer|chunk|copy". */
+  private filled = new Set<string>();
   private tilesDirty = false;
   private patchesDirty = false;
   private warned = false;
@@ -180,8 +181,10 @@ export class Vegetation {
     this.tileLayers = this.layers.filter((l) => l.batch === 'tile');
     this.patchLayers = this.layers.filter((l) => l.batch === 'patch');
     this.impostorRange = Math.max(0, ...this.tileLayers.map((l) => l.ranges.impostor ?? 0));
-    this.tileReach = Math.max(...this.tileLayers.map((l) => l.ranges.low ?? l.ranges.full)) * REACH;
-    this.patchReach = Math.max(0, ...this.patchLayers.map((l) => l.ranges.full));
+    // Placed objects are wanted wherever a refill could put them in a mesh copy.
+    const reach = (l: CompiledLayer): number => copyReach(l.ranges, l.ranges.low === undefined ? 'full' : 'low') + REFILL_MOVE;
+    this.tileReach = Math.max(...this.tileLayers.map(reach));
+    this.patchReach = this.patchLayers.length ? Math.max(...this.patchLayers.map(reach)) : 0;
 
   }
 
@@ -245,31 +248,33 @@ export class Vegetation {
       this.scan(this.patches, PATCH, this.patchReach, camera, 'patch');
     }
 
-    const chunkKey = `${Math.floor(camera.x / CHUNK)},${Math.floor(camera.z / CHUNK)}`;
-    if (chunkKey !== this.chunkKey || this.tilesDirty) {
-      this.chunkKey = chunkKey;
+    // Refill the mesh copies after a short move, so none can lack a plant it should draw
+    // before the next refill (see coverage.ts).
+    const moved = Math.hypot(camera.x - this.lastFill.x, camera.z - this.lastFill.z) > REFILL_MOVE;
+    if (moved) this.lastFill.copy(camera);
+    if (moved || this.tilesDirty) {
       this.tilesDirty = false;
-      this.fillFromTiles(camera);
+      this.fillFromTiles(this.lastFill);
     }
-    const patchKey = `${Math.floor(camera.x / (PATCH / 2))},${Math.floor(camera.z / (PATCH / 2))}`;
-    if (patchKey !== this.patchKey || this.patchesDirty) {
-      this.patchKey = patchKey;
+    if (moved || this.patchesDirty) {
       this.patchesDirty = false;
-      this.fillFromPatches(camera);
+      this.fillFromPatches(this.lastFill);
     }
     this.stats.loading = this.inFlight;
   }
 
   /**
    * Visits every placed object within `radius` of a point that vehicles can hit (species
-   * with a collider), giving its permanent name, shape, position, height and radius share.
+   * with a collider), giving its permanent name, shape, position, height and radius share,
+   * and whether it is drawn on screen right now.
    */
   forEachSolid(
     x: number,
     z: number,
     radius: number,
-    visit: (key: string, shape: 'trunk' | 'rock', px: number, py: number, pz: number, size: number, radiusPerHeight: number) => void,
+    visit: (key: string, shape: 'trunk' | 'rock', px: number, py: number, pz: number, size: number, radiusPerHeight: number, drawn: boolean) => void,
   ): void {
+    const viewer = this.shading.viewer.value;
     const size = this.index.tileSize;
     const perSide = size / CHUNK;
     for (const tile of this.tiles.values()) {
@@ -286,7 +291,11 @@ export class Vegetation {
             const at = k * STRIDE;
             const px = placed.data[at]!, pz = placed.data[at + 2]!;
             if ((px - x) * (px - x) + (pz - z) * (pz - z) > radius * radius) continue;
-            visit(`${placed.layer}:${placed.cells[k * 2]}:${placed.cells[k * 2 + 1]}`, collider.shape, px, placed.data[at + 1]!, pz, placed.data[at + 3]!, collider.radiusPerHeight);
+            const py = placed.data[at + 1]!;
+            // Drawn if the copy the shader picks for it holds it.
+            const copy = shownBy(Math.hypot(px - viewer.x, py - viewer.y, pz - viewer.z), placed.data[at + 5]!, this.layers[placed.layer]!.ranges);
+            const drawn = copy === 'impostor' ? tile.impostor !== null : copy !== null && this.filled.has(`${tile.x},${tile.z}|${placed.layer}|${c}|${copy}`);
+            visit(`${placed.layer}:${placed.cells[k * 2]}:${placed.cells[k * 2 + 1]}`, collider.shape, px, py, pz, placed.data[at + 3]!, collider.radiusPerHeight, drawn);
           }
         }
       }
@@ -446,6 +455,7 @@ export class Vegetation {
     const size = this.index.tileSize;
     const perSide = size / CHUNK;
     let meshes = 0, full = 0;
+    this.filled.clear();
     for (const tile of this.tiles.values()) {
       if (tile.state !== 'ready' || Vegetation.distance(camera, tile.x, tile.z, size) > this.tileReach) continue;
       for (const placed of tile.layers) {
@@ -455,8 +465,13 @@ export class Vegetation {
           const from = starts[c]!, to = starts[c + 1]!;
           if (from === to) continue;
           const d = Vegetation.distance(camera, tile.x + (c % perSide) * CHUNK, tile.z + Math.floor(c / perSide) * CHUNK, CHUNK);
-          if (d <= ranges.full * REACH) { spans.push({ layer: placed.layer, detail: 'full', placed, from, to }); full += to - from; meshes += to - from; }
-          if (ranges.low !== undefined && d <= ranges.low * REACH) { spans.push({ layer: placed.layer, detail: 'low', placed, from, to }); meshes += to - from; }
+          for (const detail of ['full', 'low'] as const) {
+            if (!needsCopy(d, ranges, detail)) continue;
+            spans.push({ layer: placed.layer, detail, placed, from, to });
+            this.filled.add(`${tile.x},${tile.z}|${placed.layer}|${c}|${detail}`);
+            meshes += to - from;
+            if (detail === 'full') full += to - from;
+          }
         }
       }
     }
@@ -472,7 +487,7 @@ export class Vegetation {
       if (patch.state !== 'ready') continue;
       const d = Vegetation.distance(camera, patch.x, patch.z, PATCH);
       for (const placed of patch.layers) {
-        if (placed.count === 0 || d > this.layers[placed.layer]!.ranges.full) continue;
+        if (placed.count === 0 || !needsCopy(d, this.layers[placed.layer]!.ranges, 'full')) continue;
         spans.push({ layer: placed.layer, detail: 'full', placed, from: 0, to: placed.count });
         meshes += placed.count;
       }

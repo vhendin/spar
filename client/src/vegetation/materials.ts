@@ -7,6 +7,7 @@ import * as THREE from 'three/webgpu';
 import {
   attribute, float, fract, mix, normalViewGeometry, positionGeometry, positionLocal, select, sin, smoothstep, texture, time, uniform, vec2, vec3,
 } from 'three/tsl';
+import { FADE_END, FADE_START, JITTER_MIN, JITTER_SPAN } from './coverage';
 
 /** Side of an impostor picture in units of tree height, and the empty margin below the tree. */
 export const IMPOSTOR_CELL = 1.1;
@@ -42,9 +43,9 @@ export class VegetationShading {
     const origin = attribute<'vec4'>('iOrigin', 'vec4');
     const distance = origin.xyz.distance(this.viewer);
     // Each instance switches a little nearer or farther than the next, so no ring shows.
-    const jitter = origin.w.mul(0.2).add(0.9);
+    const jitter = origin.w.mul(JITTER_SPAN).add(JITTER_MIN);
     const inRange = distance.greaterThanEqual(jitter.mul(o.near)).and(distance.lessThan(jitter.mul(o.far)));
-    const shown = select(inRange, o.fadeOut ? float(1).sub(smoothstep(o.far * 0.7, o.far * 0.9, distance)) : float(1), 0);
+    const shown = select(inRange, o.fadeOut ? float(1).sub(smoothstep(o.far * FADE_START, o.far * FADE_END, distance)) : float(1), 0);
 
     // positionLocal already includes the instance's own placement.
     const local = positionLocal.sub(origin.xyz);
@@ -72,7 +73,7 @@ export class VegetationShading {
     const corner = positionGeometry;
     const toCamera = this.viewer.sub(origin.xyz);
     const distance = toCamera.length();
-    const jitter = info.z.mul(0.2).add(0.9);
+    const jitter = info.z.mul(JITTER_SPAN).add(JITTER_MIN);
     // Far away a tree is a few pixels: draw fewer, wider ones for the same look.
     const thin = smoothstep(700, 2000, distance);
     const kept = fract(info.z.mul(13.7)).lessThan(mix(1, 0.3, thin));

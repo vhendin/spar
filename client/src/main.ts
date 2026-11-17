@@ -144,7 +144,8 @@ async function start(): Promise<void> {
         lines.push(
           `plants ${(v.meshes / 1000).toFixed(1)}k meshes (${(v.full / 1000).toFixed(1)}k full) · ${(v.impostors / 1000).toFixed(0)}k far trees in ${v.tiles} tiles` +
             (v.loading ? ` · placing ${v.loading}` : '') +
-            (obstacles ? ` · ${obstacles.count} solid nearby` : ''),
+            (obstacles ? ` · ${obstacles.count} solid nearby` : '') +
+            (obstacles && obstacles.undrawnEver.size ? ` · ${obstacles.undrawn} NOT DRAWN (${obstacles.undrawnEver.size} so far)` : ''),
         );
       }
       if (world.features) {
@@ -162,7 +163,7 @@ async function start(): Promise<void> {
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
           : 'click to fly · F drive · M masks · C credits'
-        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · G wheels · F fly · C credits',
+        : 'W/S drive, brake and reverse · A/D steer · Space handbrake · L low range · 1 2 3 diff locks · H lights · R reset · G wheels · K colliders · F fly · C credits',
     );
     hud.textContent = lines.join('\n');
   };
@@ -245,11 +246,13 @@ async function start(): Promise<void> {
     sim.place(spawn.x, (terrain.heightAt(spawn.x, spawn.z) ?? index.heights.max) + 1, spawn.z, spawn.heading);
     view.snap();
 
-    world = {
-      index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spawn,
-      obstacles: vegetation || features ? new Obstacles(RAPIER, physics, vegetation, features) : null,
-      unplaced: true,
-    };
+    // K, or ?colliders=1, shows the wireframes of the colliders around the vehicle.
+    const obstacles = vegetation || features ? new Obstacles(RAPIER, physics, vegetation, features) : null;
+    if (obstacles) {
+      obstacles.debug.visible = params.get('colliders') === '1';
+      scene.add(obstacles.debug);
+    }
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spawn, obstacles, unplaced: true };
 
     // The fly camera starts above the middle of the area looking north, unless the URL says
     // otherwise: ?pos=x,y,z (metres) and ?look=yaw,pitch (degrees). With ?agl=n, y is n
@@ -302,6 +305,9 @@ async function start(): Promise<void> {
         location.search = next.toString();
         break;
       }
+      case 'KeyK':
+        if (w?.obstacles) w.obstacles.debug.visible = !w.obstacles.debug.visible;
+        break;
       case 'KeyG':
         detailed = !detailed;
         break;
@@ -377,7 +383,9 @@ async function start(): Promise<void> {
       }
       if (steps === 4) owed = 0; // too slow to keep up: let time slip rather than spiral
       w.view.render(w.unplaced ? 1 : owed / STEP);
-      const at = w.view.group.position;
+      // While flying with the collider view on, colliders gather round the camera instead,
+      // so they can be inspected anywhere.
+      const at = flying && w.obstacles?.debug.visible ? camera.position : w.view.group.position;
       w.obstacles?.update(now / 1000, at.x, at.z);
 
       if (flying) fly.update(dt);

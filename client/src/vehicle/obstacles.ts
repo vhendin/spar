@@ -1,7 +1,12 @@
 // Trees, boulders, buildings, poles and fences near the vehicle as physics colliders. They
 // come and go as the vehicle moves; each keeps the permanent name it was placed with.
+//
+// For debugging, `debug` holds a wireframe of every collider (K in the game): green for
+// plants, blue for buildings and the like, red for a plant that is solid but not drawn,
+// which should never happen. Those are also counted and logged.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
+import * as THREE from 'three/webgpu';
 import type { Features } from '../features/features';
 import type { Vegetation } from '../vegetation/vegetation';
 import { GROUP_OBSTACLE, GROUP_VEHICLE, groups } from './sim';
@@ -10,8 +15,28 @@ const RADIUS = 28;
 /** Rocks smaller than this pass under the vehicle and are left out. */
 const MIN_ROCK = 0.7;
 
+interface Entry {
+  collider: RAPIER.Collider;
+  seen: number;
+  wire: THREE.Mesh;
+  drawn: boolean;
+}
+
+const UNIT_CYLINDER = new THREE.CylinderGeometry(1, 1, 2, 10, 1);
+const UNIT_BALL = new THREE.IcosahedronGeometry(1, 1);
+const UNIT_BOX = new THREE.BoxGeometry(2, 2, 2);
+const wireMaterial = (color: number): THREE.MeshBasicNodeMaterial =>
+  new THREE.MeshBasicNodeMaterial({ color, wireframe: true, depthTest: false, transparent: true, opacity: 0.8, fog: false });
+
 export class Obstacles {
-  private readonly colliders = new Map<string, { collider: RAPIER.Collider; seen: number }>();
+  /** Wireframes of the colliders; hidden unless debugging. */
+  readonly debug = new THREE.Group();
+  /** Plants that are solid but not drawn: now, and different ones since the start. */
+  undrawn = 0;
+  readonly undrawnEver = new Set<string>();
+
+  private readonly colliders = new Map<string, Entry>();
+  private readonly materials = { plant: wireMaterial(0x3cff6e), object: wireMaterial(0x4aa8ff), hidden: wireMaterial(0xff2a2a) };
   private pass = 0;
   private next = 0;
 
@@ -20,7 +45,36 @@ export class Obstacles {
     private readonly world: RAPIER.World,
     private readonly vegetation: Vegetation | null,
     private readonly features: Features | null,
-  ) {}
+  ) {
+    this.debug.name = 'colliders';
+    this.debug.visible = false;
+    this.debug.renderOrder = 10;
+  }
+
+  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, plant: boolean): void {
+    const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
+    const wire = new THREE.Mesh(geometry, plant ? this.materials.plant : this.materials.object);
+    const t = desc.translation, r = desc.rotation;
+    wire.position.set(t.x, t.y, t.z);
+    wire.quaternion.set(r.x, r.y, r.z, r.w);
+    wire.scale.set(...scale);
+    wire.renderOrder = 10;
+    this.debug.add(wire);
+    this.colliders.set(key, { collider, seen: this.pass, wire, drawn: true });
+    if (plant) this.mark(key, this.colliders.get(key)!, drawn);
+  }
+
+  /** Records whether a plant's collider has something drawn to go with it. */
+  private mark(key: string, entry: Entry, drawn: boolean): void {
+    if (entry.drawn === drawn) return;
+    entry.drawn = drawn;
+    entry.wire.material = drawn ? this.materials.plant : this.materials.hidden;
+    if (!drawn && !this.undrawnEver.has(key)) {
+      this.undrawnEver.add(key);
+      const p = entry.wire.position;
+      console.warn(`obstacles: ${key} at ${p.x.toFixed(1)}, ${p.z.toFixed(1)} is solid but not drawn`);
+    }
+  }
 
   get count(): number {
     return this.colliders.size;
@@ -42,31 +96,35 @@ export class Obstacles {
         .cuboid(s.hx, s.hy, s.hz)
         .setTranslation(s.x, s.y, s.z)
         .setRotation({ x: 0, y: Math.sin(s.yaw / 2), z: 0, w: Math.cos(s.yaw / 2) });
-      const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
-      this.colliders.set(s.key, { collider, seen: this.pass });
+      this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, false);
     });
-    this.vegetation?.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight) => {
+    this.vegetation?.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight, drawn) => {
       const known = this.colliders.get(key);
       if (known) {
         known.seen = this.pass;
+        this.mark(key, known, drawn);
         return;
       }
-      let desc: RAPIER.ColliderDesc;
       if (shape === 'trunk') {
         const half = Math.min(size, 6) / 2 + 0.2;
-        desc = this.R.ColliderDesc.cylinder(half, Math.max(0.07, radiusPerHeight * size)).setTranslation(px, py + half - 0.4, pz);
+        const radius = Math.max(0.07, radiusPerHeight * size);
+        const desc = this.R.ColliderDesc.cylinder(half, radius).setTranslation(px, py + half - 0.4, pz);
+        this.add(key, desc, UNIT_CYLINDER, [radius, half, radius], drawn, true);
       } else {
         if (size < MIN_ROCK) return;
-        desc = this.R.ColliderDesc.ball(radiusPerHeight * size).setTranslation(px, py + 0.25 * size, pz);
+        const radius = radiusPerHeight * size;
+        const desc = this.R.ColliderDesc.ball(radius).setTranslation(px, py + 0.25 * size, pz);
+        this.add(key, desc, UNIT_BALL, [radius, radius, radius], drawn, true);
       }
-      const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
-      this.colliders.set(key, { collider, seen: this.pass });
     });
+    let undrawn = 0;
     for (const [key, entry] of this.colliders) {
       if (entry.seen !== this.pass) {
         this.world.removeCollider(entry.collider, false);
+        this.debug.remove(entry.wire);
         this.colliders.delete(key);
-      }
+      } else if (!entry.drawn) undrawn++;
     }
+    this.undrawn = undrawn;
   }
 }
