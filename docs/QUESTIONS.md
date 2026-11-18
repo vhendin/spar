@@ -56,7 +56,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Snow calendar.** Snow from late October, 0.4 m by mid-December, 0.75 m at the end of March,
   gone by mid-May at 600 m; 12 % deeper per hundred metres up. Right for Vålådalen?
 - **Roofs, fences and cabins** carry no snow yet. Wanted?
-- **Driving on snow** still uses the summer grip of the ground underneath (the snow-driving step).
 - **Bare birches** under snow read as grey-brown lumps at a distance; see the bare-tree question above.
 
 ### Lake ice (this commit)
@@ -71,12 +70,20 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   Enough warning, or should it be more obvious (or less)?
 - **Holes.** A break-through leaves a 3.5 m hole of open water; the last 8 are kept until the
   spring thaw. Should holes freeze over again after a few in-game days?
-- **Grip on ice** is 0.15, the same with snow on top (until the snow-driving step).
+- **Grip on ice** is 0.15; with snow on top it is the snow's 0.32.
 
-### Seasons: later steps
+### Driving on snow (this commit)
 
-- **Deep snow.** Should it be able to get you stuck the way a bog does (sinking, digging in), or
-  only change grip?
+- **How hard is deep snow?** I chose: it can get you stuck. Tyres pack it to about half its
+  depth (at most 20 cm for the 4×4), it drags, and spinning digs on, though half as fast as
+  in mud. At the end of March off-road, high range on open differentials bogs down within
+  seconds; low range with both locks crawls at about 9 km/h on the flat. Too hard?
+- **Flooring it on a snowy road.** With W all or nothing, the wheels spin and the vehicle
+  slides off a cambered road into the deep snow beside it. This makes the earlier keyboard
+  throttle question more pressing: ease W in gently on low grip?
+- **Ploughed roads.** Asphalt keeps 10 % of the snow, gravel 12 %, dirt tracks 15 %; paths are
+  not cleared. The plough takes the verges too. Right?
+- **Snow spray** clods look grey against the light. Mostly powder instead?
 
 ### What next
 
@@ -86,6 +93,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
+- Driving on snow: next after the ice (done; see the questions on how hard it is).
 - Frozen lakes: yes, drivable, with thin ice near streams that breaks and drowns the engine.
 - Seasons: the colours first (trees, plants and ground through the year), winter snow, snow
   driving and ice after.

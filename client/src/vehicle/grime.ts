@@ -14,6 +14,7 @@ const MUDDY: Record<string, [number, number]> = {
   grass: [0.05, 0.4],
   sand: [0.15, 0.3],
   gravel: [0.02, 0.15],
+  snow: [0, 0.08],
 };
 
 const linear = (hex: number): THREE.Vector3 => {

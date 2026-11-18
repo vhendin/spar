@@ -1,5 +1,5 @@
 {
-  "grounds": ["asphalt", "gravel", "dirt", "grass", "rock", "sand", "bog", "water", "ice"],
+  "grounds": ["asphalt", "gravel", "dirt", "grass", "rock", "sand", "bog", "water", "ice", "snow"],
   "softness": {
     "bog": { "dry": 0.8, "wet": 1 },
     "water": { "dry": 0.55, "wet": 0.6 },

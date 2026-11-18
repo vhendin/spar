@@ -30,6 +30,7 @@ const LOOKS: Record<string, Look> = {
   grass: { dry: [0.3, 0.32, 0.17], wet: [0.17, 0.16, 0.08], rate: 130, dust: 0.3, size: 0.11, splash: 0 },
   gravel: { dry: [0.48, 0.46, 0.42], wet: [0.3, 0.29, 0.27], rate: 150, dust: 1, size: 0.08, splash: 0 },
   sand: { dry: [0.66, 0.58, 0.44], wet: [0.42, 0.36, 0.26], rate: 200, dust: 1.4, size: 0.05, splash: 0 },
+  snow: { dry: [0.95, 0.97, 1], wet: [0.75, 0.77, 0.78], rate: 90, dust: 1.6, size: 0.06, splash: 0.15 },
   water: { dry: [0.72, 0.76, 0.78], wet: [0.72, 0.76, 0.78], rate: 300, dust: 0, size: 0.08, splash: 1 },
 };
 

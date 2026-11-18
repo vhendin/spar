@@ -1012,6 +1012,7 @@ async function start(): Promise<void> {
       // Lake ice: what the vehicle drives on, and how it is drawn, with the holes broken in it.
       const ice = snowOverride === null ? season.ice : 0;
       w.ground.ice = ice;
+      w.ground.snow = snowDepth;
       w.shading.ice.value = ice;
       if (ice <= 0) w.ground.holes.length = 0; // open water again; next winter freezes over them
       w.shading.iceHoles.forEach((v, k) => {

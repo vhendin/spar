@@ -2,12 +2,18 @@
 // of ground lies under each wheel.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
-import type { GroundClasses, RegionIndex } from '@spar/shared';
+import { snowDepthAt, type GroundClasses, type RegionIndex, type SeasonCalendar } from '@spar/shared';
 import groundDefs from '../../../defs/ground.json';
+import seasonDefs from '../../../defs/seasons.json';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { GROUP_GROUND, GROUP_OBSTACLE, groups, type GroundProbe } from './sim';
 
 const GROUND = groundDefs as unknown as GroundClasses;
+const CALENDAR = seasonDefs as SeasonCalendar;
+/** Road coverage from which the snow counts as cleared: the plough takes the verges too. */
+const CLEARED = 40;
+/** Share of the snow left on roads, by surface: ploughed roads and village tracks; paths are not cleared. */
+const PACKED: Record<string, number> = { asphalt: 0.1, gravel: 0.12, dirt: 0.15 };
 /** Height files are turned into colliders this far ahead of the vehicle, and dropped this far behind. */
 const LOAD_MARGIN = 90;
 const KEEP_MARGIN = 260;
@@ -47,6 +53,8 @@ export class GroundStore implements GroundProbe {
   rain = 0;
   /** Thickness of lake ice away from streams this time of year, metres (see seasonAt). */
   ice = 0;
+  /** Depth of lying snow at the season calendar's reference height, metres (see seasonAt). */
+  snow = 0;
   /** Where vehicles have broken through the ice, newest last. */
   readonly holes: IceHole[] = [];
 
@@ -222,6 +230,15 @@ export class GroundStore implements GroundProbe {
       if (name === 'pool') return this.ice;
     }
     return this.ice * iceShare(this.streamDistance(x, z));
+  }
+
+  /** Depth of lying snow at a spot, metres: deeper higher up, packed thin on roads. */
+  snowAt(x: number, z: number): number {
+    if (this.snow <= 0) return 0;
+    const depth = snowDepthAt(CALENDAR, this.snow, this.heightAt(x, z) ?? CALENDAR.snowHeight.reference);
+    const s = this.sample(x, z);
+    if (!s || s.mask[this.planes.road * s.plane + s.at]! < CLEARED) return depth;
+    return depth * (PACKED[this.surfaceName[s.mask[this.planes.surface * s.plane + s.at]!]!] ?? 1);
   }
 
   /** A vehicle broke through the ice here: it stays open (until the newest holes push it out). */

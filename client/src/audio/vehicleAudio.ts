@@ -36,6 +36,8 @@ const VOICES: Record<string, Voice> = {
   grass: { buffer: 'white', filter: 'bandpass', frequency: 2600, q: 0.6, gain: 0.12, full: 12, rate: 0 },
   sand: { buffer: 'white', filter: 'bandpass', frequency: 1400, q: 0.5, gain: 0.16, full: 10, rate: 0 },
   bog: { buffer: 'gurgle', filter: 'lowpass', frequency: 900, q: 0.8, gain: 0.9, full: 6, rate: 0.8 },
+  snow: { buffer: 'crackle', filter: 'lowpass', frequency: 650, q: 0.7, gain: 0.4, full: 10, rate: 0.5 },
+  ice: { buffer: 'white', filter: 'highpass', frequency: 3000, q: 0.5, gain: 0.08, full: 20, rate: 0 },
   water: { buffer: 'bubbles', filter: 'bandpass', frequency: 1300, q: 0.4, gain: 1.1, full: 6, rate: 0.6 },
 };
 

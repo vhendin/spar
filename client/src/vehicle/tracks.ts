@@ -32,6 +32,8 @@ const MARKS: Record<string, Mark> = {
   sand: { dry: 0.5, wet: 0.7, color: [0.3, 0.24, 0.16] },
   grass: { dry: 0.3, wet: 0.6, color: [0.07, 0.075, 0.03] },
   gravel: { dry: 0.18, wet: 0.35, color: [0.17, 0.16, 0.14] },
+  // Pressed snow, in the blue shadow of its own groove.
+  snow: { dry: 0.9, wet: 1, color: [0.4, 0.46, 0.56] },
 };
 
 /** Where one wheel's ribbon last ended. */

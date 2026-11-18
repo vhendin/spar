@@ -36,6 +36,21 @@ const SETTLE_DISTANCE = 0.8;
 const CLIMB_DISTANCE = 2.5;
 /** Drag of the rut: this times (depth / radius)² times the load. */
 const RUT_DRAG = 0.6;
+/**
+ * Snow: a tyre packs it down to about half its depth before it bears, but never deeper than
+ * this share of its radius on its own; spinning digs on to near the frozen ground beneath.
+ */
+const SNOW_SETTLE = 0.5;
+const SNOW_SINK = 0.45;
+/** How soft snow this deep (metres) and deeper is to dig into, 0..1. */
+const SNOW_SOFT_DEPTH = 0.5;
+const SNOW_SOFTNESS = 0.7;
+/** Drag of pushing through snow, as a share of the wheel's load per metre of depth. */
+const SNOW_DRAG = 0.12;
+/** How much more slowly a spinning tyre digs into snow than into mud. */
+const SNOW_DIG = 0.5;
+/** Thinner than this (metres) and the snow is only a dusting: the ground beneath decides. */
+const SNOW_DUSTING = 0.03;
 
 // Water. Wheels go down to the bed, the body pushes through and is lifted a little, and too
 // deep for the air intake drowns the engine.
@@ -84,6 +99,8 @@ export interface WheelTelemetry {
   /** How far the tyre has sunk into soft ground, metres, and how soft that ground is (0..1). */
   sink: number;
   softness: number;
+  /** Depth of snow under the tyre, metres; 0 where there is none. */
+  snow: number;
   /** Depth of water over the ground under the tyre, metres. */
   water: number;
   /** Where the tyre touches the ground, and the ground's normal there (world frame); valid while in contact. */
@@ -105,6 +122,8 @@ export interface GroundProbe {
   iceAt?(x: number, z: number): number;
   /** The ice gave way here under a vehicle. */
   breakIce?(x: number, z: number): void;
+  /** Depth of lying snow, metres (packed thin on roads); 0 or left out where there is none. */
+  snowAt?(x: number, z: number): number;
 }
 
 /**
@@ -251,7 +270,7 @@ export class VehicleSim {
         this.controller.setWheelMaxSuspensionTravel(i, s.travel);
         this.controller.setWheelMaxSuspensionForce(i, staticLoad * 8);
         this.controller.setWheelSideFrictionStiffness(i, 1);
-        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, sink: 0, softness: 0, water: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
+        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, sink: 0, softness: 0, snow: 0, water: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
         void a;
       }
     });
@@ -377,6 +396,7 @@ export class VehicleSim {
         Object.assign(wheel.point, { x: point.x, y: point.y, z: point.z });
         const under = this.underfoot(point.x, point.z);
         wheel.ground = under.ground;
+        wheel.snow = under.snow;
         this.waterUnder[i] = under.water;
       }
       if (normal) Object.assign(wheel.normal, { x: normal.x, y: normal.y, z: normal.z });
@@ -421,7 +441,8 @@ export class VehicleSim {
         // Rolling resistance and the rut's drag. Rapier leaves out a wheel's brake while it is
         // driven, so on a driven wheel it comes off the drive force instead: holding it back from
         // a standstill, slowing it once rolling. Off the drive it all goes on the brake.
-        const sunk = RUT_DRAG * (wheel.sink / def.wheels.radius) ** 2 * wheel.load;
+        // Ruts drag, and so does snow pushed aside.
+        const sunk = (RUT_DRAG * (wheel.sink / def.wheels.radius) ** 2 + SNOW_DRAG * wheel.snow) * wheel.load;
         let force = axle.driven ? split.forces[d]! : 0;
         if (force !== 0) {
           const drag = tire.rollingResistance * wheel.load + sunk;
@@ -478,14 +499,19 @@ export class VehicleSim {
       const wheel = this.wheels[i]!;
       if (wheel.contact) {
         const { x, z } = wheel.point;
-        wheel.softness = this.ground.softness(x, z);
         const depth = this.waterUnder[i] ?? this.ground.waterDepth(x, z);
         wheel.water += Math.max(-DEPTH_RATE * dt, Math.min(DEPTH_RATE * dt, depth - wheel.water));
+        // In snow the frozen ground beneath is firm: the snow decides how far a tyre goes down.
+        const snow = wheel.snow;
+        wheel.softness = snow ? SNOW_SOFTNESS * Math.min(1, snow / SNOW_SOFT_DEPTH) : this.ground.softness(x, z);
         const soft = wheel.softness;
-        const settle = SETTLE * r * soft * Math.sqrt(Math.min(2, wheel.load / staticLoad));
+        const loaded = Math.sqrt(Math.min(2, wheel.load / staticLoad));
+        const settle = snow ? Math.min(SNOW_SETTLE * snow, SNOW_SINK * r) * loaded : SETTLE * r * soft * loaded;
+        const bottom = snow ? Math.min(snow * 0.85, DIG_LIMIT * r) : DIG_LIMIT * r;
         if (wheel.sink < settle) wheel.sink += (settle - wheel.sink) * Math.min(1, travelled / SETTLE_DISTANCE + dt * 0.1);
         else if (wheel.spin < 0.1) wheel.sink -= (wheel.sink - settle) * Math.min(1, travelled / CLIMB_DISTANCE);
-        wheel.sink = Math.min(DIG_LIMIT * r, wheel.sink + wheel.spin * DIG_RATE * soft * dt);
+        // A spinning tyre polishes snow as much as it digs it.
+        wheel.sink = Math.min(Math.max(bottom, settle), wheel.sink + wheel.spin * DIG_RATE * soft * (snow ? SNOW_DIG : 1) * dt);
       } else {
         // Lifted clear: out of the rut, and the water drains towards nothing until it lands again.
         wheel.sink = Math.max(0, wheel.sink - dt);
@@ -529,15 +555,18 @@ export class VehicleSim {
    * The ground and the depth of water at a spot, with ice taken into account: ice thick
    * enough for this vehicle is ground to drive on; thinner ice breaks, into the water below.
    */
-  private underfoot(x: number, z: number): { ground: string; water: number } {
+  private underfoot(x: number, z: number): { ground: string; water: number; snow: number } {
     const ground = this.ground.groundAt(x, z);
     const water = this.ground.waterDepth(x, z);
-    if (water <= 0) return { ground, water };
+    const lying = this.ground.snowAt?.(x, z) ?? 0;
+    const snow = lying > SNOW_DUSTING ? lying : 0;
+    if (water <= 0) return snow ? { ground: 'snow', water, snow } : { ground, water, snow };
     const ice = this.ground.iceAt?.(x, z) ?? 0;
-    if (ice <= 0) return { ground, water };
-    if (ice >= this.iceNeeded) return { ground: 'ice', water: 0 };
+    // Open water carries no snow.
+    if (ice <= 0) return { ground, water, snow: 0 };
+    if (ice >= this.iceNeeded) return snow ? { ground: 'snow', water: 0, snow } : { ground: 'ice', water: 0, snow };
     this.ground.breakIce?.(x, z);
-    return { ground, water };
+    return { ground, water, snow: 0 };
   }
 
   /** Lift and drag on the body where it is under water, worked out at the corners of its underside. */

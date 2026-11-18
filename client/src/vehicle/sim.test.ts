@@ -14,7 +14,7 @@ beforeAll(() => RAPIER.init());
 /** A world with a big flat slab tilted `slope` degrees, rising towards -z (the way a vehicle placed at heading 0 faces). */
 function setup(
   name: string,
-  opts: { slope?: number; ground?: (x: number, z: number) => string; soft?: (x: number, z: number) => number; water?: (x: number, z: number) => number; wet?: number; ice?: number } = {},
+  opts: { slope?: number; ground?: (x: number, z: number) => string; soft?: (x: number, z: number) => number; water?: (x: number, z: number) => number; wet?: number; ice?: number; snow?: number } = {},
 ) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
@@ -33,6 +33,7 @@ function setup(
     waterDepth: opts.water ?? (() => 0),
     iceAt: (x, z) => (holes.some((h) => Math.hypot(x - h.x, z - h.z) < 3.5) ? 0 : (opts.ice ?? 0)),
     breakIce: (x, z) => void holes.push({ x, z }),
+    snowAt: () => opts.snow ?? 0,
   };
   const car = new VehicleSim(RAPIER, world, load(name), probe);
   car.place(0, 0.05, 0, 0);
@@ -293,5 +294,48 @@ describe('lake ice', () => {
     expect(heavy.needed).toBeGreaterThan(0.16);
     expect(light.broke || light.wet).toBe(false);
     expect(heavy.broke && heavy.wet).toBe(true);
+  });
+});
+
+describe('snow', () => {
+  it('drives easily on a thin layer, gripping less than on gravel', () => {
+    const { car, run } = setup('tgb11', { snow: 0.12 });
+    run(1);
+    run(8, { throttle: 0.6 });
+    expect(car.wheels.every((w) => w.ground === 'snow')).toBe(true);
+    expect(car.body.translation().z).toBeLessThan(-40);
+    expect(Math.max(...car.wheels.map((w) => w.sink))).toBeLessThan(0.08);
+  });
+
+  it('is hard going when deep: the tyres sink, it slows to a crawl, and spinning digs deeper', () => {
+    const deep = (crawl: boolean) => {
+      const { car, run } = setup('tgb11', { snow: 0.75 });
+      if (crawl) {
+        car.toggleRange();
+        car.def.axles.forEach((_, a) => car.toggleLock(a));
+      }
+      run(1);
+      run(10, { throttle: crawl ? 0.6 : 1 });
+      return { gone: -car.body.translation().z, sink: Math.max(...car.wheels.map((w) => w.sink)) };
+    };
+    const crawl = deep(true);
+    expect(crawl.sink).toBeGreaterThan(0.15);
+    expect(crawl.gone).toBeGreaterThan(4);
+    // On gravel the same ten seconds flat out cover well over a hundred metres.
+    const spun = deep(false);
+    expect(spun.gone).toBeLessThan(45);
+    expect(spun.sink).toBeGreaterThan(0.22);
+  });
+
+  it('lies on thick lake ice, which then grips better than bare ice', () => {
+    const lake = { water: () => 1.4, ground: () => 'water', ice: 0.5 };
+    const onSnow = setup('tgb11', { ...lake, snow: 0.1 });
+    onSnow.run(1);
+    expect(onSnow.car.wheels.every((w) => w.ground === 'snow')).toBe(true);
+    expect(onSnow.car.wading).toBe(0);
+    const bare = setup('tgb11', lake);
+    bare.run(1);
+    expect(bare.car.wheels.every((w) => w.ground === 'ice')).toBe(true);
+    expect(onSnow.car.wheels[0]!.grip).toBeGreaterThan(bare.car.wheels[0]!.grip);
   });
 });
