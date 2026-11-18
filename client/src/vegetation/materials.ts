@@ -38,6 +38,14 @@ export class VegetationShading {
    * whichever camera is drawing, so trees are picked the same way in the shadow pass.
    */
   readonly viewer = uniform(new THREE.Vector3());
+  /**
+   * Winter snow: depth in metres at `snowReference` metres above sea level, deepening by
+   * `snowGain` of that per hundred metres higher. Everything stands that deep in it, so
+   * low plants vanish under it.
+   */
+  readonly snowDepth = uniform(0);
+  readonly snowReference = uniform(600);
+  readonly snowGain = uniform(0.12);
   /** Where the vehicle has pressed grass and shrubs flat. */
   readonly trample = new Trample();
   private readonly trampleCentre = uniform(this.trample.centre);
@@ -76,7 +84,9 @@ export class VegetationShading {
       // Crushed stems show paler.
       material.colorNode = mix(vec3(1, 1, 1), vec3(1.15, 1.1, 0.75), flat.mul(0.6));
     }
-    material.positionNode = origin.xyz.add(shape.add(push).mul(shown));
+    // Snow lies around the foot: sink the whole plant that deep (a little less: it settles).
+    const depth = this.snowDepth.mul(max(0.2, origin.y.sub(this.snowReference).mul(this.snowGain.div(100)).add(1)));
+    material.positionNode = origin.xyz.add(vec3(0, depth.mul(-0.9), 0)).add(shape.add(push).mul(shown));
     // Leaves and needles let light through: shade both sides of a surface alike, instead of
     // turning the normal on the back, which leaves crowns black from below.
     if (o.doubleSided) material.normalNode = normalViewGeometry;

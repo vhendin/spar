@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { dayOfYear, onDayOfYear } from './sky/clock';
-import { seasonAt } from './season';
+import { seasonAt, snowDepthAt } from './season';
 import type { SeasonCalendar } from './generated/seasons';
 import { isSeasonCalendar } from './validate';
 
@@ -43,6 +43,19 @@ describe('season calendar', () => {
     const half = seasonAt(calendar, 159);
     expect(half.leaves).toBeCloseTo((0.35 + 1) / 2, 5);
     expect(seasonAt(calendar, 365.9).leaves).toBe(0);
+  });
+});
+
+describe('snow', () => {
+  it('lies from November to May, deepest in March, and deeper higher up', () => {
+    expect(seasonAt(calendar, 75).snow).toBeGreaterThan(0.5);
+    expect(seasonAt(calendar, 15).snow).toBeGreaterThan(0.3);
+    expect(seasonAt(calendar, 200).snow).toBe(0);
+    expect(seasonAt(calendar, 258).snow).toBe(0);
+    const march = seasonAt(calendar, 75).snow;
+    expect(snowDepthAt(calendar, march, 1200)).toBeGreaterThan(march * 1.5);
+    expect(snowDepthAt(calendar, march, 500)).toBeLessThan(march);
+    expect(snowDepthAt(calendar, 0, 1400)).toBe(0);
   });
 });
 

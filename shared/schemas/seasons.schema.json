@@ -4,7 +4,10 @@
   "description": "How the year turns in the region: on which days leaves come out, colour and fall, and the ground greens and withers. Lives in defs/seasons.json. Between two entries everything blends evenly; after the last entry the year wraps round to the first.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["calendar"],
+  "required": [
+    "calendar",
+    "snowHeight"
+  ],
   "properties": {
     "calendar": {
       "type": "array",
@@ -13,7 +16,13 @@
         "title": "SeasonKey",
         "type": "object",
         "additionalProperties": false,
-        "required": ["day", "foliage", "leaves", "ground"],
+        "required": [
+          "day",
+          "foliage",
+          "leaves",
+          "ground",
+          "snow"
+        ],
         "properties": {
           "day": {
             "description": "Day of the year, 1 for 1 January. Entries go in order.",
@@ -24,7 +33,12 @@
           "foliage": {
             "description": "Which of each species' season colours its foliage has on this day.",
             "type": "string",
-            "enum": ["spring", "summer", "autumn", "winter"]
+            "enum": [
+              "spring",
+              "summer",
+              "autumn",
+              "winter"
+            ]
           },
           "leaves": {
             "description": "How much of a deciduous tree's crown is in leaf, 0 bare to 1 full.",
@@ -35,8 +49,35 @@
           "ground": {
             "description": "The colour of vegetated ground: green summer, coloured autumn, or withered dormant (late autumn to spring).",
             "type": "string",
-            "enum": ["summer", "autumn", "dormant"]
+            "enum": [
+              "summer",
+              "autumn",
+              "dormant"
+            ]
+          },
+          "snow": {
+            "description": "Depth of lying snow on open ground at the reference height, metres. Precipitation falls as snow while there is any.",
+            "type": "number",
+            "minimum": 0
           }
+        }
+      }
+    },
+    "snowHeight": {
+      "description": "How snow depth grows with height: the calendar's depth lies at `reference` metres above sea level, and every hundred metres higher adds `gainPerHundred` of it (lower takes it away, down to a fifth).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "gainPerHundred"
+      ],
+      "properties": {
+        "reference": {
+          "type": "number"
+        },
+        "gainPerHundred": {
+          "type": "number",
+          "minimum": 0
         }
       }
     }

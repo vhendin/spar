@@ -202,6 +202,9 @@ export class Environment {
     return this.sunRadiance.value;
   }
 
+  /** True while it is cold enough that rain falls as snow; set from the season each frame. */
+  snowing = false;
+
   /** The day of the year on the region's clocks (1 is 1 January, the time of day a fraction), at stopwatch time `now`. */
   dayOfYear(now = performance.now()): number {
     return dayOfYear(gameUtc(this.clock, now), this.clock.utcOffset);
@@ -225,7 +228,8 @@ export class Environment {
   /** "Sat 15 Aug 09:42 · overcast · wind 6 m/s". */
   describe(): string {
     const w = this.weather;
-    const sky = w.rain > 0.05 ? (w.rain > 0.6 ? 'heavy rain' : 'rain') : w.cloud > 0.6 ? 'overcast' : w.cloud > 0.3 ? 'some cloud' : 'clear';
+    const fall = this.snowing ? 'snow' : 'rain';
+    const sky = w.rain > 0.05 ? (w.rain > 0.6 ? `heavy ${fall}` : fall) : w.cloud > 0.6 ? 'overcast' : w.cloud > 0.3 ? 'some cloud' : 'clear';
     return `${formatGameTime(this.utc, this.clock.utcOffset)} · ${sky} · wind ${(w.wind * GALE).toFixed(0)} m/s${w.wetness > 0.2 ? ' · wet ground' : ''}`;
   }
 
@@ -267,7 +271,7 @@ export class Environment {
     this.mist = this.mistiness(THREE.MathUtils.radToDeg(sunAt.elevation));
     this.fog.mistDensity.value = MIST_DENSITY * this.mist;
     this.grading(state.sun[1]);
-    this.rain.update(camera, w.rain, this.windVector.x * w.wind * GALE, this.windVector.y * w.wind * GALE);
+    this.rain.update(camera, w.rain, this.windVector.x * w.wind * GALE, this.windVector.y * w.wind * GALE, this.snowing);
     this.light(state, moonAt.illumination, focus);
   }
 

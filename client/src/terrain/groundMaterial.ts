@@ -122,6 +122,13 @@ export class GroundShading {
   readonly windDirection = uniform(new THREE.Vector2(1, 0));
   /** Height above which snow lies on open, north-facing ground, metres. */
   readonly snowLine = uniform(5000);
+  /**
+   * Winter snow: its depth in metres at `snowReference` metres above sea level, deepening by
+   * `snowGain` of that for every hundred metres higher (see snowDepthAt).
+   */
+  readonly snowDepth = uniform(0);
+  readonly snowReference = uniform(600);
+  readonly snowGain = uniform(0.12);
   /** Shares of the summer, autumn and withered ground colours, adding up to 1 (see seasonAt). */
   readonly season = uniform(new THREE.Vector3(1, 0, 0));
 
@@ -250,10 +257,18 @@ export class GroundShading {
     // Snow: above the line, more so facing north and in the hollows the noise picks out; none on cliffs.
     const north = normalWorld.z.negate();
     const drift = mx_noise_float(ground.mul(0.004)).mul(70).add(mx_noise_float(ground.mul(0.03)).mul(18)).add(mx_noise_float(ground.mul(0.4)).mul(3));
-    const snowy = smoothstep(this.snowLine, this.snowLine.add(20), positionWorld.y.add(drift).add(north.mul(110)))
-      .mul(smoothstep(0.5, 0.72, normalWorld.y));
+    const flatEnough = smoothstep(0.5, 0.72, normalWorld.y);
+    const lingering = smoothstep(this.snowLine, this.snowLine.add(20), positionWorld.y.add(drift).add(north.mul(110)));
+    // Winter snow over everything, deeper higher up. While it is thin (first falls, the melt)
+    // it lies in patches: in hollows and on north-facing ground first, last to go.
+    const depth = this.snowDepth.mul(max(0.2, positionWorld.y.sub(this.snowReference).mul(this.snowGain.div(100)).add(1)));
+    const patches = mx_noise_float(ground.mul(0.03)).mul(0.05).add(mx_noise_float(ground.mul(0.25)).mul(0.025)).add(north.mul(0.03));
+    const winter = smoothstep(0.03, 0.12, depth.add(patches)).mul(mix(1, 0.85, onRoad));
+    const snowy = max(lingering, winter).mul(flatEnough);
     const snowColor = vec3(0.86, 0.9, 0.95).mul(float(0.96).add(mx_noise_float(ground.mul(0.7)).mul(0.04)));
-    const land = vec4(mix(bare.xyz, snowColor, snowy), mix(bare.w, 0.6, snowy));
+    // Roads are ploughed and driven: packed snow with the gravel showing through, so they can still be followed.
+    const roadSnow = mix(snowColor, roadColor, onRoad.mul(winter).mul(0.3));
+    const land = vec4(mix(bare.xyz, roadSnow, snowy), mix(bare.w, 0.6, snowy));
 
     // How much of this spot is water: the land-cover texels, and streams and pools on the road layer.
     const isWater = (t: THREE.Node<'vec4'>) => select(int(t.x.mul(255).add(0.5)).equal(int(this.waterId)), float(1), float(0));

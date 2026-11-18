@@ -8,6 +8,13 @@ export interface SeasonCalendar {
    * @minItems 2
    */
   calendar: [SeasonKey, SeasonKey, ...SeasonKey[]];
+  /**
+   * How snow depth grows with height: the calendar's depth lies at `reference` metres above sea level, and every hundred metres higher adds `gainPerHundred` of it (lower takes it away, down to a fifth).
+   */
+  snowHeight: {
+    reference: number;
+    gainPerHundred: number;
+  };
 }
 export interface SeasonKey {
   /**
@@ -26,4 +33,8 @@ export interface SeasonKey {
    * The colour of vegetated ground: green summer, coloured autumn, or withered dormant (late autumn to spring).
    */
   ground: 'summer' | 'autumn' | 'dormant';
+  /**
+   * Depth of lying snow on open ground at the reference height, metres. Precipitation falls as snow while there is any.
+   */
+  snow: number;
 }

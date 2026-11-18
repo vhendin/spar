@@ -13,6 +13,14 @@ export interface SeasonState {
   leaves: number;
   /** How much of each ground colour to use; the shares add up to 1. */
   ground: Record<GroundSeason, number>;
+  /** Depth of lying snow on open ground at the calendar's reference height, metres. */
+  snow: number;
+}
+
+/** Snow depth at `height` metres above sea level, from the depth at the reference height. */
+export function snowDepthAt(calendar: SeasonCalendar, snow: number, height: number): number {
+  const { reference, gainPerHundred } = calendar.snowHeight;
+  return snow * Math.max(0.2, 1 + ((height - reference) / 100) * gainPerHundred);
 }
 
 const YEAR = 365;
@@ -33,7 +41,7 @@ export function seasonAt(calendar: SeasonCalendar, day: number): SeasonState {
   const ground: Record<GroundSeason, number> = { summer: 0, autumn: 0, dormant: 0 };
   ground[a.ground] += 1 - t;
   ground[b.ground] += t;
-  return { foliage, leaves: a.leaves + (b.leaves - a.leaves) * t, ground };
+  return { foliage, leaves: a.leaves + (b.leaves - a.leaves) * t, ground, snow: a.snow + (b.snow - a.snow) * t };
 }
 
 /** A blend of the four season colours by `state.foliage`, as linear RGB from linear RGB inputs. */

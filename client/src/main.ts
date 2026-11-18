@@ -994,6 +994,11 @@ async function start(): Promise<void> {
 
       // The sky sets the light, and the weather reaches into everything else.
       const env = w.environment;
+      const day = env.dayOfYear(now);
+      const season = seasonAt(CALENDAR, day);
+      // ?snow=<metres> instead puts the lingering snow line there, with no winter snow.
+      const snowDepth = snowOverride === null ? season.snow : 0;
+      env.snowing = snowDepth > 0.02;
       env.update(now, dt, camera.position, flying ? camera.position : w.view.group.position);
       w.shading.wet.value = env.weather.wetness;
       w.shading.sky.value.set(env.skyColor.r, env.skyColor.g, env.skyColor.b);
@@ -1003,9 +1008,12 @@ async function start(): Promise<void> {
       // ?snow=<metres> puts the snow line there instead of where the month has it.
       w.shading.snowLine.value = snowOverride ?? snowLine(env.month());
       // The ground turns with the season smoothly; the plants are recoloured every few days.
-      const day = env.dayOfYear(now);
-      const season = seasonAt(CALENDAR, day);
       w.shading.season.value.set(season.ground.summer, season.ground.autumn, season.ground.dormant);
+      for (const target of w.vegetation ? [w.shading, w.vegetation.shading] : [w.shading]) {
+        target.snowDepth.value = snowDepth;
+        target.snowReference.value = CALENDAR.snowHeight.reference;
+        target.snowGain.value = CALENDAR.snowHeight.gainPerHundred;
+      }
       if (seasonStep(day) !== w.seasonDay) {
         w.seasonDay = seasonStep(day);
         w.vegetation?.setSeason(seasonAt(CALENDAR, w.seasonDay));

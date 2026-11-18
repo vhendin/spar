@@ -1,13 +1,22 @@
 {
+  "snowHeight": { "reference": 600, "gainPerHundred": 0.12 },
   "calendar": [
-    { "day": 130, "foliage": "winter", "leaves": 0, "ground": "dormant" },
-    { "day": 152, "foliage": "spring", "leaves": 0.35, "ground": "dormant" },
-    { "day": 166, "foliage": "spring", "leaves": 1, "ground": "summer" },
-    { "day": 185, "foliage": "summer", "leaves": 1, "ground": "summer" },
-    { "day": 234, "foliage": "summer", "leaves": 1, "ground": "summer" },
-    { "day": 252, "foliage": "autumn", "leaves": 1, "ground": "autumn" },
-    { "day": 263, "foliage": "autumn", "leaves": 0.85, "ground": "autumn" },
-    { "day": 276, "foliage": "winter", "leaves": 0.15, "ground": "dormant" },
-    { "day": 286, "foliage": "winter", "leaves": 0, "ground": "dormant" }
+    { "day": 1, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.55 },
+    { "day": 60, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.7 },
+    { "day": 90, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.75 },
+    { "day": 110, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.5 },
+    { "day": 124, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.15 },
+    { "day": 130, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.04 },
+    { "day": 152, "foliage": "spring", "leaves": 0.35, "ground": "dormant", "snow": 0 },
+    { "day": 166, "foliage": "spring", "leaves": 1, "ground": "summer", "snow": 0 },
+    { "day": 185, "foliage": "summer", "leaves": 1, "ground": "summer", "snow": 0 },
+    { "day": 234, "foliage": "summer", "leaves": 1, "ground": "summer", "snow": 0 },
+    { "day": 252, "foliage": "autumn", "leaves": 1, "ground": "autumn", "snow": 0 },
+    { "day": 263, "foliage": "autumn", "leaves": 0.85, "ground": "autumn", "snow": 0 },
+    { "day": 276, "foliage": "winter", "leaves": 0.15, "ground": "dormant", "snow": 0 },
+    { "day": 286, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0 },
+    { "day": 300, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.05 },
+    { "day": 320, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.2 },
+    { "day": 345, "foliage": "winter", "leaves": 0, "ground": "dormant", "snow": 0.4 }
   ]
 }

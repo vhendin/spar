@@ -50,8 +50,16 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Autumn heath.** Red-brown on the open fell in September. Too strong?
 - **Choosing the season.** The time panel (T) has a date slider and Winter/Spring/Summer/Autumn
   buttons. Also wanted in the start menu? The server still starts on 15 August.
-- **Winter without snow.** Until snow comes (step 3), February looks like late October:
-  withered ground, bare trees, snow only on the high fells.
+
+### Seasons: winter snow (this commit)
+
+- **Snow calendar.** Snow from late October, 0.4 m by mid-December, 0.75 m at the end of March,
+  gone by mid-May at 600 m; 12 % deeper per hundred metres up. Right for Vålådalen?
+- **Open lakes in winter.** Lakes stay open water while everything around is white. Frozen,
+  snow-covered lakes belong with the ice step; do that next?
+- **Roofs, fences and cabins** carry no snow yet. Wanted?
+- **Driving on snow** still uses the summer grip of the ground underneath (the snow-driving step).
+- **Bare birches** under snow read as grey-brown lumps at a distance; see the bare-tree question above.
 
 ### Seasons: later steps
 
