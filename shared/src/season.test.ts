@@ -40,8 +40,13 @@ describe('season calendar', () => {
       expect(s.leaves).toBeGreaterThanOrEqual(0);
       expect(s.leaves).toBeLessThanOrEqual(1);
     }
-    const half = seasonAt(calendar, 159);
-    expect(half.leaves).toBeCloseTo((0.35 + 1) / 2, 5);
+    const keys = calendar.calendar;
+    for (let k = 0; k + 1 < keys.length; k++) {
+      const a = keys[k]!, b = keys[k + 1]!;
+      const half = seasonAt(calendar, (a.day + b.day) / 2);
+      expect(half.leaves).toBeCloseTo((a.leaves + b.leaves) / 2, 5);
+      expect(half.ice).toBeCloseTo((a.ice + b.ice) / 2, 5);
+    }
     expect(seasonAt(calendar, 365.9).leaves).toBe(0);
   });
 });
@@ -56,6 +61,15 @@ describe('snow', () => {
     expect(snowDepthAt(calendar, march, 1200)).toBeGreaterThan(march * 1.5);
     expect(snowDepthAt(calendar, march, 500)).toBeLessThan(march);
     expect(snowDepthAt(calendar, 0, 1400)).toBe(0);
+  });
+});
+
+describe('lake ice', () => {
+  it('holds from late November to late May, thickest in March', () => {
+    expect(seasonAt(calendar, 75).ice).toBeGreaterThan(0.5);
+    expect(seasonAt(calendar, 200).ice).toBe(0);
+    expect(seasonAt(calendar, 300).ice).toBe(0);
+    expect(seasonAt(calendar, 340).ice).toBeGreaterThan(0.1);
   });
 });
 

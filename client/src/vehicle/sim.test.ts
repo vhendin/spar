@@ -12,7 +12,10 @@ const idle: VehicleInput = { throttle: 0, brake: 0, steer: 0, handbrake: false }
 beforeAll(() => RAPIER.init());
 
 /** A world with a big flat slab tilted `slope` degrees, rising towards -z (the way a vehicle placed at heading 0 faces). */
-function setup(name: string, opts: { slope?: number; ground?: (x: number, z: number) => string; soft?: (x: number, z: number) => number; water?: (x: number, z: number) => number; wet?: number } = {}) {
+function setup(
+  name: string,
+  opts: { slope?: number; ground?: (x: number, z: number) => string; soft?: (x: number, z: number) => number; water?: (x: number, z: number) => number; wet?: number; ice?: number } = {},
+) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   const tilt = ((opts.slope ?? 0) * Math.PI) / 360;
@@ -22,11 +25,14 @@ function setup(name: string, opts: { slope?: number; ground?: (x: number, z: num
       .setRotation({ x: Math.sin(tilt), y: 0, z: 0, w: Math.cos(tilt) })
       .setCollisionGroups(groups(GROUP_GROUND, 0xffff)),
   );
+  const holes: { x: number; z: number }[] = [];
   const probe: GroundProbe = {
     groundAt: opts.ground ?? (() => 'gravel'),
     wetness: () => opts.wet ?? 0,
     softness: opts.soft ?? (() => 0),
     waterDepth: opts.water ?? (() => 0),
+    iceAt: (x, z) => (holes.some((h) => Math.hypot(x - h.x, z - h.z) < 3.5) ? 0 : (opts.ice ?? 0)),
+    breakIce: (x, z) => void holes.push({ x, z }),
   };
   const car = new VehicleSim(RAPIER, world, load(name), probe);
   car.place(0, 0.05, 0, 0);
@@ -41,7 +47,7 @@ function setup(name: string, opts: { slope?: number; ground?: (x: number, z: num
     // Angle between the body's up axis and the world's.
     return Math.acos(Math.min(1, 1 - 2 * (r.x * r.x + r.z * r.z)));
   };
-  return { world, car, run, tiltOf };
+  return { world, car, run, tiltOf, holes };
 }
 
 describe.each(['tgb11', 'tgb13', 'ltb4'])('%s', (name) => {
@@ -239,3 +245,53 @@ describe('water', () => {
 });
 
 const DRY_SECONDS = 4;
+
+describe('lake ice', () => {
+  /** A lake 1.4 m deep from 6 m ahead, its bed level with the ground: ice, if any, is the ground. */
+  const lake = { water: (_x: number, z: number) => (-z > 6 ? 1.4 : 0), ground: (_x: number, z: number) => (-z > 6 ? 'water' : 'gravel') };
+
+  it('drives across thick ice without getting wet, but it is slippery', () => {
+    const { car, run, holes } = setup('tgb11', { ...lake, ice: 0.5 });
+    run(1);
+    run(6, { throttle: 0.6 });
+    expect(car.body.translation().z).toBeLessThan(-15);
+    expect(holes.length).toBe(0);
+    expect(car.wading).toBe(0);
+    expect(car.wheels.every((w) => w.ground === 'ice')).toBe(true);
+    // Braking from speed on ice takes far longer than on gravel.
+    const stopping = (opts: object) => {
+      const s = setup('tgb11', opts);
+      s.run(1);
+      s.run(8, { throttle: 0.5 });
+      const from = s.car.body.translation().z, speed = s.car.speed;
+      for (let t = 0; t < 10 && s.car.speed > 0.3; t += 0.05) s.run(0.05, { brake: 1 });
+      return { distance: Math.abs(s.car.body.translation().z - from), speed };
+    };
+    const onIce = stopping({ ground: () => 'ice' });
+    const onGravel = stopping({});
+    expect(onIce.distance / onIce.speed ** 2).toBeGreaterThan((onGravel.distance / onGravel.speed ** 2) * 2);
+  });
+
+  it('breaks through thin ice into the water below', () => {
+    const { car, run, holes } = setup('tgb11', { ...lake, ice: 0.1 });
+    run(1);
+    run(8, { throttle: 0.6 });
+    expect(holes.length).toBeGreaterThan(0);
+    expect(car.wading).toBeGreaterThan(0.6);
+    expect(car.drowned).toBe(true);
+  });
+
+  it('carries a light vehicle where a heavy one goes through', () => {
+    const cross = (name: string) => {
+      const { car, run, holes } = setup(name, { ...lake, ice: 0.16 });
+      run(1);
+      run(6, { throttle: 0.5 });
+      return { broke: holes.length > 0, wet: car.wading > 0.3, needed: car.iceNeeded };
+    };
+    const light = cross('ltb4'), heavy = cross('tgb11');
+    expect(light.needed).toBeLessThan(0.16);
+    expect(heavy.needed).toBeGreaterThan(0.16);
+    expect(light.broke || light.wet).toBe(false);
+    expect(heavy.broke && heavy.wet).toBe(true);
+  });
+});

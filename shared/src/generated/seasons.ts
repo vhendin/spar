@@ -37,4 +37,8 @@ export interface SeasonKey {
    * Depth of lying snow on open ground at the reference height, metres. Precipitation falls as snow while there is any.
    */
   snow: number;
+  /**
+   * Thickness of the ice on lakes away from streams, metres; 0 when they are open.
+   */
+  ice: number;
 }

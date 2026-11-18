@@ -101,7 +101,17 @@ export interface GroundProbe {
   softness(x: number, z: number): number;
   /** Metres of water over the ground at a world position; 0 on land. */
   waterDepth(x: number, z: number): number;
+  /** Thickness of ice over that water, metres; 0 or left out where it is open. */
+  iceAt?(x: number, z: number): number;
+  /** The ice gave way here under a vehicle. */
+  breakIce?(x: number, z: number): void;
 }
+
+/**
+ * Kilograms ice bears per square centimetre of thickness squared (Gold's rule, with a
+ * margin): a vehicle of m kg needs sqrt(m / ICE_STRENGTH) cm of ice.
+ */
+export const ICE_STRENGTH = 7;
 
 /** Seconds the vehicle takes to roll back onto its wheels. */
 const RIGHTING_TIME = 1.2;
@@ -158,6 +168,10 @@ export class VehicleSim {
   readonly chassis = new Set<number>();
   private readonly connectionY: number[] = [];
   private readonly colliders: RAPIER.Collider[] = [];
+  /** Ice thick enough to carry this vehicle, metres. */
+  readonly iceNeeded: number;
+  /** Water under each wheel where it touches, once ice is taken into account. */
+  private readonly waterUnder: number[] = [];
   /** Whether the body still bumps into the ground; not while it sits deep in a lake. */
   private bodyMeetsGround = true;
   /** Seconds with the intake under water, or the engine drowned and out of it. */
@@ -174,6 +188,7 @@ export class VehicleSim {
   ) {
     const { mass, centerOfMass: com, box } = def.chassis;
     const [w, h, l] = box.size as [number, number, number];
+    this.iceNeeded = Math.sqrt(mass / ICE_STRENGTH) / 100;
     // A box's resistance to turning, eased a little: much of the weight sits low and central.
     const k = (mass / 12) * 0.8;
     this.body = world.createRigidBody(
@@ -360,7 +375,9 @@ export class VehicleSim {
       const normal = wheel.contact ? c.wheelContactNormal(i) : null;
       if (point) {
         Object.assign(wheel.point, { x: point.x, y: point.y, z: point.z });
-        wheel.ground = this.ground.groundAt(point.x, point.z);
+        const under = this.underfoot(point.x, point.z);
+        wheel.ground = under.ground;
+        this.waterUnder[i] = under.water;
       }
       if (normal) Object.assign(wheel.normal, { x: normal.x, y: normal.y, z: normal.z });
       wheel.grip = tireOnGround(def, wheel.ground, wet).grip;
@@ -462,7 +479,7 @@ export class VehicleSim {
       if (wheel.contact) {
         const { x, z } = wheel.point;
         wheel.softness = this.ground.softness(x, z);
-        const depth = this.ground.waterDepth(x, z);
+        const depth = this.waterUnder[i] ?? this.ground.waterDepth(x, z);
         wheel.water += Math.max(-DEPTH_RATE * dt, Math.min(DEPTH_RATE * dt, depth - wheel.water));
         const soft = wheel.softness;
         const settle = SETTLE * r * soft * Math.sqrt(Math.min(2, wheel.load / staticLoad));
@@ -508,6 +525,21 @@ export class VehicleSim {
     }
   }
 
+  /**
+   * The ground and the depth of water at a spot, with ice taken into account: ice thick
+   * enough for this vehicle is ground to drive on; thinner ice breaks, into the water below.
+   */
+  private underfoot(x: number, z: number): { ground: string; water: number } {
+    const ground = this.ground.groundAt(x, z);
+    const water = this.ground.waterDepth(x, z);
+    if (water <= 0) return { ground, water };
+    const ice = this.ground.iceAt?.(x, z) ?? 0;
+    if (ice <= 0) return { ground, water };
+    if (ice >= this.iceNeeded) return { ground: 'ice', water: 0 };
+    this.ground.breakIce?.(x, z);
+    return { ground, water };
+  }
+
   /** Lift and drag on the body where it is under water, worked out at the corners of its underside. */
   private pushThroughWater(dt: number): void {
     let level = 0, n = 0;
@@ -528,7 +560,7 @@ export class VehicleSim {
     for (const [cx, cz] of [[w / 2, l / 2], [-w / 2, l / 2], [w / 2, -l / 2], [-w / 2, -l / 2]] as const) {
       const [ox, oy, oz] = rotate(q, cx * 0.8, groundClearance, cz * 0.8);
       const x = p.x + ox, y = p.y + oy, z = p.z + oz;
-      if (this.ground.waterDepth(x, z) <= 0) continue;
+      if (this.underfoot(x, z).water <= 0) continue;
       const under = Math.min(tall, level - y);
       if (under <= 0) continue;
       // Velocity of this corner, then its parts along the body's own axes.

@@ -1009,6 +1009,15 @@ async function start(): Promise<void> {
       w.shading.snowLine.value = snowOverride ?? snowLine(env.month());
       // The ground turns with the season smoothly; the plants are recoloured every few days.
       w.shading.season.value.set(season.ground.summer, season.ground.autumn, season.ground.dormant);
+      // Lake ice: what the vehicle drives on, and how it is drawn, with the holes broken in it.
+      const ice = snowOverride === null ? season.ice : 0;
+      w.ground.ice = ice;
+      w.shading.ice.value = ice;
+      if (ice <= 0) w.ground.holes.length = 0; // open water again; next winter freezes over them
+      w.shading.iceHoles.forEach((v, k) => {
+        const h = w.ground.holes[k];
+        v.set(h?.x ?? 0, h?.z ?? 0, h?.radius ?? 0, 0);
+      });
       for (const target of w.vegetation ? [w.shading, w.vegetation.shading] : [w.shading]) {
         target.snowDepth.value = snowDepth;
         target.snowReference.value = CALENDAR.snowHeight.reference;

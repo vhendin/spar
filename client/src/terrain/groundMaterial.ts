@@ -10,7 +10,12 @@ import {
   pow, reflect, select, smoothstep, texture, time, uniform, uniformArray, uv, vec2, vec3, vec4,
 } from 'three/tsl';
 import { cloudShadow } from '../sky/clouds';
-import type { RegionIndex } from '@spar/shared';
+import type { GroundClasses, RegionIndex } from '@spar/shared';
+import groundDefs from '../../../defs/ground.json';
+
+const ICE = (groundDefs as unknown as GroundClasses).ice;
+/** Holes broken through the ice that are drawn at once. */
+export const ICE_HOLES = 8;
 
 /** Views switched with the M key: the finished ground, then each raw mask. */
 export const GROUND_VIEWS = ['shaded', 'biome mask', 'surface mask', 'wetness mask', 'canopy mask', 'slope'] as const;
@@ -129,6 +134,11 @@ export class GroundShading {
   readonly snowDepth = uniform(0);
   readonly snowReference = uniform(600);
   readonly snowGain = uniform(0.12);
+  /** Thickness of lake ice away from streams, metres; 0 while the lakes are open. */
+  readonly ice = uniform(0);
+  /** Holes broken through the ice: x, z, radius (0 for none). */
+  readonly iceHoles = Array.from({ length: ICE_HOLES }, () => new THREE.Vector4());
+  private readonly holeNodes = uniformArray<'vec4'>(this.iceHoles, 'vec4');
   /** Shares of the summer, autumn and withered ground colours, adding up to 1 (see seasonAt). */
   readonly season = uniform(new THREE.Vector3(1, 0, 0));
 
@@ -141,6 +151,7 @@ export class GroundShading {
   private readonly surfaceRoughness;
   private readonly surfaceWater;
   private readonly waterId: number;
+  private readonly streamId: number;
   private readonly forestId: number;
   private readonly canopyScale: number;
 
@@ -155,6 +166,7 @@ export class GroundShading {
     this.surfaceRoughness = uniformArray<'float'>(byId(surfaces, SURFACE_ROUGHNESS, -1), 'float');
     this.surfaceWater = uniformArray<'float'>(byId(surfaces, SURFACE_WATER, 0), 'float');
     this.waterId = biomes.find((b) => b.name === 'water')?.id ?? -1;
+    this.streamId = surfaces.find((c) => c.name === 'stream')?.id ?? -1;
     this.forestId = biomes.find((b) => b.name === 'forest')?.id ?? -1;
     this.canopyScale = channels.find((c) => c.name === 'canopy')?.scale ?? 0.25;
   }
@@ -163,9 +175,10 @@ export class GroundShading {
    * A material reading a square RGBA mask texture `size` texels wide through the mesh's
    * uv (R biome id, G surface id and road coverage, B wetness, A canopy height; see
    * buildNodeMask). With `mask` null, every
-   * mesh supplies its own texture as `userData.mask`.
+   * mesh supplies its own texture as `userData.mask`, and the metres one texel spans as
+   * `userData.texel` (otherwise `texel`).
    */
-  material(size: number, mask: THREE.Texture | null): THREE.MeshStandardNodeMaterial {
+  material(size: number, mask: THREE.Texture | null, texel = 2): THREE.MeshStandardNodeMaterial {
     const placeholder = new THREE.DataTexture(new Uint8Array(4), 1, 1);
     const maskNode = texture(mask ?? placeholder);
     // Runs before each mesh is drawn and points the shader at that mesh's texture.
@@ -174,6 +187,7 @@ export class GroundShading {
       if (mask === null && own) maskNode.value = own;
       return 0;
     });
+    const texelMetres = uniform(texel).onObjectUpdate(({ object }) => (object?.userData as { texel?: number } | undefined)?.texel ?? texel);
 
     const ground = positionWorld.xz;
     const rock = float(1).sub(smoothstep(0.62, 0.8, normalWorld.y)); // bare rock from about 37° to 52°
@@ -319,8 +333,46 @@ export class GroundShading {
         const edge = smoothstep(0.3, 0.55, water).mul(float(1).sub(smoothstep(0.65, 0.95, water)));
         const rapids = streamShare.mul(smoothstep(0.04, 0.14, float(1).sub(normalWorld.y)));
         const foam = max(edge.mul(smoothstep(0.05, 0.25, lap.add(edge.mul(0.3)))), rapids.mul(smoothstep(-0.2, 0.2, lap))).clamp(0, 1);
-        waterColor.assign(vec4(mix(body.mul(float(1).sub(fresnel)), vec3(0.82, 0.86, 0.86), foam), shoreline));
-        waterGlow.assign(this.sky.mul(fresnel).mul(0.85).add(sunLight.mul(sparkle)).mul(float(1).sub(foam)).mul(shoreline));
+        // Ice: thinner near streams, which keep the water moving, and on the streams themselves;
+        // none where a vehicle broke through. Thick ice carries the snow; thin ice shows dark.
+        const iceThick = float(0).toVar();
+        If(this.ice.greaterThan(0), () => {
+          const isStream = (t: THREE.Node<'vec4'>) => {
+            const packed = t.y.mul(255).add(0.5).floor();
+            const surface = packed.div(32).floor();
+            return select(int(surface).equal(int(this.streamId)).and(packed.sub(surface.mul(32)).greaterThan(13)), float(1), float(0));
+          };
+          const look = (dx: number, dy: number, metres: number) =>
+            isStream(maskNode.load(ivec2(clamp(floor(at.add(vec2(dx, dy).mul(metres).div(texelMetres))), 0, size - 1))));
+          let distance: THREE.Node<'float'> = float(2 * ICE.reach);
+          for (const metres of [44, 30, 16, 6]) {
+            let found: THREE.Node<'float'> = float(0);
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]] as const) found = max(found, look(dx, dy, metres));
+            distance = select(found.greaterThan(0), float(metres), distance);
+          }
+          const share = select(streamShare.greaterThan(0.5), float(ICE.stream), float(ICE.mouth).add(smoothstep(0, 2 * ICE.reach, distance).mul(1 - ICE.mouth)));
+          let open: THREE.Node<'float'> = float(0);
+          for (let h = 0; h < ICE_HOLES; h++) {
+            const hole = this.holeNodes.element(h);
+            const off = positionWorld.xz.sub(vec2(hole.x, hole.y)).length();
+            open = max(open, select(hole.z.greaterThan(0), float(1).sub(smoothstep(hole.z.sub(0.6), hole.z, off)), float(0)));
+          }
+          iceThick.assign(this.ice.mul(share).mul(float(1).sub(open)));
+        });
+        const frozen = smoothstep(0.02, 0.05, iceThick);
+        // Bare ice is smooth, not rippled, and mottled with frozen-in bubbles and cracks.
+        const mottle = float(0.88).add(mx_noise_float(ground.mul(0.15)).mul(0.12)).add(smoothstep(0.42, 0.5, mx_noise_float(ground.mul(0.6))).mul(0.15));
+        const clearIce = mix(vec3(0.06, 0.09, 0.11), vec3(0.3, 0.36, 0.4), smoothstep(0.05, 0.3, iceThick)).mul(mottle);
+        const iceFresnel = float(0.05).add(pow(float(1).sub(max(view.y, 0)), 4).mul(0.7)).clamp(0, 1);
+        const snowOnIce = smoothstep(0.03, 0.12, this.snowDepth).mul(smoothstep(0.12, 0.22, iceThick));
+        const iceColor = mix(clearIce, snowColor, snowOnIce);
+        const open = float(1).sub(frozen);
+        waterColor.assign(vec4(mix(mix(body.mul(float(1).sub(fresnel)), vec3(0.82, 0.86, 0.86), foam), iceColor, frozen), shoreline));
+        waterGlow.assign(
+          this.sky.mul(fresnel).mul(0.85).add(sunLight.mul(sparkle)).mul(float(1).sub(foam)).mul(open)
+            .add(this.sky.mul(iceFresnel).mul(0.45).mul(frozen).mul(float(1).sub(snowOnIce)))
+            .mul(shoreline),
+        );
       });
       return { color: waterColor, glow: waterGlow };
     };

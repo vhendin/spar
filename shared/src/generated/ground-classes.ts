@@ -48,6 +48,27 @@ export interface GroundClasses {
      */
     lakeShelf: number;
   };
+  /**
+   * How lake ice varies and what it bears. Its thickness through the year is in defs/seasons.json; near where a stream runs in or out, moving water keeps it thinner.
+   */
+  ice: {
+    /**
+     * Share of the full thickness right where a stream meets the ice.
+     */
+    mouth: number;
+    /**
+     * Metres from a stream over which the ice thickens back towards full.
+     */
+    reach: number;
+    /**
+     * Share of the full thickness on streams themselves.
+     */
+    stream: number;
+    /**
+     * Weight in kilograms the ice bears per square centimetre of thickness squared: a vehicle of m kg needs sqrt(m / strength) cm.
+     */
+    strength: number;
+  };
 }
 export interface GroundClass {
   id: number;

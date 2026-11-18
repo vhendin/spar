@@ -11,7 +11,7 @@ import { stump } from './stump';
 export const GENERATORS: Record<Species['generator'], Generator> = { conifer, broadleaf, shrub, grass, boulder, stump };
 
 /** High summer, for when no season is given. */
-export const SUMMER: SeasonState = { foliage: { spring: 0, summer: 1, autumn: 0, winter: 0 }, leaves: 1, ground: { summer: 1, autumn: 0, dormant: 0 }, snow: 0 };
+export const SUMMER: SeasonState = { foliage: { spring: 0, summer: 1, autumn: 0, winter: 0 }, leaves: 1, ground: { summer: 1, autumn: 0, dormant: 0 }, snow: 0, ice: 0 };
 
 /**
  * Builds one individual of a species, in the colours of `season`. Variant numbers give

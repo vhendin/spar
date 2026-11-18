@@ -17,6 +17,23 @@ const ON_SURFACE = 110;
 const SHORE_SEARCH = 14;
 /** Water depths remembered per mask sample, so the shore search runs once per spot. */
 const DEPTH_CACHE = 4096;
+/** Holes broken through the ice that are remembered (and drawn); older ones freeze over. */
+const MAX_HOLES = 8;
+/** Radius of the hole a vehicle breaks, metres. */
+const HOLE_RADIUS = 3.5;
+
+/** How far a spot `distance` metres from the nearest stream is from the ice's full thickness: 0..1. */
+export function iceShare(distance: number): number {
+  const { mouth, reach } = GROUND.ice;
+  const t = Math.min(1, Math.max(0, distance / (2 * reach)));
+  return mouth + (1 - mouth) * t * t * (3 - 2 * t);
+}
+
+export interface IceHole {
+  x: number;
+  z: number;
+  radius: number;
+}
 
 interface HeightTile {
   collider: RAPIER.Collider | null;
@@ -28,6 +45,10 @@ interface HeightTile {
 export class GroundStore implements GroundProbe {
   /** 0 dry to 1 soaked; the weather sets this in a later step. */
   rain = 0;
+  /** Thickness of lake ice away from streams this time of year, metres (see seasonAt). */
+  ice = 0;
+  /** Where vehicles have broken through the ice, newest last. */
+  readonly holes: IceHole[] = [];
 
   private readonly level: RegionIndex['heights']['levels'][number];
   private readonly maskLevel: RegionIndex['masks']['levels'][number];
@@ -38,6 +59,7 @@ export class GroundStore implements GroundProbe {
   private readonly surfaceName: string[] = [];
   private readonly planes: { biome: number; surface: number; road: number; wetness: number };
   private readonly depths = new Map<number, number>();
+  private readonly streamDistances = new Map<number, number>();
 
   constructor(
     private readonly R: typeof RAPIER,
@@ -182,6 +204,61 @@ export class GroundStore implements GroundProbe {
       this.depths.set(key, depth);
     }
     return depth;
+  }
+
+  /**
+   * Thickness of the ice over water at a spot, metres: thinner near streams, which keep it
+   * moving, and none where it has been broken.
+   */
+  iceAt(x: number, z: number): number {
+    if (this.ice <= 0) return 0;
+    for (const h of this.holes) if (Math.hypot(x - h.x, z - h.z) < h.radius) return 0;
+    const s = this.sample(x, z);
+    if (!s) return this.ice;
+    const { mask, at, plane } = s;
+    if (mask[this.planes.road * plane + at]! >= ON_SURFACE) {
+      const name = this.surfaceName[mask[this.planes.surface * plane + at]!];
+      if (name === 'stream') return this.ice * GROUND.ice.stream;
+      if (name === 'pool') return this.ice;
+    }
+    return this.ice * iceShare(this.streamDistance(x, z));
+  }
+
+  /** A vehicle broke through the ice here: it stays open (until the newest holes push it out). */
+  breakIce(x: number, z: number): void {
+    if (this.holes.some((h) => Math.hypot(x - h.x, z - h.z) < h.radius)) return;
+    this.holes.push({ x, z, radius: HOLE_RADIUS });
+    if (this.holes.length > MAX_HOLES) this.holes.shift();
+  }
+
+  /** Metres to the nearest stream, searched as far as it matters for the ice. */
+  private streamDistance(x: number, z: number): number {
+    const spacing = this.maskLevel.spacing;
+    const ci = Math.round(x / spacing), cj = Math.round(z / spacing);
+    const key = ci * 65536 + cj;
+    const known = this.streamDistances.get(key);
+    if (known !== undefined) return known;
+    const cells = Math.ceil((2 * GROUND.ice.reach) / spacing);
+    let nearest = cells + 1;
+    let unknown = false;
+    search: for (let r = 0; r <= cells; r++) {
+      for (let k = -r; k <= r; k++) {
+        for (const [di, dj] of r === 0 ? ([[0, 0]] as const) : ([[k, -r], [k, r], [-r, k], [r, k]] as const)) {
+          const s = this.sample((ci + di) * spacing, (cj + dj) * spacing);
+          if (!s) unknown = true;
+          else if (s.mask[this.planes.road * s.plane + s.at]! >= ON_SURFACE && this.surfaceName[s.mask[this.planes.surface * s.plane + s.at]!] === 'stream') {
+            nearest = Math.min(nearest, Math.hypot(di, dj));
+            if (nearest <= r) break search;
+          }
+        }
+      }
+    }
+    const distance = nearest * spacing;
+    if (!unknown) {
+      if (this.streamDistances.size > DEPTH_CACHE) this.streamDistances.clear();
+      this.streamDistances.set(key, distance);
+    }
+    return distance;
   }
 
   /** The land cover's ground at a spot, or null where its mask is not loaded. */

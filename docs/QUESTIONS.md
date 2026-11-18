@@ -55,18 +55,28 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 - **Snow calendar.** Snow from late October, 0.4 m by mid-December, 0.75 m at the end of March,
   gone by mid-May at 600 m; 12 % deeper per hundred metres up. Right for Vålådalen?
-- **Open lakes in winter.** Lakes stay open water while everything around is white. Frozen,
-  snow-covered lakes belong with the ice step; do that next?
 - **Roofs, fences and cabins** carry no snow yet. Wanted?
 - **Driving on snow** still uses the summer grip of the ground underneath (the snow-driving step).
 - **Bare birches** under snow read as grey-brown lumps at a distance; see the bare-tree question above.
+
+### Lake ice (this commit)
+
+- **Ice calendar.** Lakes freeze mid-November, 25 cm by mid-December, 65 cm at the end of
+  March, open again early June. Right?
+- **What the ice carries.** Gold's rule with a margin (7 kg per cm² squared): the 4×4 needs
+  18.5 cm, the 6×6 20 cm, the light 4×4 14 cm. So in early December the light one can cross
+  where the military ones go through. Too strict, too lenient?
+- **Thin ice near streams.** A quarter of the full thickness where a stream runs in or out,
+  back to full about 50 m away; on streams themselves 30 %. It shows dark and bare of snow.
+  Enough warning, or should it be more obvious (or less)?
+- **Holes.** A break-through leaves a 3.5 m hole of open water; the last 8 are kept until the
+  spring thaw. Should holes freeze over again after a few in-game days?
+- **Grip on ice** is 0.15, the same with snow on top (until the snow-driving step).
 
 ### Seasons: later steps
 
 - **Deep snow.** Should it be able to get you stuck the way a bog does (sinking, digging in), or
   only change grip?
-- **Frozen lakes.** Drivable ice, with thin ice near inlets and outlets in late autumn and spring
-  that can break and drown the engine?
 
 ### What next
 
@@ -76,6 +86,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
+- Frozen lakes: yes, drivable, with thin ice near streams that breaks and drowns the engine.
 - Seasons: the colours first (trees, plants and ground through the year), winter snow, snow
   driving and ice after.
 - Light 4×4 body: a hard top, not open, so there is no empty driver's seat to see.

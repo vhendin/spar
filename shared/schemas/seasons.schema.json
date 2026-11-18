@@ -21,7 +21,8 @@
           "foliage",
           "leaves",
           "ground",
-          "snow"
+          "snow",
+          "ice"
         ],
         "properties": {
           "day": {
@@ -57,6 +58,11 @@
           },
           "snow": {
             "description": "Depth of lying snow on open ground at the reference height, metres. Precipitation falls as snow while there is any.",
+            "type": "number",
+            "minimum": 0
+          },
+          "ice": {
+            "description": "Thickness of the ice on lakes away from streams, metres; 0 when they are open.",
             "type": "number",
             "minimum": 0
           }
