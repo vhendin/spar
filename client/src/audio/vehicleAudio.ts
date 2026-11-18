@@ -401,15 +401,18 @@ export class VehicleAudio {
         this.thud(50, 1.2 + 0.6 * s, 0.16);
         this.ring([140, 389, 812, 1490], 0.18 + 0.25 * s, 0.13);
         this.burst(b.gravel, 'bandpass', 1500, 0.8, 0.6 * s + 0.15, 0.2, 1.2);
-        this.burst(b.crackle, 'bandpass', 3000, 1, 0.5 * s, 0.25, 1.8, 0.04);
-        this.burst(b.white, 'highpass', 5000, 0.7, 0.15 * s, 0.3, 1, 0.05);
+        this.burst(b.crackle, 'bandpass', 1800, 1, 0.4 * s, 0.2, 1.3, 0.04);
         break;
       case 'tree':
-        // A trunk: a dull wooden knock, the bumper ringing, the crown shaking.
-        this.thud(85, 0.9 + 0.6 * s, 0.1);
-        this.burst(b.white, 'bandpass', 450, 1.5, 0.5 * s + 0.15, 0.05);
-        this.ring([210, 580, 1130], 0.12 + 0.18 * s, 0.1);
-        this.burst(b.white, 'highpass', 3000, 0.5, 0.15 + 0.25 * s, 0.35, 1, 0.03);
+        // A trunk does not give: the whole vehicle slams to a stop against it. A deep thud,
+        // the bumper and panels crumpling (a dull dent, not a bell), a hard knock of wood,
+        // and only a faint rustle from the crown.
+        this.thud(48, 1.4 + 0.6 * s, 0.18 + 0.06 * s);
+        this.thud(105, 0.7 + 0.5 * s, 0.07);
+        this.burst(b.white, 'lowpass', 350, 0.8, 0.6 * s + 0.25, 0.09);
+        this.burst(b.crackle, 'bandpass', 650, 1.4, 0.45 * s + 0.15, 0.08, 0.7);
+        this.ring([92, 238, 455], 0.14 + 0.2 * s, 0.07);
+        this.burst(b.white, 'lowpass', 1100, 0.6, 0.05 + 0.08 * s, 0.25, 1, 0.08);
         break;
       case 'rock':
         // Stone: a hard crack, metal ringing, grit.
