@@ -40,6 +40,16 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   pressure count, so it floats better over bog?
 - **Colour.** Faded red. Another colour, or several to choose from?
 
+### Seasons (proposed, not started)
+
+- **Choosing the season.** Pick a month in the start menu (and the time menu), defaulting to
+  today's date? At one day per 30 minutes a season barely moves during a session.
+- **Deep snow.** Should it be able to get you stuck the way a bog does (sinking, digging in), or
+  only change grip?
+- **Frozen lakes.** Drivable ice, with thin ice near inlets and outlets in late autumn and spring
+  that can break and drown the engine?
+- **Order.** Winter first (the biggest change), or the cheap all-season colours first?
+
 ### What next
 
 - **Something to do on a drive:** timed routes, summit challenges, fuel and depots?
