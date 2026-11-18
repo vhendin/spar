@@ -89,9 +89,12 @@ export const broadleaf: Generator = (params, colors, seed, detail) => {
   const order = centres.map((_, k) => k).sort((a, b) => blobSize[b]! - blobSize[a]!);
   const kept = full ? order : order.slice(0, Math.max(2, Math.round(blobCount / 3)));
   const solid = ICO;
+  // Out of leaf the blobs thin to a haze of twigs, in the winter colour; not much smaller, or
+  // they come apart into separate lumps.
+  const inLeaf = 0.82 + 0.18 * colors.leaves;
   for (const k of kept) {
     const [x, y, z] = centres[k]!;
-    const r = blobSize[k]! * (full ? 1 : 1.25);
+    const r = blobSize[k]! * (full ? 1 : 1.25) * inLeaf;
     const start = mesh.vertexCount;
     solid.vertices.forEach(([vx, vy, vz], v) => {
       const bump = full ? bumps[k]![v]! : 1;

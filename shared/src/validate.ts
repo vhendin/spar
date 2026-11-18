@@ -12,7 +12,9 @@ import type { RegionIndex } from './generated/region-index';
 import objectSchema from '../schemas/object.schema.json' with { type: 'json' };
 import speciesSchema from '../schemas/species.schema.json' with { type: 'json' };
 import vehicleSchema from '../schemas/vehicle.schema.json' with { type: 'json' };
+import seasonsSchema from '../schemas/seasons.schema.json' with { type: 'json' };
 import vegetationRulesSchema from '../schemas/vegetation-rules.schema.json' with { type: 'json' };
+import type { SeasonCalendar } from './generated/seasons';
 import type { ObjectDef } from './generated/object';
 import type { Species } from './generated/species';
 import type { VegetationRules } from './generated/vegetation-rules';
@@ -30,3 +32,4 @@ export const isSpecies = ajv.compile(speciesSchema) as ValidateFunction<Species>
 export const isObjectDef = ajv.compile(objectSchema) as ValidateFunction<ObjectDef>;
 export const isVegetationRules = ajv.compile(vegetationRulesSchema) as ValidateFunction<VegetationRules>;
 export const isVehicleDef = ajv.compile(vehicleSchema) as ValidateFunction<VehicleDef>;
+export const isSeasonCalendar = ajv.compile(seasonsSchema) as ValidateFunction<SeasonCalendar>;

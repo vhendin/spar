@@ -43,3 +43,18 @@ export function atLocalHour(utcMs: number, utcOffset: number, hour: number): num
   const midnight = Math.floor(local / 86400000) * 86400000;
   return midnight + Math.round(hour * 3600000) - utcOffset * 3600000;
 }
+
+/** The day of the year on the region's clocks, 1 for 1 January, with the time of day as a fraction. */
+export function dayOfYear(utcMs: number, utcOffset: number): number {
+  const local = utcMs + utcOffset * 3600000;
+  const year = new Date(local).getUTCFullYear();
+  return (local - Date.UTC(year, 0, 1)) / 86400000 + 1;
+}
+
+/** The same time of day on `day` of the same year (1 is 1 January), as UTC milliseconds. */
+export function onDayOfYear(utcMs: number, utcOffset: number, day: number): number {
+  const local = utcMs + utcOffset * 3600000;
+  const year = new Date(local).getUTCFullYear();
+  const timeOfDay = ((local % 86400000) + 86400000) % 86400000;
+  return Date.UTC(year, 0, 1) + (Math.round(day) - 1) * 86400000 + timeOfDay - utcOffset * 3600000;
+}

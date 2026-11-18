@@ -40,15 +40,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   pressure count, so it floats better over bog?
 - **Colour.** Faded red. Another colour, or several to choose from?
 
-### Seasons (proposed, not started)
+### Seasons: colours (this commit)
 
-- **Choosing the season.** Pick a month in the start menu (and the time menu), defaulting to
-  today's date? At one day per 30 minutes a season barely moves during a session.
+- **Bare trees.** Out of leaf, birch, aspen, rowan and alder crowns turn a grey-brown haze of
+  the same shape. Reads as winter, or as dead trees? Real twigs would cost more triangles.
+- **Calendar.** Leaves out 1–15 June, autumn colours peak around 15 September, bare from early
+  October (`defs/seasons.json`). The same at every height, though spring comes later and autumn
+  earlier up the fell. Right for Vålådalen? Should height shift the dates?
+- **Autumn heath.** Red-brown on the open fell in September. Too strong?
+- **Choosing the season.** The time panel (T) has a date slider and Winter/Spring/Summer/Autumn
+  buttons. Also wanted in the start menu? The server still starts on 15 August.
+- **Winter without snow.** Until snow comes (step 3), February looks like late October:
+  withered ground, bare trees, snow only on the high fells.
+
+### Seasons: later steps
+
 - **Deep snow.** Should it be able to get you stuck the way a bog does (sinking, digging in), or
   only change grip?
 - **Frozen lakes.** Drivable ice, with thin ice near inlets and outlets in late autumn and spring
   that can break and drown the engine?
-- **Order.** Winter first (the biggest change), or the cheap all-season colours first?
 
 ### What next
 
@@ -58,6 +68,8 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
+- Seasons: the colours first (trees, plants and ground through the year), winter snow, snow
+  driving and ice after.
 - Light 4×4 body: a hard top, not open, so there is no empty driver's seat to see.
 
 - Multiplayer (step 6) waits until single player is complete.

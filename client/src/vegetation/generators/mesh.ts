@@ -13,6 +13,11 @@ export interface GeneratorColors {
   barkTop: Rgb;
   foliage: Rgb;
   accent: Rgb;
+  /**
+   * How much of a leafy crown is in leaf, 0 bare to 1 full. A generator must build the same
+   * number of vertices whatever this is, so a mesh can be updated in place as the season turns.
+   */
+  leaves: number;
 }
 
 /** A unit-sized mesh: the base sits at y = 0 and the top near y = 1. */

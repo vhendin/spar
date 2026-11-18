@@ -1,10 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Species } from '@spar/shared';
+import { seasonAt, type SeasonCalendar, type Species } from '@spar/shared';
 import { generate } from './index';
 
 const dir = join(import.meta.dirname, '../../../../defs/species');
+const calendar = JSON.parse(readFileSync(join(import.meta.dirname, '../../../../defs/seasons.json'), 'utf8')) as SeasonCalendar;
 const all = readdirSync(dir).sort().map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')) as Species);
 
 function bounds(positions: Float32Array) {
@@ -19,6 +20,22 @@ function bounds(positions: Float32Array) {
 
 describe.each(all.map((s) => [s.name, s] as const))('%s', (_, species) => {
   const tree = species.generator === 'conifer' || species.generator === 'broadleaf';
+
+  it('keeps its shape through the year, so the meshes can be recoloured in place', () => {
+    for (const detail of ['full', 'low'] as const) {
+      const summer = generate(species, 0, detail, seasonAt(calendar, 200));
+      for (const day of [30, 160, 258, 280]) {
+        const other = generate(species, 0, detail, seasonAt(calendar, day));
+        expect(other.positions.length).toBe(summer.positions.length);
+        expect(Array.from(other.indices)).toEqual(Array.from(summer.indices));
+      }
+    }
+    // Leafy trees go bare in winter: the crown shrinks and takes the winter colour.
+    if (species.deciduous && species.generator === 'broadleaf') {
+      const top = (m: { positions: Float32Array }) => bounds(m.positions).reach;
+      expect(top(generate(species, 0, 'full', seasonAt(calendar, 30)))).toBeLessThan(top(generate(species, 0, 'full', seasonAt(calendar, 200))) * 0.95);
+    }
+  });
 
   it('builds sound unit-height meshes for every variant', () => {
     for (let variant = 0; variant < species.variants; variant++) {

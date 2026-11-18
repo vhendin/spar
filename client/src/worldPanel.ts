@@ -20,6 +20,20 @@ const WEATHERS: [label: string, value: NonNullable<SetWorld['weather']>][] = [
   ['Rain', 'rain'],
 ];
 
+/** Quick jumps to the middle of each season in these fells; the year itself is unchanged. */
+const SEASONS: [label: string, day: number][] = [
+  ['Winter', 46],
+  ['Spring', 158],
+  ['Summer', 196],
+  ['Autumn', 258],
+];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "15 Sep" for a day of the year (1 is 1 January, in a year that is not a leap year). */
+const dateText = (day: number): string => {
+  const d = new Date(Date.UTC(2025, 0, Math.floor(day)));
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+};
+
 const clockText = (hour: number): string => {
   const minutes = Math.round(hour * 60) % 1440;
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
@@ -28,6 +42,9 @@ const clockText = (hour: number): string => {
 export class WorldPanel {
   private readonly slider: HTMLInputElement;
   private readonly hourLabel: HTMLSpanElement;
+  private readonly daySlider: HTMLInputElement;
+  private readonly dayLabel: HTMLSpanElement;
+  private dragging = false;
   private readonly note: HTMLParagraphElement;
   private readonly speedButtons: HTMLButtonElement[] = [];
   private readonly weatherButtons: HTMLButtonElement[] = [];
@@ -70,6 +87,22 @@ export class WorldPanel {
       this.askHour(Number(this.slider.value), true);
       this.slider.blur();
     });
+
+    const date = row('Time of year');
+    this.daySlider = Object.assign(document.createElement('input'), { type: 'range', min: '1', max: '365', step: '1' });
+    this.dayLabel = document.createElement('span');
+    this.dayLabel.className = 'value';
+    date.append(this.daySlider, this.dayLabel);
+    this.daySlider.addEventListener('pointerdown', () => (this.dragging = true));
+    this.daySlider.addEventListener('input', () => (this.dayLabel.textContent = dateText(Number(this.daySlider.value))));
+    // Sent on letting go: every new day recolours the plants.
+    this.daySlider.addEventListener('change', () => {
+      this.dragging = false;
+      this.send({ type: 'set_world', day: Number(this.daySlider.value) });
+      this.daySlider.blur();
+    });
+    const seasons = row('');
+    for (const [label, day] of SEASONS) seasons.append(this.button(label, () => this.send({ type: 'set_world', day })));
 
     const speed = row('Clock');
     for (const [label, dayMinutes] of SPEEDS) {
@@ -120,6 +153,11 @@ export class WorldPanel {
     if (!this.sliding) {
       this.slider.value = String(hour);
       this.hourLabel.textContent = clockText(hour);
+    }
+    if (!this.dragging) {
+      const day = Math.floor(env.dayOfYear());
+      this.daySlider.value = String(day);
+      this.dayLabel.textContent = dateText(day);
     }
     const dayMinutes = env.rate > 0 ? 1440 / env.rate : 0;
     for (const b of this.speedButtons) b.classList.toggle('on', Math.abs(Number(b.dataset.minutes) - dayMinutes) < 0.5);

@@ -1,0 +1,13 @@
+{
+  "calendar": [
+    { "day": 130, "foliage": "winter", "leaves": 0, "ground": "dormant" },
+    { "day": 152, "foliage": "spring", "leaves": 0.35, "ground": "dormant" },
+    { "day": 166, "foliage": "spring", "leaves": 1, "ground": "summer" },
+    { "day": 185, "foliage": "summer", "leaves": 1, "ground": "summer" },
+    { "day": 234, "foliage": "summer", "leaves": 1, "ground": "summer" },
+    { "day": 252, "foliage": "autumn", "leaves": 1, "ground": "autumn" },
+    { "day": 263, "foliage": "autumn", "leaves": 0.85, "ground": "autumn" },
+    { "day": 276, "foliage": "winter", "leaves": 0.15, "ground": "dormant" },
+    { "day": 286, "foliage": "winter", "leaves": 0, "ground": "dormant" }
+  ]
+}

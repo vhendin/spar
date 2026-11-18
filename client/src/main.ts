@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
-import { parseLocalTime, type RegionIndex, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
+import { parseLocalTime, seasonAt, type RegionIndex, type SeasonCalendar, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
 import { fillCredits } from './credits';
 import { Features } from './features/features';
 import { FlyCamera } from './flyCamera';
@@ -40,12 +40,17 @@ import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu } from './ui/startMenu';
 import { StartStore } from './ui/starts';
+import seasonDefs from '../../defs/seasons.json';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
 /** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
 const STEP = 1 / 60;
 
+const CALENDAR = seasonDefs as SeasonCalendar;
+/** Plants are recoloured when the season has moved on this many days; the ground follows smoothly. */
+const SEASON_STEP = 3;
+const seasonStep = (day: number): number => Math.round(day / SEASON_STEP) * SEASON_STEP;
 const VEHICLES = import.meta.glob<VehicleDef>('../../defs/vehicles/*.json', { eager: true, import: 'default' });
 
 const canvas = document.querySelector<HTMLCanvasElement>('#view')!;
@@ -118,6 +123,8 @@ interface World {
   shading: GroundShading;
   environment: Environment;
   vegetation: Vegetation | null;
+  /** The day of the year the plants are coloured for, in SEASON_STEP steps. */
+  seasonDay: number;
   features: Features | null;
   physics: RAPIER.World;
   ground: GroundStore;
@@ -355,7 +362,7 @@ async function start(): Promise<void> {
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
-      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough);
+      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough, seasonAt(CALENDAR, seasonStep(environment.dayOfYear())));
       scene.add(vegetation.group);
       // ?atlas=1 stands the far-tree pictures up in front of the start position.
       if (params.get('atlas') === '1') {
@@ -493,7 +500,7 @@ async function start(): Promise<void> {
       starts.editable = info?.enabled ?? false;
       start.setMaker(info?.enabled ?? false);
     });
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, spray, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
     if (!direct) showStart(world);
@@ -995,6 +1002,14 @@ async function start(): Promise<void> {
       w.shading.windDirection.value.copy(env.windVector);
       // ?snow=<metres> puts the snow line there instead of where the month has it.
       w.shading.snowLine.value = snowOverride ?? snowLine(env.month());
+      // The ground turns with the season smoothly; the plants are recoloured every few days.
+      const day = env.dayOfYear(now);
+      const season = seasonAt(CALENDAR, day);
+      w.shading.season.value.set(season.ground.summer, season.ground.autumn, season.ground.dormant);
+      if (seasonStep(day) !== w.seasonDay) {
+        w.seasonDay = seasonStep(day);
+        w.vegetation?.setSeason(seasonAt(CALENDAR, w.seasonDay));
+      }
       w.ground.rain = env.weather.wetness;
       if (w.vegetation) {
         w.vegetation.shading.wind.value = env.weather.wind;

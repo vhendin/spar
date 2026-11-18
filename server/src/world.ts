@@ -1,4 +1,4 @@
-import { atLocalHour, createRng, holdWeather, newWeather, stepWeather, type ClientMessage, type ServerMessage, type WeatherModel } from '@spar/shared';
+import { atLocalHour, createRng, onDayOfYear, holdWeather, newWeather, stepWeather, type ClientMessage, type ServerMessage, type WeatherModel } from '@spar/shared';
 import type { ServerConfig } from './config';
 
 type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
@@ -34,7 +34,8 @@ export class WorldState {
 
   /** A player changed the clock or the weather; fields left out stay as they are. */
   set(change: SetWorld): void {
-    const utc = this.utc();
+    let utc = this.utc();
+    if (change.day !== undefined) utc = onDayOfYear(utc, this.config.utcOffset, change.day);
     this.anchorAt = this.now();
     this.anchorUtc = change.hour === undefined ? utc : atLocalHour(utc, this.config.utcOffset, change.hour);
     if (change.dayMinutes !== undefined) this.rate = change.dayMinutes > 0 ? 86400 / (change.dayMinutes * 60) : 0;

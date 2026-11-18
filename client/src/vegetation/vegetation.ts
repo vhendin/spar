@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
-import type { RegionIndex, Species } from '@spar/shared';
+import type { RegionIndex, SeasonState, Species } from '@spar/shared';
 import { RULES, SPECIES } from './defs';
-import { generate, type Detail, type MeshData } from './generators';
+import { generate, SUMMER, type Detail, type MeshData } from './generators';
 import { copyReach, needsCopy, REFILL_MOVE, shownBy } from './coverage';
 import { bakeImpostors, type ImpostorAtlas } from './impostors';
 import type { SeeThrough } from '../seeThrough';
@@ -170,6 +170,14 @@ export class Vegetation {
   private tilesDirty = false;
   private patchesDirty = false;
   private warned = false;
+  /** Every generated mesh, to be recoloured when the season turns, and the ones pictured far away. */
+  private readonly sources: { species: number; variant: number; detail: Detail; geometry: THREE.BufferGeometry }[] = [];
+  private readonly pictures: THREE.BufferGeometry[] = [];
+  private renderer!: THREE.WebGPURenderer;
+  private season: SeasonState;
+  /** A recolouring under way, and the season wanted after it if it changed meanwhile. */
+  private recolouring = false;
+  private nextSeason: SeasonState | null = null;
   /** Trees knocked over by a vehicle, by permanent name, with the way they fell. */
   private readonly felled = new Map<string, [number, number]>();
 
@@ -179,8 +187,9 @@ export class Vegetation {
    * distance far-tree pictures reach.
    */
   /** With `seeThrough`, trees and rocks between the camera and the vehicle turn see-through. */
-  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number, range = 1, farRange = 1, seeThrough: SeeThrough | null = null): Promise<Vegetation> {
-    const vegetation = new Vegetation(index, seed, range, farRange, seeThrough);
+  /** Plants take the colours of `season`; setSeason changes them later. */
+  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number, range = 1, farRange = 1, seeThrough: SeeThrough | null = null, season: SeasonState = SUMMER): Promise<Vegetation> {
+    const vegetation = new Vegetation(index, seed, range, farRange, seeThrough, season);
     await vegetation.prepare(renderer);
     return vegetation;
   }
@@ -191,7 +200,9 @@ export class Vegetation {
     range: number,
     farRange: number,
     private readonly seeThrough: SeeThrough | null,
+    season: SeasonState,
   ) {
+    this.season = season;
     this.group.name = 'vegetation';
     this.layers = compileRules(RULES, SPECIES, index.masks.biomes).map((l) => ({
       ...l,
@@ -217,11 +228,15 @@ export class Vegetation {
     const geometry = (species: number, variant: number, detail: Detail): THREE.BufferGeometry => {
       const key = `${species}/${variant}/${detail}`;
       let g = meshes.get(key);
-      if (!g) meshes.set(key, (g = toGeometry(generate(SPECIES[species]!, variant, detail))));
+      if (!g) {
+        meshes.set(key, (g = toGeometry(generate(SPECIES[species]!, variant, detail, this.season))));
+        this.sources.push({ species, variant, detail, geometry: g });
+      }
       return g;
     };
 
-    const pictures: THREE.BufferGeometry[] = [];
+    this.renderer = renderer;
+    const pictures = this.pictures;
     for (const layer of this.layers) {
       const perDetail: Record<Detail, Batch[][]> = { full: [], low: [] };
       const used = [...new Set(layer.rules.map((r) => r.species))];
@@ -267,6 +282,45 @@ export class Vegetation {
       done?.(ev.data);
     };
     this.post({ kind: 'init', index: this.index, layers: this.layers, seed: this.seed });
+  }
+
+  /**
+   * Recolours every plant for another time of year and redraws the far-tree pictures. Costs
+   * a moment, so call it only when the season has visibly moved on (every few days).
+   */
+  setSeason(season: SeasonState): void {
+    this.nextSeason = season;
+    if (!this.recolouring) void this.recolour();
+  }
+
+  private async recolour(): Promise<void> {
+    this.recolouring = true;
+    try {
+      while (this.nextSeason) {
+        this.season = this.nextSeason;
+        this.nextSeason = null;
+        // Same shapes, new colours and leaf: the vertex data is overwritten in place, and every
+        // batch drawing it shares the same attributes.
+        for (const { species, variant, detail, geometry } of this.sources) {
+          const data = generate(SPECIES[species]!, variant, detail, this.season);
+          for (const [name, values] of [['position', data.positions], ['normal', data.normals], ['color', data.colors]] as const) {
+            const attribute = geometry.getAttribute(name) as THREE.BufferAttribute;
+            if (attribute.array.length !== values.length) continue;
+            (attribute.array as Float32Array).set(values);
+            attribute.needsUpdate = true;
+          }
+        }
+        if (this.impostorMaterial) {
+          const atlas = await bakeImpostors(this.renderer, this.pictures, 8);
+          const old = this.atlas.texture as THREE.DataTexture;
+          (old.image.data as Uint8Array).set((atlas.texture as THREE.DataTexture).image.data as Uint8Array);
+          old.needsUpdate = true;
+          atlas.texture.dispose();
+        }
+      }
+    } finally {
+      this.recolouring = false;
+    }
   }
 
   /** Call every frame with the camera position. Cheap unless the camera has moved to new ground. */

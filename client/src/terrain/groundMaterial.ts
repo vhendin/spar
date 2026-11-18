@@ -33,6 +33,33 @@ const BIOME_COLORS: Record<string, number> = {
   clearcut: 0x6e5d43,
   regrowth: 0x66723f,
 };
+/**
+ * Vegetated ground in autumn colours (bilberry and dwarf birch turning red on the heaths,
+ * sedges going orange in the bogs) and withered from late autumn until spring greens it.
+ * Classes left out keep their summer colour. sRGB.
+ */
+const AUTUMN_BIOME_COLORS: Record<string, number> = {
+  unknown: 0x6a6436,
+  forest: 0x4a4228,
+  wetland: 0x8f6c38,
+  heath: 0x8c5434,
+  grassland: 0x8c8a48,
+  farmland: 0x9a9254,
+  scrub: 0x7c5c32,
+  built_up: 0x7a7a4a,
+  regrowth: 0x7e6236,
+};
+const DORMANT_BIOME_COLORS: Record<string, number> = {
+  unknown: 0x5e5642,
+  forest: 0x403c2c,
+  wetland: 0x857552,
+  heath: 0x6a5c46,
+  grassland: 0x8a7f58,
+  farmland: 0x8f8560,
+  scrub: 0x5a5140,
+  built_up: 0x76705a,
+  regrowth: 0x6a5e44,
+};
 const SURFACE_COLORS: Record<string, number> = {
   none: 0x000000,
   asphalt: 0x38383a,
@@ -95,8 +122,12 @@ export class GroundShading {
   readonly windDirection = uniform(new THREE.Vector2(1, 0));
   /** Height above which snow lies on open, north-facing ground, metres. */
   readonly snowLine = uniform(5000);
+  /** Shares of the summer, autumn and withered ground colours, adding up to 1 (see seasonAt). */
+  readonly season = uniform(new THREE.Vector3(1, 0, 0));
 
   private readonly biomeColors;
+  private readonly autumnColors;
+  private readonly dormantColors;
   private readonly surfaceColors;
   private readonly biomeKey;
   private readonly surfaceKey;
@@ -109,6 +140,8 @@ export class GroundShading {
   constructor(index: RegionIndex) {
     const { biomes, surfaces, channels } = index.masks;
     this.biomeColors = uniformArray<'vec3'>(colors(biomes, BIOME_COLORS), 'vec3');
+    this.autumnColors = uniformArray<'vec3'>(colors(biomes, { ...BIOME_COLORS, ...AUTUMN_BIOME_COLORS }), 'vec3');
+    this.dormantColors = uniformArray<'vec3'>(colors(biomes, { ...BIOME_COLORS, ...DORMANT_BIOME_COLORS }), 'vec3');
     this.surfaceColors = uniformArray<'vec3'>(colors(surfaces, SURFACE_COLORS), 'vec3');
     this.biomeKey = uniformArray<'vec3'>(colors(biomes, BIOME_KEY), 'vec3');
     this.surfaceKey = uniformArray<'vec3'>(colors(surfaces, SURFACE_KEY), 'vec3');
@@ -156,7 +189,10 @@ export class GroundShading {
       const canopy = texel.w.mul(255 * this.canopyScale);
       const isWater = biome.equal(int(this.waterId));
 
-      const color = this.biomeColors.element(biome).toVar();
+      const color = this.biomeColors.element(biome).mul(this.season.x)
+        .add(this.autumnColors.element(biome).mul(this.season.y))
+        .add(this.dormantColors.element(biome).mul(this.season.z))
+        .toVar();
       // Tall forest shades its floor; wet ground is darker; steep ground is bare.
       color.assign(mix(color, deepForest, select(biome.equal(int(this.forestId)), clamp(canopy.div(22), 0, 1).mul(0.3), 0)));
       color.mulAssign(select(isWater, 1, float(1).sub(wet.mul(0.4))));

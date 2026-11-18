@@ -30,6 +30,14 @@ describe('WorldState', () => {
     expect(isServerMessage(after)).toBe(true);
   });
 
+  it('lets players move to another day of the year, keeping the time of day', () => {
+    const world = new WorldState(loadConfig({ START_TIME: '2026-08-15T09:00', DAY_LENGTH_MINUTES: '0' }), () => 0);
+    world.set({ type: 'set_world', day: 32 });
+    expect(world.message().time.utc).toBe(Date.UTC(2026, 1, 1, 8, 0)); // 1 February, 09:00 local
+    world.set({ type: 'set_world', day: 196, hour: 14 });
+    expect(world.message().time.utc).toBe(Date.UTC(2026, 6, 15, 13, 0)); // 15 July, 14:00 local
+  });
+
   it('lets players set the time of day, clock speed and weather', () => {
     let now = 0;
     const world = new WorldState(loadConfig({ START_TIME: '2026-08-15T21:30', DAY_LENGTH_MINUTES: '30' }), () => now);

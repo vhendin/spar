@@ -50,6 +50,12 @@
           "minimum": 0,
           "maximum": 24
         },
+        "day": {
+          "description": "Day of the year to jump to (1 is 1 January), in the same year and at the same time of day.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        },
         "dayMinutes": {
           "description": "Real minutes one in-game day takes from now on; 0 stops the clock, 1440 is real time.",
           "type": "number",

@@ -4,7 +4,7 @@
 import * as THREE from 'three/webgpu';
 import { Fn, abs, cameraPosition, exp, float, mix, output, positionWorld, rangeFogFactor, select, uniform, vec4 } from 'three/tsl';
 import {
-  GALACTIC_CENTRE, GALACTIC_POLE, auroraActivity, decodeStars, formatGameTime, gameUtc, moonPosition, skyDirection, starPosition, sunPosition,
+  GALACTIC_CENTRE, GALACTIC_POLE, auroraActivity, dayOfYear, decodeStars, formatGameTime, gameUtc, moonPosition, skyDirection, starPosition, sunPosition,
   type GameClock, type RegionIndex, type ServerMessage, type Weather,
 } from '@spar/shared';
 import { luminance, skyColor, skyState, smoothstep, sunlight, type Rgb, type SkyState } from './atmosphere';
@@ -200,6 +200,11 @@ export class Environment {
   /** The sun's light reaching the ground in the open: colour times strength. */
   get sunLight(): THREE.Color {
     return this.sunRadiance.value;
+  }
+
+  /** The day of the year on the region's clocks (1 is 1 January, the time of day a fraction), at stopwatch time `now`. */
+  dayOfYear(now = performance.now()): number {
+    return dayOfYear(gameUtc(this.clock, now), this.clock.utcOffset);
   }
 
   /** The month on the region's clocks, 0 January to 11 December. */

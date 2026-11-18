@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SeasonCalendar",
+  "description": "How the year turns in the region: on which days leaves come out, colour and fall, and the ground greens and withers. Lives in defs/seasons.json. Between two entries everything blends evenly; after the last entry the year wraps round to the first.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["calendar"],
+  "properties": {
+    "calendar": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "title": "SeasonKey",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["day", "foliage", "leaves", "ground"],
+        "properties": {
+          "day": {
+            "description": "Day of the year, 1 for 1 January. Entries go in order.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "foliage": {
+            "description": "Which of each species' season colours its foliage has on this day.",
+            "type": "string",
+            "enum": ["spring", "summer", "autumn", "winter"]
+          },
+          "leaves": {
+            "description": "How much of a deciduous tree's crown is in leaf, 0 bare to 1 full.",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "ground": {
+            "description": "The colour of vegetated ground: green summer, coloured autumn, or withered dormant (late autumn to spring).",
+            "type": "string",
+            "enum": ["summer", "autumn", "dormant"]
+          }
+        }
+      }
+    }
+  }
+}

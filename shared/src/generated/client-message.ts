@@ -22,6 +22,10 @@ export interface SetWorld {
    */
   hour?: number;
   /**
+   * Day of the year to jump to (1 is 1 January), in the same year and at the same time of day.
+   */
+  day?: number;
+  /**
    * Real minutes one in-game day takes from now on; 0 stops the clock, 1440 is real time.
    */
   dayMinutes?: number;
