@@ -10,6 +10,7 @@ lines for each region come from that region's `index.json`, written by the impor
 | Markhöjdmodell (1 m bare-earth elevation) | Terrain inside the area | © Lantmäteriet, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Downloaded through Lantmäteriet's STAC API; needs a free Geotorget account. |
 | Copernicus DEM GLO-30 | Distant terrain, and the whole area when the 1 m model is missing | © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA. Free to use with this credit. |
 | OpenStreetMap | Land cover, roads, paths, streams, lakes, buildings, power lines, fences, place names | © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/). |
+| Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren, 1991) | The stars in the night sky, every one down to magnitude 6.5, packed into `defs/sky/stars.bin` by `importer/stars.py` | Public domain. From the Harvard–Smithsonian Center for Astrophysics, `tdc-www.harvard.edu/catalogs/bsc5.html`. |
 | Utförd avverkning (performed fellings) | Clear-cuts and young regrowth | © Skogsstyrelsen. Open data; the download service states that no conditions apply. Credited all the same. |
 
 Derived in the importer, not downloaded:

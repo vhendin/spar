@@ -4,13 +4,15 @@
 import * as THREE from 'three/webgpu';
 import { Fn, abs, cameraPosition, exp, float, mix, output, positionWorld, rangeFogFactor, select, uniform, vec4 } from 'three/tsl';
 import {
-  GALACTIC_CENTRE, GALACTIC_POLE, auroraActivity, formatGameTime, gameUtc, moonPosition, siderealAngle, skyDirection, starPosition, sunPosition,
+  GALACTIC_CENTRE, GALACTIC_POLE, auroraActivity, decodeStars, formatGameTime, gameUtc, moonPosition, skyDirection, starPosition, sunPosition,
   type GameClock, type RegionIndex, type ServerMessage, type Weather,
 } from '@spar/shared';
 import { luminance, skyColor, skyState, smoothstep, sunlight, type Rgb, type SkyState } from './atmosphere';
 import { Clouds, cloudShadow } from './clouds';
 import { Rain } from './rain';
 import { SkyDome, type NightSky } from './skyDome';
+import { starTurn } from './starFrame';
+import starsUrl from '../../../defs/sky/stars.bin?url';
 
 type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
 
@@ -27,6 +29,29 @@ const MIST_FLOOR = 90;
 const MIST_THICKNESS = 60;
 /** Mist density at its floor, per metre, when it is at its thickest. */
 const MIST_DENSITY = 0.006;
+
+/** Star colour by colour index B-V, from blue-white through white and yellow to orange-red. */
+const STAR_COLOURS: [number, Rgb][] = [
+  [-0.3, [0.66, 0.78, 1]],
+  [0, [0.82, 0.88, 1]],
+  [0.3, [1, 0.98, 0.95]],
+  [0.65, [1, 0.93, 0.8]],
+  [1.1, [1, 0.82, 0.6]],
+  [1.6, [1, 0.7, 0.45]],
+];
+
+function starColour(bv: number): Rgb {
+  const t = STAR_COLOURS;
+  if (bv <= t[0]![0]) return t[0]![1];
+  for (let i = 1; i < t.length; i++) {
+    const [b, c] = t[i]!, [a, p] = t[i - 1]!;
+    if (bv <= b) {
+      const k = (bv - a) / (b - a);
+      return [p[0] + (c[0] - p[0]) * k, p[1] + (c[1] - p[1]) * k, p[2] + (c[2] - p[2]) * k];
+    }
+  }
+  return t[t.length - 1]![1];
+}
 
 const AURORA_GREEN = new THREE.Color(0.35, 1, 0.6);
 
@@ -79,7 +104,6 @@ export class Environment {
   private readonly drift = new THREE.Vector2();
   private readonly cloudDrift = new THREE.Vector2();
   private readonly starTurn = new THREE.Matrix3();
-  private readonly pole: THREE.Vector3;
   private readonly night: NightSky = {
     galacticPole: new THREE.Vector3(),
     galacticCentre: new THREE.Vector3(),
@@ -102,7 +126,7 @@ export class Environment {
   ) {
     this.dome = new SkyDome(farPlane * 0.9);
     this.clouds = new Clouds(index.heights.max, 0x5a4);
-    scene.add(this.dome.mesh, this.clouds.mesh, this.rain.mesh, this.ambient, this.sun, this.sun.target);
+    scene.add(this.dome.mesh, this.dome.stars, this.clouds.mesh, this.rain.mesh, this.ambient, this.sun, this.sun.target);
     scene.fog = null;
     scene.fogNode = this.fogNode(index.heights.min + MIST_FLOOR);
     scene.background = null;
@@ -122,11 +146,33 @@ export class Environment {
       this.sun.shadow.bias = -0.0006;
       this.sun.shadow.normalBias = 0.06;
     }
-    // The stars turn about the celestial pole: due north, as high as the latitude.
-    const lat = THREE.MathUtils.degToRad(index.center.latitude);
-    this.pole = new THREE.Vector3(0, Math.sin(lat), -Math.cos(lat));
+    void this.loadStars();
     this.clock = { utc: options.fixedUtc ?? Date.UTC(2026, 7, 15, 8), rate: 0, utcOffset: 1, at: performance.now() };
     if (options.fixedWeather) Object.assign(this.weather, options.fixedWeather);
+  }
+
+  /** Fetches the star catalogue and hands the dome every star's place in the turning sky. */
+  private async loadStars(): Promise<void> {
+    let stars;
+    try {
+      stars = decodeStars(await (await fetch(starsUrl)).arrayBuffer());
+    } catch (e) {
+      console.warn('sky: no star catalogue', e);
+      return;
+    }
+    const { latitude, longitude } = this.index.center;
+    // Where each star stands at one moment, turned back into the stars' own frame.
+    const then = Date.UTC(2026, 0, 1);
+    const turn = starTurn(new THREE.Matrix3(), then, latitude, longitude);
+    const dirs = new Float32Array(stars.length * 3), mags = new Float32Array(stars.length), colours = new Float32Array(stars.length * 3);
+    const v = new THREE.Vector3();
+    stars.forEach((star, i) => {
+      v.fromArray(skyDirection(starPosition(then, latitude, longitude, star.ra, star.dec))).applyMatrix3(turn);
+      dirs.set([v.x, v.y, v.z], i * 3);
+      mags[i] = star.mag;
+      colours.set(starColour(star.bv), i * 3);
+    });
+    this.dome.setStars(dirs, mags, colours);
   }
 
   /** Takes the server's word on time and weather. */
@@ -207,7 +253,7 @@ export class Environment {
     this.sunElevation = sunAt.elevation;
     const state = skyState(sun, moon, moonAt.illumination, w.cloud, w.rain);
 
-    this.starTurn.setFromMatrix4(new THREE.Matrix4().makeRotationAxis(this.pole, -siderealAngle(this.utc, longitude)));
+    starTurn(this.starTurn, this.utc, latitude, longitude);
     this.nightSky(now, state, latitude, longitude);
     // The puffy clouds take over from the dome's painted ones until the cover closes up.
     this.dome.update({ ...state, cloud: smoothstep(0.35, 1, w.cloud) * 0.95 }, this.starTurn, this.drift, camera, this.night);

@@ -4,8 +4,8 @@
 
 import * as THREE from 'three/webgpu';
 import {
-  Fn, If, Loop, dot, exp, float, floor, fract, fwidth, max, mix, mx_fractal_noise_float, mx_noise_float, normalize,
-  positionLocal, screenCoordinate, sin, smoothstep, sqrt, uniform, vec2, vec3,
+  Fn, If, Loop, attribute, cameraPosition, cameraProjectionMatrix, cameraViewMatrix, dot, exp, float, floor, fract, fwidth, max, mix, mx_fractal_noise_float, mx_noise_float, normalize,
+  positionLocal, screenCoordinate, screenSize, sin, smoothstep, sqrt, uniform, varying, vec2, vec3, vec4,
 } from 'three/tsl';
 import { AIR, HAZE, HAZE_FORWARD, type SkyState } from './atmosphere';
 
@@ -55,6 +55,8 @@ export class SkyDome {
     moonTint: uniform(new THREE.Vector3(1, 1, 1)),
     /** Turns a view direction into the frame the stars are fixed in. */
     stars: uniform(new THREE.Matrix3()),
+    /** And back: the stars' frame into the world. */
+    starsToWorld: uniform(new THREE.Matrix3()),
     galacticPole: uniform(new THREE.Vector3(0, 1, 0)),
     galacticCentre: uniform(new THREE.Vector3(1, 0, 0)),
     aurora: uniform(0),
@@ -64,7 +66,43 @@ export class SkyDome {
     drift: uniform(new THREE.Vector2()),
   };
 
+  /** The catalogue's stars, once they are loaded; drawn just over the dome. */
+  readonly stars = new THREE.Mesh(new THREE.BufferGeometry());
+  private readonly radius: number;
+
+  /** Low down, faint light has a lot of air to get through. */
+  private clearing(d: Vec3): Node {
+    return exp(float(1).div(max(d.y, 0).add(0.06)).mul(-0.035));
+  }
+
+  /** The moon's disc: where it is, and where on the ball each direction meets it. */
+  private moonDisc(d: Vec3) {
+    const u = this.u;
+    const moonSize = Math.sin(THREE.MathUtils.degToRad(MOON_RADIUS));
+    const toMoon = dot(d, u.moon);
+    const off = d.sub(u.moon.mul(toMoon)).div(moonSize);
+    const r2 = dot(off, off);
+    const facing = off.sub(u.moon.mul(sqrt(max(float(1).sub(r2), 0))));
+    const onMoon = smoothstep(1, 0.9, r2).mul(smoothstep(0.9, 1, toMoon)).mul(smoothstep(-0.02, 0.03, d.y));
+    return { toMoon, facing, onMoon };
+  }
+
+  /** The painted cloud layer: how thick it is in a direction, and the noise it comes from. */
+  private cloudLayer(d: Vec3) {
+    const u = this.u;
+    const y = max(d.y, 0);
+    // Clouds on a flat ceiling, seen ever more edge-on towards the horizon.
+    const ceiling = d.xz.div(y.add(0.16)).mul(0.9).add(u.drift);
+    const lumps = mx_fractal_noise_float(vec3(ceiling.x, ceiling.y, u.drift.x.mul(0.15)), 4, 2.1, 0.5).mul(0.5).add(0.5);
+    const threshold = float(1.02).sub(u.cloud.mul(1.14));
+    const cover = smoothstep(threshold, threshold.add(0.32), lumps);
+    // Towards the horizon gaps close up, as they do when looking along a cloud layer.
+    const dens = mix(cover, max(cover, u.cloud), float(1).sub(smoothstep(0, 0.2, d.y)).mul(0.8)).mul(smoothstep(-0.01, 0.03, d.y).mul(0.3).add(0.7));
+    return { lumps, threshold, dens };
+  }
+
   constructor(radius: number) {
+    this.radius = radius;
     const material = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
     material.colorNode = Fn(() => {
       const u = this.u;
@@ -87,20 +125,14 @@ export class SkyDome {
         .add(u.twilight.mul(float(0.45).add(float(1).sub(y).mul(0.55))))
         .add(u.afterglow.mul(glow))
         .add(u.night.mul(float(1).add(float(1).sub(y).mul(1.5))));
-      // Low down, faint light has a lot of air to get through.
-      const clearing = exp(mass.mul(-0.035));
+      const clearing = this.clearing(d);
 
       // Sun: a disc with a soft rim, dimmed like its light.
       const sunEdge = Math.cos(THREE.MathUtils.degToRad(SUN_RADIUS));
       const sunDisc = smoothstep(sunEdge, sunEdge + 0.00012, mu).mul(smoothstep(-0.02, 0.02, d.y));
 
       // Moon: a ball lit by the sun, so its phase comes out by itself, with darker seas on it.
-      const moonSize = Math.sin(THREE.MathUtils.degToRad(MOON_RADIUS));
-      const toMoon = dot(d, u.moon);
-      const off = d.sub(u.moon.mul(toMoon)).div(moonSize);
-      const r2 = dot(off, off);
-      const facing = off.sub(u.moon.mul(sqrt(max(float(1).sub(r2), 0))));
-      const onMoon = smoothstep(1, 0.9, r2).mul(smoothstep(0.9, 1, toMoon)).mul(smoothstep(-0.02, 0.03, d.y));
+      const { toMoon, facing, onMoon } = this.moonDisc(d);
       const seas = smoothstep(-0.05, 0.3, mx_fractal_noise_float(facing.mul(2.3).add(vec3(3.1, 0, 1.7)), 3, 2.2, 0.55));
       const pits = smoothstep(0.35, 0.6, mx_noise_float(facing.mul(9))).mul(0.12);
       const albedo = float(1).sub(seas.mul(0.36)).sub(pits);
@@ -113,8 +145,9 @@ export class SkyDome {
         .mul(exp(away.mul(-900)).mul(0.22).add(exp(away.mul(-40)).mul(0.018)).add(exp(away.mul(-6)).mul(0.004)))
         .mul(moonUp);
 
-      // Stars in three sizes, the faint ones thickest along the Milky Way. Each sits somewhere
-      // in a cell of a grid fixed to the sky, and is never drawn smaller than about a pixel.
+      // The real stars are drawn on their own (see setStars). Here only the grain of stars too
+      // faint to see one by one, along the Milky Way: each sits somewhere in a cell of a grid
+      // fixed to the sky, and is never drawn smaller than about a pixel.
       const sd = u.stars.mul(d);
       const across = dot(d, u.galacticPole);
       const band = exp(across.div(0.2).pow(2).negate());
@@ -139,9 +172,7 @@ export class SkyDome {
         const shape = exp(dist.mul(dist).mul(-1.6)).add(exp(dist.mul(-1.2)).mul(0.08));
         stars.addAssign(colour.mul(shape).mul(there).mul(magnitude).mul(flicker).mul(power));
       };
-      layer(55, float(0.007), 1.6, 5, 0);
-      layer(120, float(0.012), 1.2, 1.6, 1);
-      layer(240, band.mul(0.03).add(core.mul(band).mul(0.02)).add(0.006), 1, 0.45, 2);
+      layer(240, band.mul(0.035).add(core.mul(band).mul(0.025)), 1, 0.3, 2);
 
       // The Milky Way: a band of haze, brightest towards the galaxy's centre, split by dark dust.
       const sky3 = sd.mul(5);
@@ -186,13 +217,7 @@ export class SkyDome {
       const lit = clear.add(u.sunColor.mul(sunDisc).mul(6)).add(heavens.add(aurora).mul(behind)).add(halo);
       const withMoon = lit.add(moonColor.mul(onMoon));
 
-      // Clouds on a flat ceiling, seen ever more edge-on towards the horizon.
-      const ceiling = d.xz.div(y.add(0.16)).mul(0.9).add(u.drift);
-      const lumps = mx_fractal_noise_float(vec3(ceiling.x, ceiling.y, u.drift.x.mul(0.15)), 4, 2.1, 0.5).mul(0.5).add(0.5);
-      const threshold = float(1.02).sub(u.cloud.mul(1.14));
-      const cover = smoothstep(threshold, threshold.add(0.32), lumps);
-      // Towards the horizon gaps close up, as they do when looking along a cloud layer.
-      const dens = mix(cover, max(cover, u.cloud), float(1).sub(smoothstep(0, 0.2, d.y)).mul(0.8)).mul(smoothstep(-0.01, 0.03, d.y).mul(0.3).add(0.7));
+      const { lumps, threshold, dens } = this.cloudLayer(d);
       const body = mix(u.cloudShade, u.cloudLit, smoothstep(threshold, threshold.add(0.7), lumps).oneMinus().mul(0.75).add(0.25));
       // The sun and moon show through thin cloud as bright patches.
       const thin = float(1).sub(u.cloud.mul(0.85));
@@ -206,6 +231,73 @@ export class SkyDome {
     this.mesh.renderOrder = -1000;
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
+    this.stars.name = 'stars';
+    this.stars.renderOrder = -999;
+    this.stars.frustumCulled = false;
+    this.stars.matrixAutoUpdate = false;
+    this.stars.visible = false;
+  }
+
+  /**
+   * Puts up the real stars. `dirs` holds each star's direction in the frame the sky turns in
+   * (see `update`'s `starTurn`), `mags` its magnitude and `colours` its colour, RGB.
+   */
+  setStars(dirs: Float32Array, mags: Float32Array, colours: Float32Array): void {
+    const n = mags.length;
+    const dir = new Float32Array(n * 12), corner = new Float32Array(n * 8), colour = new Float32Array(n * 12), look = new Float32Array(n * 12);
+    const index = new Uint32Array(n * 6);
+    const corners = [-1, -1, 1, -1, 1, 1, -1, 1];
+    for (let i = 0; i < n; i++) {
+      const mag = mags[i]!;
+      // Each magnitude is 2.5 times fainter than the last; squeezed a little so the faint ones still show.
+      const flux = Math.exp(-0.78 * (mag - 1.2));
+      const size = 1.1 + Math.min(4.5, Math.max(0, 3 - mag)) * 0.6;
+      const peak = Math.min(2.2, flux);
+      // A different twinkle for each star.
+      const phase = (Math.sin(i * 12.9898) * 43758.5453) % 1;
+      for (let k = 0; k < 4; k++) {
+        const v = i * 4 + k;
+        dir.set(dirs.subarray(i * 3, i * 3 + 3), v * 3);
+        corner.set(corners.slice(k * 2, k * 2 + 2), v * 2);
+        colour.set(colours.subarray(i * 3, i * 3 + 3), v * 3);
+        look.set([peak, size, phase], v * 3);
+      }
+      index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(dir, 3));
+    g.setAttribute('dir', new THREE.BufferAttribute(dir, 3));
+    g.setAttribute('corner', new THREE.BufferAttribute(corner, 2));
+    g.setAttribute('starColour', new THREE.BufferAttribute(colour, 3));
+    g.setAttribute('look', new THREE.BufferAttribute(look, 3));
+    g.setIndex(new THREE.BufferAttribute(index, 1));
+    this.stars.geometry.dispose();
+    this.stars.geometry = g;
+
+    const u = this.u;
+    // Tested against depth, so hills and trees in front hide them.
+    const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false });
+    const w = u.starsToWorld.mul(attribute<'vec3'>('dir', 'vec3'));
+    const lookAttr = attribute<'vec3'>('look', 'vec3');
+    const cornerAttr = attribute<'vec2'>('corner', 'vec2');
+    // Seen or not, worked out once per star: dark enough, above the horizon, not behind the moon or cloud.
+    const twinkle = float(0.25).add(float(1).sub(smoothstep(0, 0.45, max(w.y, 0))).mul(0.6));
+    const flicker = float(1).add(sin(u.time.mul(fract(lookAttr.z.mul(7.3)).mul(9).add(6)).add(lookAttr.z.mul(400))).mul(twinkle).mul(0.35));
+    const seen = u.starlight
+      .mul(smoothstep(-0.01, 0.1, w.y))
+      .mul(this.clearing(w))
+      .mul(float(1).sub(this.moonDisc(w).onMoon))
+      .mul(float(1).sub(this.cloudLayer(w).dens.mul(0.97)));
+    const bright = varying(lookAttr.x.mul(seen).mul(flicker));
+    const at = cameraProjectionMatrix.mul(cameraViewMatrix.mul(vec4(cameraPosition.add(w.mul(this.radius * 0.95)), 1)));
+    // Each star a little square a few pixels across, whatever the zoom.
+    const spread = cornerAttr.mul(lookAttr.y.mul(2.5)).mul(2).div(screenSize).mul(at.w);
+    material.vertexNode = vec4(at.xy.add(spread), at.z, at.w);
+    const r = cornerAttr.length().mul(2.5);
+    const shape = exp(r.mul(r).mul(-0.9)).add(exp(r.mul(-1.6)).mul(0.05));
+    material.colorNode = vec4(varying(attribute<'vec3'>('starColour', 'vec3')).mul(shape).mul(bright), 1);
+    this.stars.material = material;
+    this.stars.visible = true;
   }
 
   /**
@@ -228,6 +320,7 @@ export class SkyDome {
     u.moonPhase.value = state.moonPhase;
     u.moonTint.value.set(night.moonTint.r, night.moonTint.g, night.moonTint.b);
     u.stars.value.copy(starTurn);
+    u.starsToWorld.value.copy(starTurn).transpose();
     u.galacticPole.value.copy(night.galacticPole);
     u.galacticCentre.value.copy(night.galacticCentre);
     u.aurora.value = night.aurora;

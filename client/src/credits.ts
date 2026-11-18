@@ -10,6 +10,9 @@ const SOFTWARE = [
   'Ajv — MIT licence',
 ];
 
+/** Data used everywhere, not per region. */
+const SKY = ['Stars: Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren, 1991), public domain'];
+
 /** Fills the credits panel for a region; `index` null before a region has loaded. */
 export function fillCredits(panel: HTMLElement, index: RegionIndex | null): void {
   const box = document.createElement('div');
@@ -23,7 +26,7 @@ export function fillCredits(panel: HTMLElement, index: RegionIndex | null): void
   add('p', index ? `${index.title}: a real piece of the Swedish mountains, built from open data.` : 'A real piece of the Swedish mountains, built from open data.');
   add('h2', 'Map and terrain data');
   const data = add('ul', '');
-  for (const line of index?.attribution ?? ['Loading the region…']) add('li', line, data);
+  for (const line of [...(index?.attribution ?? ['Loading the region…']), ...SKY]) add('li', line, data);
   add('h2', 'Software');
   const software = add('ul', '');
   for (const line of SOFTWARE) add('li', line, software);
