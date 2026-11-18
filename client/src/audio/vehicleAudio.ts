@@ -74,6 +74,7 @@ export class VehicleAudio {
   private readonly lastSuspension: number[] = [];
   private readonly lastWater: boolean[] = [];
   private readonly forward = new THREE.Vector3();
+  private readonly bed: GainNode;
   private bumpQuiet = 0;
   private stopQuiet = 0;
   private readonly hitQuiet = new Map<Impact['kind'], number>();
@@ -86,17 +87,23 @@ export class VehicleAudio {
   private readonly scrapeMetal: GainNode;
   private readonly scrapeSource: AudioBufferSourceNode;
   private scrape = 0;
+  /** A hard saturation curve for the blows of crashes. */
+  private readonly hard = softClip(4);
   private load = 0;
 
   constructor(private readonly out: AudioOut) {
     const ctx = out.ctx;
     this.at = out.panner(7, 1);
     this.at.connect(out.vehicle);
+    // The steady sounds (engine, gears, tyres) go through one level that dips for a moment
+    // when something hits hard, so the blow is heard over them.
+    this.bed = ctx.createGain();
+    this.bed.connect(this.at);
 
     // The exhaust: lowpassed pulses with a hollow resonance and a little grit from clipping.
     this.engineLevel = ctx.createGain();
     this.engineLevel.gain.value = 0;
-    this.engineLevel.connect(this.at);
+    this.engineLevel.connect(this.bed);
     // A deep, boomy pipe: the low end lifted, a hollow resonance around 70 Hz.
     const boom = out.filter('lowshelf', 140, 0.7, 5);
     boom.connect(this.engineLevel);
@@ -108,7 +115,7 @@ export class VehicleAudio {
     // Air drawn in and the rattle of the valves: a breathy band that climbs with the revs.
     this.intakeLevel = ctx.createGain();
     this.intakeLevel.gain.value = 0;
-    this.intakeLevel.connect(this.at);
+    this.intakeLevel.connect(this.bed);
     this.intakeTone = out.filter('bandpass', 900, 1.4);
     this.intakeTone.connect(this.intakeLevel);
     out.loop(out.buffers.white).connect(this.intakeTone);
@@ -116,7 +123,7 @@ export class VehicleAudio {
     // Gears: a thin whine that rises with the speed of the shafts.
     this.whineLevel = ctx.createGain();
     this.whineLevel.gain.value = 0;
-    this.whineLevel.connect(this.at);
+    this.whineLevel.connect(this.bed);
     this.whine = ctx.createOscillator();
     this.whine.type = 'sine';
     this.whine.connect(this.whineLevel);
@@ -125,7 +132,7 @@ export class VehicleAudio {
     // Tyres squealing on hard ground.
     this.squealLevel = ctx.createGain();
     this.squealLevel.gain.value = 0;
-    this.squealLevel.connect(this.at);
+    this.squealLevel.connect(this.bed);
     const squeal = out.filter('bandpass', 1050, 14);
     squeal.connect(this.squealLevel);
     out.loop(out.buffers.white).connect(squeal);
@@ -133,7 +140,7 @@ export class VehicleAudio {
     // Spray hissing off the tyres on wet ground.
     this.hissLevel = ctx.createGain();
     this.hissLevel.gain.value = 0;
-    this.hissLevel.connect(this.at);
+    this.hissLevel.connect(this.bed);
     this.hissTone = out.filter('highpass', 2500, 0.5);
     this.hissTone.connect(this.hissLevel);
     out.loop(out.buffers.white).connect(this.hissTone);
@@ -154,7 +161,7 @@ export class VehicleAudio {
       const filter = out.filter(voice.filter, voice.frequency, voice.q);
       const level = ctx.createGain();
       level.gain.value = 0;
-      source.connect(filter).connect(level).connect(this.at);
+      source.connect(filter).connect(level).connect(this.bed);
       this.voices.set(ground, { source, level, voice });
     }
   }
@@ -316,6 +323,40 @@ export class VehicleAudio {
     s.onended = () => g.disconnect();
   }
 
+  /**
+   * A heavy body blow, made to be felt on small speakers too: a tone that drops fast from
+   * around 150 Hz to `low` (a kick drum's punch), driven hard so its overtones carry where a
+   * pure deep tone would not be heard, with a low burst of noise for the crunch.
+   */
+  private slam(low: number, gain: number, decay: number): void {
+    const ctx = this.out.ctx;
+    const t = ctx.currentTime;
+    // Duck the engine and tyres under the blow, the harder the deeper, and bring them back.
+    const dip = Math.max(0.25, 1 - 0.55 * gain);
+    this.bed.gain.cancelScheduledValues(t);
+    this.bed.gain.setValueAtTime(this.bed.gain.value, t);
+    this.bed.gain.linearRampToValueAtTime(dip, t + 0.01);
+    this.bed.gain.setTargetAtTime(1, t + 0.25, 0.2);
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(low * 3.2, t);
+    o.frequency.exponentialRampToValueAtTime(low, t + 0.07);
+    const drive = ctx.createWaveShaper();
+    drive.curve = this.hard;
+    const tone = this.out.lowpass(900, 0.7);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.003);
+    g.gain.setTargetAtTime(0, t + 0.003, decay);
+    // Driven before the envelope, so the blow keeps its weight as it dies away.
+    const pre = ctx.createGain();
+    pre.gain.value = 3;
+    o.connect(pre).connect(drive).connect(tone).connect(g).connect(this.at);
+    o.start(t);
+    o.stop(t + decay * 8 + 0.05);
+    o.onended = () => g.disconnect();
+    this.burst(this.out.buffers.white, 'lowpass', 260, 0.9, gain * 0.55, decay * 0.7);
+  }
+
   /** A low thud: a falling tone that dies quickly. */
   private thud(frequency: number, gain: number, decay: number, to: AudioNode = this.at): void {
     const ctx = this.out.ctx;
@@ -384,9 +425,8 @@ export class VehicleAudio {
   /** Coming down from a jump: a deep slam of the whole vehicle, rattling, and the body creaking. */
   private land(strength: number): void {
     const b = this.out.buffers;
-    this.thud(55, 1 + 0.6 * strength, 0.14 + 0.06 * strength);
+    this.slam(50, 0.7 + 0.84 * strength, 0.12 + 0.06 * strength);
     this.thud(110, 0.4 + 0.4 * strength, 0.06);
-    this.burst(b.white, 'lowpass', 400, 0.7, 0.4 * strength + 0.1, 0.07);
     this.burst(b.crackle, 'bandpass', 1900, 1, 0.5 * strength + 0.1, 0.18, 1.4);
     this.burst(b.white, 'bandpass', 700, 9, 0.2 * strength, 0.2, 1, 0.05);
   }
@@ -398,8 +438,8 @@ export class VehicleAudio {
     switch (kind) {
       case 'ground':
         // Rolling or nosing in: a heavy slam, crumpling metal, earth and bits flying.
-        this.thud(50, 1.2 + 0.6 * s, 0.16);
-        this.ring([140, 389, 812, 1490], 0.18 + 0.25 * s, 0.13);
+        this.slam(45, 0.98 + 0.84 * s, 0.16);
+        this.ring([140, 389, 812, 1490], 0.08 + 0.12 * s, 0.1);
         this.burst(b.gravel, 'bandpass', 1500, 0.8, 0.6 * s + 0.15, 0.2, 1.2);
         this.burst(b.crackle, 'bandpass', 1800, 1, 0.4 * s, 0.2, 1.3, 0.04);
         break;
@@ -407,24 +447,22 @@ export class VehicleAudio {
         // A trunk does not give: the whole vehicle slams to a stop against it. A deep thud,
         // the bumper and panels crumpling (a dull dent, not a bell), a hard knock of wood,
         // and only a faint rustle from the crown.
-        this.thud(48, 1.4 + 0.6 * s, 0.18 + 0.06 * s);
-        this.thud(105, 0.7 + 0.5 * s, 0.07);
-        this.burst(b.white, 'lowpass', 350, 0.8, 0.6 * s + 0.25, 0.09);
-        this.burst(b.crackle, 'bandpass', 650, 1.4, 0.45 * s + 0.15, 0.08, 0.7);
-        this.ring([92, 238, 455], 0.14 + 0.2 * s, 0.07);
-        this.burst(b.white, 'lowpass', 1100, 0.6, 0.05 + 0.08 * s, 0.25, 1, 0.08);
+        this.slam(48, 1.12 + 0.84 * s, 0.17 + 0.06 * s);
+        this.burst(b.crackle, 'bandpass', 500, 1.2, 0.5 * s + 0.2, 0.09, 0.6);
+        this.ring([92, 238, 455], 0.05 + 0.08 * s, 0.06);
+        this.burst(b.white, 'lowpass', 1100, 0.6, 0.04 + 0.06 * s, 0.25, 1, 0.08);
         break;
       case 'rock':
         // Stone: a hard crack, metal ringing, grit.
-        this.thud(65, 1 + 0.5 * s, 0.12);
-        this.ring([160, 450, 920, 1700], 0.16 + 0.24 * s, 0.12);
+        this.slam(60, 0.98 + 0.7 * s, 0.12);
+        this.ring([160, 450, 920, 1700], 0.08 + 0.14 * s, 0.1);
         this.burst(b.gravel, 'bandpass', 2600, 0.9, 0.5 * s + 0.15, 0.12, 1.4);
         break;
       case 'object':
         // A wall, fence or log pile: boards splintering.
-        this.thud(80, 0.9 + 0.5 * s, 0.1);
-        this.burst(b.crackle, 'bandpass', 1400, 0.9, 0.7 * s + 0.2, 0.15, 1.2);
-        this.ring([200, 540, 1050], 0.12 + 0.18 * s, 0.1);
+        this.slam(55, 0.98 + 0.7 * s, 0.13);
+        this.burst(b.crackle, 'bandpass', 1400, 0.9, 0.6 * s + 0.2, 0.15, 1.2);
+        this.ring([200, 540, 1050], 0.06 + 0.1 * s, 0.08);
         break;
     }
   }
@@ -447,12 +485,12 @@ export class VehicleAudio {
 }
 
 /** A gentle saturation curve, for some grit in the exhaust. */
-function softClip(): Float32Array<ArrayBuffer> {
+function softClip(drive = 1.8): Float32Array<ArrayBuffer> {
   const n = 1024;
   const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 2 - 1;
-    curve[i] = Math.tanh(x * 1.8) / Math.tanh(1.8);
+    curve[i] = Math.tanh(x * drive) / Math.tanh(drive);
   }
   return curve;
 }

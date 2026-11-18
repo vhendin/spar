@@ -9,6 +9,8 @@ import * as THREE from 'three/webgpu';
 import { ENGINE_WORKLET } from './engineWorklet';
 
 /** Seconds for the volume and the cab muffling to settle. */
+/** Master level at full volume: the steady sounds stay this far below the limiter. */
+const HEADROOM = 0.8;
 const EASE = 0.08;
 
 export class AudioOut {
@@ -39,24 +41,24 @@ export class AudioOut {
 
   constructor(volume: number) {
     this.ctx = new AudioContext({ latencyHint: 'interactive' });
+    // The volume, then a limiter as the very last thing: it only catches the peaks of crashes
+    // just below full scale, so the steady sounds pass untouched and leave room above them.
     this.master = this.ctx.createGain();
-    this.master.connect(this.ctx.destination);
-    // A gentle limiter, so a crash on top of a revving engine never clips.
     const limit = this.ctx.createDynamicsCompressor();
-    limit.threshold.value = -6;
-    limit.knee.value = 6;
-    limit.ratio.value = 8;
-    limit.attack.value = 0.003;
-    limit.release.value = 0.15;
-    limit.connect(this.master);
+    limit.threshold.value = -2;
+    limit.knee.value = 2;
+    limit.ratio.value = 20;
+    limit.attack.value = 0.002;
+    limit.release.value = 0.12;
+    this.master.connect(limit).connect(this.ctx.destination);
 
     this.vehicleMuffle = this.lowpass(20000);
-    this.vehicleMuffle.connect(limit);
+    this.vehicleMuffle.connect(this.master);
     this.vehicle = this.ctx.createGain();
     this.vehicle.connect(this.vehicleMuffle);
 
     this.worldLevel = this.ctx.createGain();
-    this.worldLevel.connect(limit);
+    this.worldLevel.connect(this.master);
     this.worldMuffle = this.lowpass(20000);
     this.worldMuffle.connect(this.worldLevel);
     this.world = this.ctx.createGain();
@@ -115,7 +117,8 @@ export class AudioOut {
   /** 0 silent to 1 full. */
   set volume(v: number) {
     this.volumeSet = v;
-    this.master.gain.setTargetAtTime(v * v, this.ctx.currentTime, EASE);
+    // A little below unity even at full volume, as headroom for crashes.
+    this.master.gain.setTargetAtTime(v * v * HEADROOM, this.ctx.currentTime, EASE);
     this.apply();
   }
 
