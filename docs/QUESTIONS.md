@@ -38,8 +38,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Sinking.** How deep a tyre settles depends on its size and the ground, not on the weight, so
   the light vehicle sinks about as far (relative to its wheels) as the heavy ones. Should ground
   pressure count, so it floats better over bog?
-- **Look.** Open top with a roll bar, faded red. A canvas top, another colour, or several colours
-  to choose from?
+- **Colour.** Faded red. Another colour, or several to choose from?
 
 ### What next
 
@@ -49,6 +48,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
+- Light 4×4 body: a hard top, not open, so there is no empty driver's seat to see.
 
 - Multiplayer (step 6) waits until single player is complete.
 - Animals are on hold.
