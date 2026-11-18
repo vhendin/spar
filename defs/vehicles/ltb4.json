@@ -1,0 +1,215 @@
+{
+  "name": "ltb4",
+  "title": "Lätt terrängbil 4×4",
+  "chassis": {
+    "mass": 1450,
+    "centerOfMass": [
+      0,
+      0.68,
+      0.08
+    ],
+    "groundClearance": 0.23,
+    "wading": 0.5,
+    "box": {
+      "center": [
+        0,
+        0.975,
+        0
+      ],
+      "size": [
+        1.45,
+        0.95,
+        3.3
+      ]
+    }
+  },
+  "wheels": {
+    "radius": 0.36,
+    "width": 0.2
+  },
+  "axles": [
+    {
+      "z": 1.05,
+      "track": 1.25,
+      "driven": true,
+      "steer": 34,
+      "brakeShare": 0.6,
+      "suspension": {
+        "travel": 0.18,
+        "stiffness": 38000,
+        "damping": 2800
+      },
+      "differential": "open"
+    },
+    {
+      "z": -1.05,
+      "track": 1.25,
+      "driven": true,
+      "steer": 0,
+      "brakeShare": 0.4,
+      "handbrake": true,
+      "suspension": {
+        "travel": 0.18,
+        "stiffness": 36000,
+        "damping": 2700
+      },
+      "differential": "lockable"
+    }
+  ],
+  "drivetrain": {
+    "torqueCurve": [
+      [
+        800,
+        105
+      ],
+      [
+        1500,
+        135
+      ],
+      [
+        2000,
+        150
+      ],
+      [
+        3000,
+        146
+      ],
+      [
+        4000,
+        128
+      ],
+      [
+        4600,
+        108
+      ]
+    ],
+    "idle": 800,
+    "redline": 4400,
+    "gears": [
+      3.5,
+      2.1,
+      1.4,
+      1.0
+    ],
+    "reverse": 3.8,
+    "ranges": {
+      "high": 1.0,
+      "low": 2.46
+    },
+    "finalDrive": 5.38,
+    "efficiency": 0.85,
+    "engineBraking": 0.2,
+    "shift": {
+      "up": 3500,
+      "down": 1400
+    }
+  },
+  "brakes": {
+    "force": 12000
+  },
+  "tires": {
+    "grip": {
+      "asphalt": 0.95,
+      "gravel": 0.72,
+      "dirt": 0.62,
+      "grass": 0.55,
+      "rock": 0.78,
+      "sand": 0.46,
+      "bog": 0.33,
+      "water": 0.3
+    },
+    "wetGrip": {
+      "asphalt": 0.8,
+      "gravel": 0.85,
+      "dirt": 0.65,
+      "grass": 0.6,
+      "rock": 0.7,
+      "sand": 0.95,
+      "bog": 0.85,
+      "water": 1.0
+    },
+    "rollingResistance": {
+      "asphalt": 0.015,
+      "gravel": 0.03,
+      "dirt": 0.05,
+      "grass": 0.07,
+      "rock": 0.035,
+      "sand": 0.16,
+      "bog": 0.12,
+      "water": 0.15
+    }
+  },
+  "body": {
+    "length": 3.35,
+    "width": 1.45,
+    "height": 1.72,
+    "floor": 0.5,
+    "beltline": 0.98,
+    "cabLength": 2.125,
+    "windscreenRake": 0.15,
+    "bonnet": {
+      "length": 0.95,
+      "height": 0.96
+    },
+    "rear": "open",
+    "roofRack": false,
+    "spareWheel": true,
+    "colors": {
+      "body": "#6e3a2c",
+      "roof": "#5a3024",
+      "trim": "#1f1d1a",
+      "glass": "#1a2428",
+      "canvas": "#38332c",
+      "hub": "#2c2a26",
+      "tire": "#151515"
+    },
+    "headlights": [
+      [
+        0.46,
+        0.76,
+        1.675
+      ],
+      [
+        -0.46,
+        0.76,
+        1.675
+      ]
+    ],
+    "taillights": [
+      [
+        0.6,
+        0.78,
+        -1.675
+      ],
+      [
+        -0.6,
+        0.78,
+        -1.675
+      ]
+    ]
+  },
+  "attachments": [
+    {
+      "name": "front_tow",
+      "position": [
+        0,
+        0.45,
+        1.72
+      ]
+    },
+    {
+      "name": "rear_tow",
+      "position": [
+        0,
+        0.45,
+        -1.72
+      ]
+    }
+  ],
+  "winch": {
+    "attachment": "front_tow",
+    "pull": 30000,
+    "speed": 0.5,
+    "cable": 30
+  }
+}

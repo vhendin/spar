@@ -44,7 +44,7 @@ function setup(name: string, opts: { slope?: number; ground?: (x: number, z: num
   return { world, car, run, tiltOf };
 }
 
-describe.each(['tgb11', 'tgb13'])('%s', (name) => {
+describe.each(['tgb11', 'tgb13', 'ltb4'])('%s', (name) => {
   it('settles on its wheels at the height the definition says', () => {
     const { car, run, tiltOf } = setup(name);
     run(3);

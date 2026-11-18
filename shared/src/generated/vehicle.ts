@@ -194,14 +194,29 @@ export interface Body {
    * How far the top of the windscreen leans back, metres.
    */
   windscreenRake: number;
+  bonnet?: Bonnet;
   /**
-   * What sits behind the cab.
+   * What sits behind the cab. 'open' has no roof at all: a tub with low sides, a windscreen frame and a roll bar.
    */
-  rear: 'hardtop' | 'canvas' | 'pickup';
+  rear: 'hardtop' | 'canvas' | 'pickup' | 'open';
   roofRack: boolean;
+  /**
+   * A spare wheel on the back.
+   */
+  spareWheel?: boolean;
   colors: BodyColors;
   headlights: Vec3[];
   taillights: Vec3[];
+}
+/**
+ * An engine bonnet ahead of the windscreen; without it the front is flat. cabLength then counts from the front of the bonnet.
+ */
+export interface Bonnet {
+  length: number;
+  /**
+   * Height of the bonnet's top at the front.
+   */
+  height: number;
 }
 export interface BodyColors {
   body: VehicleColor;

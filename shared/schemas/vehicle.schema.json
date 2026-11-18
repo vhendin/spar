@@ -389,16 +389,42 @@
           "type": "number",
           "minimum": 0
         },
+        "bonnet": {
+          "title": "Bonnet",
+          "description": "An engine bonnet ahead of the windscreen; without it the front is flat. cabLength then counts from the front of the bonnet.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "length",
+            "height"
+          ],
+          "properties": {
+            "length": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "description": "Height of the bonnet's top at the front.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
         "rear": {
-          "description": "What sits behind the cab.",
+          "description": "What sits behind the cab. 'open' has no roof at all: a tub with low sides, a windscreen frame and a roll bar.",
           "type": "string",
           "enum": [
             "hardtop",
             "canvas",
-            "pickup"
+            "pickup",
+            "open"
           ]
         },
         "roofRack": {
+          "type": "boolean"
+        },
+        "spareWheel": {
+          "description": "A spare wheel on the back.",
           "type": "boolean"
         },
         "colors": {

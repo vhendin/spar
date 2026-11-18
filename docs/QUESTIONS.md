@@ -29,12 +29,26 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   your machine. Never measured outside the headless browser.
 - **Moonlight glinting on lakes:** wanted?
 
+### Light 4×4 (ltb4)
+
+- **Feel.** 1450 kg, short wheelbase, 150 Nm, 0.36 m wheels, 23 cm clearance. Quicker and
+  twitchier than the Terrängbil; it turns sharply at low speed. Too tippy, too slow, about right?
+- **Differentials.** Open at the front, lockable at the back (Digit2 only), so it is clearly
+  weaker off road than the military ones. Keep, or make the front lockable too?
+- **Sinking.** How deep a tyre settles depends on its size and the ground, not on the weight, so
+  the light vehicle sinks about as far (relative to its wheels) as the heavy ones. Should ground
+  pressure count, so it floats better over bog?
+- **Look.** Open top with a roll bar, faded red. A canvas top, another colour, or several colours
+  to choose from?
+
 ### What next
 
-- **Second vehicle:** a light ATV (sinks easily, light to winch out) or an old tractor?
 - **Something to do on a drive:** timed routes, summit challenges, fuel and depots?
 
 ## Answered
+
+- Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
+  to be shown) and not a tractor (too dull). Added as `ltb4`.
 
 - Multiplayer (step 6) waits until single player is complete.
 - Animals are on hold.
