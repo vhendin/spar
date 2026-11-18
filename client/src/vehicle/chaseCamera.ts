@@ -15,6 +15,8 @@ const MODES: CameraMode[] = ['chase', 'orbit', 'cab'];
 
 /** Radians turned per pixel dragged. */
 const DRAG = 0.006;
+/** Slower while aiming the winch with the mouse alone, for picking out one tree among many. */
+const AIM = 0.0025;
 /** Once the vehicle moves faster than this (m/s), a turned chase or cab view swings back. */
 const RECENTRE_SPEED = 3;
 
@@ -68,7 +70,8 @@ export class ChaseCamera {
     });
     element.addEventListener('pointermove', (e) => {
       if (!this.dragging && !(this.freeLook && this.active() && e.pointerType === 'mouse')) return;
-      this.look(-e.movementX * DRAG, (this.mode === 'cab' ? -1 : 1) * e.movementY * DRAG);
+      const k = this.dragging ? DRAG : AIM;
+      this.look(-e.movementX * k, (this.mode === 'cab' ? -1 : 1) * e.movementY * k);
     });
     const release = (e: PointerEvent): void => {
       this.dragging = false;
