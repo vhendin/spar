@@ -19,6 +19,28 @@ const MIN_ROCK = 0.7;
 /** What a solid is, for the sound of hitting it. */
 export type SolidKind = 'tree' | 'rock' | 'object';
 
+/** Trunks thinner than this (metres across) are no use to hook a winch to. */
+const MIN_ANCHOR_TRUNK = 0.1;
+/** Nor are rocks lower than this. */
+const MIN_ANCHOR_ROCK = 0.9;
+
+/** Something a winch cable can be hooked to. */
+export interface Anchor {
+  /** The permanent name it was placed with. */
+  key: string;
+  kind: SolidKind;
+  /** Its middle, at the height the cable goes round it. */
+  x: number;
+  y: number;
+  z: number;
+  /** Round things (trunks, rocks): how far the surface is from the middle. */
+  radius: number;
+  /** Trunks: metres across, which decides whether it holds. */
+  diameter: number;
+  /** Buildings and the like: half the footprint, and its turn about the vertical. */
+  box?: { hx: number; hz: number; yaw: number };
+}
+
 interface Entry {
   collider: RAPIER.Collider;
   seen: number;
@@ -119,6 +141,42 @@ export class Obstacles {
       const p = entry.wire.position;
       console.warn(`obstacles: ${key} at ${p.x.toFixed(1)}, ${p.z.toFixed(1)} is solid but not drawn`);
     }
+  }
+
+  /** Trees, rocks and buildings within `radius` of a point that a winch cable could be hooked to. */
+  anchorsNear(x: number, z: number, radius: number): Anchor[] {
+    const found: Anchor[] = [];
+    this.features?.forEachSolid(x, z, radius, (s) => {
+      // Fence posts would never hold.
+      if (s.key.startsWith('f')) return;
+      if (Math.hypot(s.x - x, s.z - z) > radius + Math.max(s.hx, s.hz)) return;
+      found.push({ key: s.key, kind: 'object', x: s.x, y: s.y - s.hy + Math.min(0.8, s.hy), z: s.z, radius: 0, diameter: 0, box: { hx: s.hx, hz: s.hz, yaw: s.yaw } });
+    });
+    this.vegetation?.forEachSolid(x, z, radius, (key, shape, px, py, pz, size, radiusPerHeight, drawn) => {
+      if (!drawn) return;
+      if (shape === 'trunk') {
+        const r = Math.max(0.07, radiusPerHeight * size);
+        if (2 * r >= MIN_ANCHOR_TRUNK) found.push({ key, kind: 'tree', x: px, y: py + 0.6, z: pz, radius: r, diameter: 2 * r });
+      } else if (size >= MIN_ANCHOR_ROCK) {
+        found.push({ key, kind: 'rock', x: px, y: py + 0.25 * size, z: pz, radius: radiusPerHeight * size, diameter: 0 });
+      }
+    });
+    return found;
+  }
+
+  /** False once the tree with this name has been knocked down. */
+  standing(key: string): boolean {
+    return !this.vegetation?.isFelled(key);
+  }
+
+  /** Pulls a tree over (by a winch): it falls the way (dx, dz) and loses its collider. */
+  fell(anchor: Anchor, dx: number, dz: number): void {
+    if (!this.standing(anchor.key)) return;
+    this.vegetation?.fell(anchor.key, anchor.x, anchor.z, dx, dz);
+    this.felled++;
+    if (this.cracks.length < 8) this.cracks.push({ x: anchor.x, y: anchor.y, z: anchor.z, diameter: anchor.diameter });
+    const entry = this.colliders.get(anchor.key);
+    if (entry) this.drop(anchor.key, entry);
   }
 
   get count(): number {

@@ -467,6 +467,39 @@
           }
         }
       }
+    },
+    "winch": {
+      "title": "Winch",
+      "description": "A cable winch: pulls the vehicle towards a tree, rock or building it is hooked to.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attachment",
+        "pull",
+        "speed",
+        "cable"
+      ],
+      "properties": {
+        "attachment": {
+          "description": "Name of the attachment point the cable leaves from.",
+          "type": "string"
+        },
+        "pull": {
+          "description": "Most the winch pulls before it stalls, newtons.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "speed": {
+          "description": "Cable speed with no load, metres per second.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cable": {
+          "description": "Length of cable on the drum, metres.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
     }
   },
   "definitions": {

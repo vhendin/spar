@@ -1,6 +1,7 @@
 // The gamepad: which button does what, changeable on the Controls page and remembered on
 // this computer. Read once a frame; actions are asked for as held, as a value (triggers),
-// or as tapped this frame. The sticks are fixed: left steers, right looks around.
+// or as tapped this frame. The sticks are fixed: left steers, right looks around (and, while
+// choosing where to hook the winch, points at the anchor).
 
 export const PAD_ACTIONS = [
   { id: 'throttle', label: 'Drive' },
@@ -11,6 +12,9 @@ export const PAD_ACTIONS = [
   { id: 'lights', label: 'Headlights' },
   { id: 'range', label: 'Low and high range' },
   { id: 'locks', label: 'Differential locks, all axles' },
+  { id: 'winch', label: 'Winch: choose an anchor, hook on, unhook' },
+  { id: 'winchIn', label: 'Winch in' },
+  { id: 'winchOut', label: 'Winch: pay out; while choosing, cancel' },
   { id: 'map', label: 'Map' },
   { id: 'minimap', label: 'Minimap' },
   { id: 'toStart', label: 'Back to the start' },
@@ -28,7 +32,7 @@ export const buttonName = (i: number): string => (i < 0 ? '–' : (BUTTON_NAMES[
 
 const DEFAULTS: Record<PadAction, number> = {
   throttle: 7, brake: 6, handbrake: 0, right: 3, camera: 2, lights: 1, range: 4, locks: 5,
-  map: 8, minimap: 12, toStart: -1, menu: 9,
+  winch: 15, winchIn: 13, winchOut: 14, map: 8, minimap: 12, toStart: -1, menu: 9,
 };
 
 const KEY = 'spar.gamepad';

@@ -19,13 +19,15 @@ import { driverEye } from './vehicle/body';
 import { Felling } from './vehicle/felling';
 import { GroundStore } from './vehicle/groundStore';
 import { DriveInput } from './vehicle/input';
-import { PadControls } from './vehicle/gamepad';
+import { buttonName, PadControls } from './vehicle/gamepad';
 import { Obstacles } from './vehicle/obstacles';
 import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
 import { Spray } from './vehicle/spray';
 import { Tracks } from './vehicle/tracks';
 import { VehicleView } from './vehicle/view';
+import { Winch, type WinchControls } from './vehicle/winch';
+import { WinchView } from './vehicle/winchView';
 import { Dashboard } from './ui/dashboard';
 import { Menu } from './ui/menu';
 import { Look, type Grade } from './sky/look';
@@ -125,6 +127,8 @@ interface World {
   spray: Spray;
   tracks: Tracks;
   felling: Felling;
+  winch: Winch;
+  winchView: WinchView;
   sound: VehicleAudio;
   map: MapScreen;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
@@ -219,6 +223,9 @@ async function start(): Promise<void> {
   let lastSaved = 0;
   /** Seconds the vehicle has lain on its side or roof; after a moment the way back is offered. */
   let overturned = 0;
+  const winchHelp = document.createElement('div');
+  winchHelp.id = 'winch-help';
+  document.body.append(winchHelp);
   const prompt = document.createElement('div');
   prompt.id = 'prompt';
   prompt.innerHTML = 'Overturned · press <kbd>R</kbd> to get back on the wheels';
@@ -296,6 +303,7 @@ async function start(): Promise<void> {
     const y = w.ground.heightAt(x, z);
     if (y === null) return false;
     w.tracks.break();
+    w.winch.stow();
     w.sim.place(x, y + 0.25, z, heading);
     w.view.snap();
     chase.reset();
@@ -395,6 +403,11 @@ async function start(): Promise<void> {
     }
     // After a rebuild for new settings, the vehicle goes back where it was.
     const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
+    // The winch hooks on to the same trees, rocks and buildings; thin trees pulled too hard go over.
+    const winch = new Winch(sim, obstacles);
+    winch.onGiveWay = (anchor, dx, dz) => obstacles?.fell(anchor, dx, dz);
+    const winchView = new WinchView();
+    scene.add(winchView.group);
     const sound = new VehicleAudio(audio);
     const map = new MapScreen(document.body, index, vectors, {
       setDestination: (d) => {
@@ -471,7 +484,7 @@ async function start(): Promise<void> {
       starts.editable = info?.enabled ?? false;
       start.setMaker(info?.enabled ?? false);
     });
-    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
     if (!direct) showStart(world);
@@ -503,6 +516,7 @@ async function start(): Promise<void> {
   const resetVehicle = (w: World): void => {
     if (w.unplaced || w.sim.beingRighted) return;
     const p = w.sim.body.translation();
+    w.winch.stow();
     w.sim.right(w.ground.heightAt(p.x, p.z) ?? p.y - 1);
     overturned = 0;
   };
@@ -529,6 +543,8 @@ async function start(): Promise<void> {
     w.view.group.visible = visible;
     scene.add(w.view.group);
     w.felling.body = w.sim.body;
+    w.winch.sim = w.sim;
+    w.winch.stow();
     chase.eye.set(...driverEye(def));
     w.sim.place(p.x, p.y, p.z, heading);
     w.view.snap();
@@ -538,6 +554,7 @@ async function start(): Promise<void> {
   const showStart = (w: World): void => {
     starting = true;
     w.unplaced = true;
+    w.winch.stow();
     w.view.group.visible = false;
     if (w.map.open) toggleMap();
     flying = false;
@@ -554,6 +571,7 @@ async function start(): Promise<void> {
     const y = w.map.heightAt(s.x, s.z) ?? w.terrain.heightAt(s.x, s.z) ?? w.index.heights.max;
     w.sim.place(s.x, y + 1, s.z, s.heading);
     w.tracks.break();
+    w.winch.stow();
     w.unplaced = true;
   };
   /** Where the vehicle is and faces, or the camera when flying. */
@@ -768,6 +786,16 @@ async function start(): Promise<void> {
       case 'KeyL':
         if (!flying) w?.sim.toggleRange();
         break;
+      case 'KeyE':
+        // The winch: choose an anchor, hook on, unhook.
+        if (w && !flying && !w.unplaced) w.winch.toggle();
+        break;
+      case 'Tab':
+        if (w?.winch.state === 'choosing') w.winch.next();
+        break;
+      case 'KeyX':
+        if (w?.winch.state === 'choosing') w.winch.cancel();
+        break;
       case 'KeyR':
         // Back on its wheels where it stands; with Shift, back to the start.
         if (w && !flying) {
@@ -805,6 +833,27 @@ async function start(): Promise<void> {
   let owed = 0;
   /** Pushes against the vehicle body gathered over the physics steps of a frame, for its sound. */
   const impacts: Impact[] = [];
+  const aim = new THREE.Vector3();
+  /** What the winch keys do now, at the bottom of the screen while it is in use. */
+  let winchShown = '';
+  const drawWinchHelp = (w: World): void => {
+    const pad = gamepad.pad !== null;
+    const key = (k: string, action: Parameters<typeof gamepad.tapped>[0]): string => `<kbd>${pad ? buttonName(gamepad.bindings[action]) : k}</kbd>`;
+    let html = '';
+    if (!paused && !flying && !w.unplaced && !w.map.open) {
+      if (w.winch.state === 'choosing') {
+        html = w.winch.choices.length
+          ? `Winch · ${key('E', 'winch')} hook on · ${pad ? 'right stick' : `<kbd>Tab</kbd>`} another · ${key('X', 'winchOut')} cancel`
+          : `Nothing to hook the winch to within reach ahead · ${key('X', 'winchOut')} cancel`;
+      } else if (w.winch.state === 'hooked') {
+        html = `Winch · hold ${key('Z', 'winchIn')} to winch in · ${key('X', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
+      }
+    }
+    if (html === winchShown) return;
+    winchShown = html;
+    winchHelp.innerHTML = html;
+    winchHelp.style.display = html ? 'block' : 'none';
+  };
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -830,6 +879,8 @@ async function start(): Promise<void> {
         if (gamepad.tapped('camera')) chase.cycle();
         if (gamepad.tapped('lights')) lamps = lamps === null ? true : lamps ? false : null;
         if (gamepad.tapped('range')) w0.sim.toggleRange();
+        if (gamepad.tapped('winch') && !w0.unplaced) w0.winch.toggle();
+        if (gamepad.tapped('winchOut') && w0.winch.state === 'choosing') w0.winch.cancel();
         if (gamepad.tapped('locks')) {
           // All lockable axles together: lock them all, or free them all if they already are.
           const lockable = w0.sim.def.axles.map((a, i) => (a.differential === 'lockable' ? i : -1)).filter((i) => i >= 0);
@@ -842,7 +893,9 @@ async function start(): Promise<void> {
     const w = world;
     if (w) {
       // While paused nothing moves: no input, no physics, no flying mud.
-      const controls = flying || paused || w.map.open ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
+      const still = flying || paused || starting || w.map.open;
+      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
+      const winching: WinchControls = still || w.unplaced ? { pull: false, slack: false } : input.winch();
       if (!paused) owed += dt;
       let steps = 0;
       if (starting) owed = 0;
@@ -862,6 +915,7 @@ async function start(): Promise<void> {
           }
         }
         w.sim.step(controls, STEP);
+        w.winch.step(STEP, winching);
         w.felling.before();
         w.physics.step(w.felling.events);
         // The event queue must be emptied every step, with or without obstacles around.
@@ -883,6 +937,12 @@ async function start(): Promise<void> {
       // so they can be inspected anywhere.
       const at = flying && w.obstacles?.debug.visible ? camera.position : w.view.group.position;
       w.obstacles?.update(now / 1000, at.x, at.z);
+
+      // The winch: what can be hooked to, picked by looking towards it; the cable.
+      if (w.winch.state === 'choosing') w.winch.aim(now / 1000, camera.getWorldDirection(aim));
+      w.winchView.group.visible = !w.unplaced && !starting;
+      w.winchView.update(dt, w.winch, w.view.group, (x, z) => w.terrain.heightAt(x, z), camera.position);
+      drawWinchHelp(w);
 
       if (starting) {
         // A slow turn round the middle of the region, high up, while the start screen shows.
@@ -945,6 +1005,15 @@ async function start(): Promise<void> {
       audio.inside = inside;
       audio.listen(camera);
       w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], impacts.splice(0), w.unplaced);
+      const spec = w.sim.def.winch;
+      w.sound.winch(paused ? 0 : dt, {
+        drum: w.winch.drum,
+        speed: spec?.speed ?? 1,
+        load: w.winch.load,
+        hooked: w.winch.state === 'hooked',
+        working: w.winch.state === 'hooked' && (winching.pull || winching.slack),
+        events: w.winch.events,
+      }, w.unplaced || paused);
       ambience.update(paused ? 0 : dt, {
         sun: THREE.MathUtils.radToDeg(env.sunElevation),
         hour: env.localHour(),
@@ -976,8 +1045,9 @@ async function start(): Promise<void> {
       prompt.style.opacity = overturned > 1.5 && !paused && !w.map.open ? '1' : '0';
 
       dash.visible = !flying && !w.unplaced;
-      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding });
-      hint.style.opacity = now < hintUntil && !paused ? '1' : '0';
+      const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;
+      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding }, gauge);
+      hint.style.opacity = now < hintUntil && !paused && winchShown === '' ? '1' : '0';
     }
     // ?look=0 draws the plain picture, without the grade and glow.
     if (plain) renderer.render(scene, camera);

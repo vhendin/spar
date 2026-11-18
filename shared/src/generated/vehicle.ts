@@ -29,6 +29,7 @@ export interface VehicleDef {
    * Points where things can be hooked on; reserved for the winch.
    */
   attachments: Attachment[];
+  winch?: Winch;
 }
 export interface Chassis {
   /**
@@ -210,4 +211,25 @@ export interface BodyColors {
 export interface Attachment {
   name: string;
   position: Vec3;
+}
+/**
+ * A cable winch: pulls the vehicle towards a tree, rock or building it is hooked to.
+ */
+export interface Winch {
+  /**
+   * Name of the attachment point the cable leaves from.
+   */
+  attachment: string;
+  /**
+   * Most the winch pulls before it stalls, newtons.
+   */
+  pull: number;
+  /**
+   * Cable speed with no load, metres per second.
+   */
+  speed: number;
+  /**
+   * Length of cable on the drum, metres.
+   */
+  cable: number;
 }

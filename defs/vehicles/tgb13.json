@@ -213,5 +213,11 @@
         -2.7249999999999996
       ]
     }
-  ]
+  ],
+  "winch": {
+    "attachment": "front_tow",
+    "pull": 54000,
+    "speed": 0.5,
+    "cable": 40
+  }
 }

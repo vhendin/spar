@@ -334,6 +334,10 @@ export class Vegetation {
     }
   }
 
+  isFelled(key: string): boolean {
+    return this.felled.has(key);
+  }
+
   /** Knocks a tree over for good: it lies towards (dx, dz) and is no longer solid. */
   fell(key: string, x: number, z: number, dx: number, dz: number): void {
     this.felled.set(key, [dx, dz]);

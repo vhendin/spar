@@ -105,6 +105,8 @@ export class VehicleSim {
   pedal = 0;
   /** True while the vehicle holds itself still with nobody on the pedals, like a parking brake. */
   holding = true;
+  /** Set while a winch pulls the vehicle along, so it does not hold itself still against it. */
+  pulled = false;
 
   private readonly controller: RAPIER.DynamicRayCastVehicleController;
   private readonly restLength: number[] = [];
@@ -319,7 +321,7 @@ export class VehicleSim {
 
     // With nobody on the pedals, once nearly stopped, hold still instead of creeping
     // downhill; a pedal lets go again.
-    if (drive >= 0.02 || brake >= 0.02) this.holding = false;
+    if (drive >= 0.02 || brake >= 0.02 || this.pulled) this.holding = false;
     else if (Math.abs(this.speed) < 0.6) this.holding = true;
     const weight = def.chassis.mass * GRAVITY;
     const handbraked = def.axles.filter((a) => a.handbrake).length * 2 || this.wheels.length;

@@ -1,5 +1,6 @@
 import type { PadControls } from './gamepad';
 import type { VehicleInput } from './sim';
+import type { WinchControls } from './winch';
 
 const held = (down: Set<string>, ...codes: string[]): boolean => codes.some((c) => down.has(c));
 
@@ -11,7 +12,7 @@ export class DriveInput {
   constructor(private readonly gamepad: PadControls) {
     window.addEventListener('keydown', (e) => {
       this.down.add(e.code);
-      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+      if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
@@ -37,5 +38,14 @@ export class DriveInput {
       handbrake ||= g.held('handbrake');
     }
     return { throttle, brake, steer, handbrake };
+  }
+
+  /** The winch's hold-down controls: Z winds in, X pays out. */
+  winch(): WinchControls {
+    const g = this.gamepad;
+    return {
+      pull: this.down.has('KeyZ') || (g.pad !== null && g.held('winchIn')),
+      slack: this.down.has('KeyX') || (g.pad !== null && g.held('winchOut')),
+    };
   }
 }

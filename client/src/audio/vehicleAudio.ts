@@ -3,7 +3,8 @@
 // tyres on each kind of ground, splashing through water and squelching in bog, thumps from
 // the suspension over bumps, bangs when it bottoms out or the vehicle lands from a jump, the
 // crash of hitting a tree, rock, building or the ground, the scrape of the body sliding on
-// the ground, and the crack of a tree giving way.
+// the ground, the crack of a tree giving way, and the winch: its motor labouring under load,
+// the cable creaking and snapping taut, the clink of the hook.
 
 import * as THREE from 'three/webgpu';
 import type { VehicleSim } from '../vehicle/sim';
@@ -54,6 +55,20 @@ export interface Impact {
   force: number;
 }
 
+/** What the winch is doing, for its sound. */
+export interface WinchSound {
+  /** Cable speed now and with no load, metres a second; positive winding in. */
+  drum: number;
+  speed: number;
+  /** Pull as a share of what the winch can manage. */
+  load: number;
+  hooked: boolean;
+  /** The motor is switched on: winding in or paying out. */
+  working: boolean;
+  /** Happenings since last time; emptied here. */
+  events: string[];
+}
+
 /** Contacts gentler than this many times the vehicle's weight are not hits. */
 const HIT_G = 2.5;
 
@@ -90,6 +105,12 @@ export class VehicleAudio {
   /** A hard saturation curve for the blows of crashes. */
   private readonly hard = softClip(4);
   private load = 0;
+  private readonly winchLevel: GainNode;
+  private readonly winchTone: BiquadFilterNode;
+  private readonly winchMotor: OscillatorNode;
+  private readonly winchGear: OscillatorNode;
+  private creakWait = 0;
+  private winchLoad = 0;
 
   constructor(private readonly out: AudioOut) {
     const ctx = out.ctx;
@@ -155,6 +176,23 @@ export class VehicleAudio {
     this.scrapeMetal.gain.value = 0;
     this.scrapeMetal.connect(this.at);
     out.loop(out.buffers.white).connect(out.filter('bandpass', 3300, 7)).connect(this.scrapeMetal);
+
+    // The winch motor: a buzzing electric motor and its reduction gears.
+    this.winchLevel = ctx.createGain();
+    this.winchLevel.gain.value = 0;
+    this.winchLevel.connect(this.at);
+    this.winchTone = out.lowpass(1400, 0.8);
+    this.winchTone.connect(this.winchLevel);
+    this.winchMotor = ctx.createOscillator();
+    this.winchMotor.type = 'sawtooth';
+    this.winchMotor.connect(this.winchTone);
+    this.winchMotor.start();
+    this.winchGear = ctx.createOscillator();
+    this.winchGear.type = 'triangle';
+    const gear = ctx.createGain();
+    gear.gain.value = 0.35;
+    this.winchGear.connect(gear).connect(this.winchTone);
+    this.winchGear.start();
 
     for (const [ground, voice] of Object.entries(VOICES)) {
       const source = out.loop(out.buffers[voice.buffer]);
@@ -302,6 +340,38 @@ export class VehicleAudio {
     ease(this.hissTone.frequency, 2000 + wetRoll * 120, t);
 
     for (const c of cracks) if (!quiet) this.crack(c);
+  }
+
+  /** Call every frame with what the winch is doing. */
+  winch(dt: number, w: WinchSound, quiet: boolean): void {
+    const t = this.out.ctx.currentTime;
+    const turning = Math.min(1.5, Math.abs(w.drum) / w.speed);
+    const load = Math.min(1.2, w.load);
+    // The motor slows and growls as the pull rises; stalled, it hums low.
+    const motor = 48 + 150 * turning + (w.working ? 12 : 0);
+    ease(this.winchMotor.frequency, motor, t, 0.05);
+    ease(this.winchGear.frequency, motor * 4.3, t, 0.05);
+    ease(this.winchTone.frequency, 700 + 900 * turning, t, 0.05);
+    ease(this.winchLevel.gain, quiet || !w.working ? 0 : 0.035 + 0.06 * load, t, 0.04);
+
+    // A cable under strain creaks now and then, more often the harder it pulls.
+    this.creakWait -= dt;
+    if (!quiet && w.hooked && load > 0.2 && this.creakWait <= 0) {
+      this.burst(this.out.buffers.crackle, 'bandpass', 350 + Math.random() * 500, 7, 0.08 + 0.18 * load, 0.08 + Math.random() * 0.1, 0.6 + Math.random() * 0.3);
+      this.creakWait = 0.2 + (Math.random() * 1.2) / load;
+    }
+    // Snapping taut.
+    if (!quiet && w.hooked && this.winchLoad < 0.08 && load > 0.3) {
+      this.ring([118, 271, 598], 0.12 * Math.min(1, load), 0.35);
+      this.thud(90, 0.3, 0.05);
+    }
+    this.winchLoad = w.hooked ? load : 0;
+    for (const e of w.events.splice(0)) {
+      if (quiet) continue;
+      // The hook clinking on, or the cable whipping free.
+      if (e === 'hooked') this.ring([1240, 2890, 4410], 0.035, 0.08);
+      else if (e === 'unhooked') this.ring([930, 2210], 0.03, 0.1);
+    }
   }
 
   /** A short one-off sound at the vehicle: a burst of a noise loop through a filter. */

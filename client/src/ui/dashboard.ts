@@ -1,5 +1,6 @@
-// The driver's instruments: rev counter with the gear in the middle, speedometer, and a row of
-// lamps for the range, the differential locks, the headlights and the parking brake.
+// The driver's instruments: rev counter with the gear in the middle, speedometer, a row of
+// lamps for the range, the differential locks, the headlights and the parking brake, and while
+// the winch is hooked on, its pull and the cable out.
 // Drawn once as SVG; each frame only turns the needles and switches lamps.
 
 import type { VehicleDef } from '@spar/shared';
@@ -69,6 +70,15 @@ export interface Lamps {
   parked: boolean;
 }
 
+/** The winch while hooked on, for its gauge. */
+export interface WinchGauge {
+  /** Pull as a share of what the winch can manage. */
+  load: number;
+  /** Newtons, and metres of cable out. */
+  tension: number;
+  length: number;
+}
+
 export class Dashboard {
   readonly root: HTMLDivElement;
   private readonly svg: SVGSVGElement;
@@ -84,12 +94,20 @@ export class Dashboard {
   /** Eased needle positions, as fractions of the sweep. */
   private rpmShown = 0;
   private speedShown = 0;
+  private loadShown = 0;
+  private readonly winch: { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement };
 
   constructor(parent: HTMLElement) {
     this.root = document.createElement('div');
     this.root.id = 'dash';
     this.svg = el('svg', { viewBox: '0 0 360 180', class: 'dials' });
     this.root.append(this.svg);
+    const winch = document.createElement('div');
+    winch.className = 'winch';
+    winch.innerHTML = '<span class="label">WINCH</span><div class="bar"><div class="fill"></div></div><span class="value"></span>';
+    winch.style.display = 'none';
+    this.winch = { root: winch, fill: winch.querySelector('.fill')!, text: winch.querySelector('.value')! };
+    this.root.append(winch);
     parent.append(this.root);
   }
 
@@ -128,10 +146,10 @@ export class Dashboard {
     const parked = lamp('P', 'Parking brake');
     parked.classList.add('brake');
     this.lamps = { range, locks, lights, parked };
-    this.root.append(row);
+    this.winch.root.before(row);
   }
 
-  update(dt: number, sim: VehicleSim, lamps: Lamps): void {
+  update(dt: number, sim: VehicleSim, lamps: Lamps, winch: WinchGauge | null = null): void {
     if (this.def !== sim.def) this.build(sim.def);
     const d = sim.drivetrain;
     const kmh = Math.abs(sim.speed) * 3.6;
@@ -158,6 +176,16 @@ export class Dashboard {
     l.lights.classList.toggle('on', lamps.lights);
     l.lights.textContent = lamps.autoLights ? 'LIGHTS A' : 'LIGHTS';
     l.parked.classList.toggle('on', lamps.parked);
+
+    const g = this.winch;
+    g.root.style.display = winch ? '' : 'none';
+    if (winch) {
+      this.loadShown += (Math.min(1.1, winch.load) - this.loadShown) * (1 - Math.exp(-dt * 8));
+      g.fill.style.width = `${(Math.min(1, this.loadShown) * 100).toFixed(1)}%`;
+      g.root.classList.toggle('stall', this.loadShown > 0.92);
+      const text = `${(winch.tension / 9810).toFixed(1)} t · ${winch.length.toFixed(0)} m`;
+      if (g.text.textContent !== text) g.text.textContent = text;
+    } else this.loadShown = 0;
   }
 
   set visible(on: boolean) {
