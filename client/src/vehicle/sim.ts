@@ -46,6 +46,8 @@ export interface WheelTelemetry {
   slide: number;
   /** Current length of the suspension strut, metres. */
   suspension: number;
+  /** How far into its travel the suspension is pushed: 1 is on the bump stops. */
+  bump: number;
   /** Steering angle and accumulated roll, radians. */
   steer: number;
   rotation: number;
@@ -106,6 +108,9 @@ export class VehicleSim {
 
   private readonly controller: RAPIER.DynamicRayCastVehicleController;
   private readonly restLength: number[] = [];
+  private readonly travel: number[] = [];
+  /** Handles of the body's own colliders, to tell its contacts from others'. */
+  readonly chassis = new Set<number>();
   private readonly connectionY: number[] = [];
   private steerAngle = 0;
   /** While being put back on its wheels: where from, where to, and how far along (0..1). */
@@ -134,15 +139,19 @@ export class VehicleSim {
         .setAngularDamping(0.25),
     );
     const solid = (hx: number, hy: number, hz: number, x: number, y: number, z: number): void => {
-      world.createCollider(
+      const collider = world.createCollider(
         R.ColliderDesc.cuboid(hx, hy, hz)
           .setTranslation(x, y, z)
           .setDensity(0) // the mass is set on the body, above
           .setFriction(0.5)
           .setRestitution(0.05)
-          .setCollisionGroups(groups(GROUP_VEHICLE, GROUP_GROUND | GROUP_OBSTACLE | GROUP_VEHICLE)),
+          .setCollisionGroups(groups(GROUP_VEHICLE, GROUP_GROUND | GROUP_OBSTACLE | GROUP_VEHICLE))
+          // Hits and scrapes against the body are heard; light touches are not reported.
+          .setActiveEvents(R.ActiveEvents.CONTACT_FORCE_EVENTS)
+          .setContactForceEventThreshold(mass * GRAVITY * 0.3),
         this.body,
       );
+      this.chassis.add(collider.handle);
     };
     // Bodywork, and under it the frame between the axles: what grounds out on a crest.
     solid(w / 2, h / 2, l / 2, box.center[0]!, box.center[1]!, box.center[2]!);
@@ -166,6 +175,7 @@ export class VehicleSim {
         // Chosen so the wheel's lowest point is at y = 0 when the vehicle stands still.
         const y = def.wheels.radius + s.travel;
         this.restLength.push(rest);
+        this.travel.push(s.travel);
         this.connectionY.push(y);
         this.controller.addWheel({ x: (side * axle.track) / 2, y, z: axle.z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, rest, def.wheels.radius);
         // Rapier multiplies the spring's result by the chassis mass, so it wants rates per kilogram.
@@ -175,7 +185,7 @@ export class VehicleSim {
         this.controller.setWheelMaxSuspensionTravel(i, s.travel);
         this.controller.setWheelMaxSuspensionForce(i, staticLoad * 8);
         this.controller.setWheelSideFrictionStiffness(i, 1);
-        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, steer: 0, rotation: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
+        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
         void a;
       }
     });
@@ -350,6 +360,7 @@ export class VehicleSim {
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i]!;
       wheel.suspension = c.wheelSuspensionLength(i) ?? this.restLength[i]!;
+      wheel.bump = Math.min(1, Math.max(0, (this.restLength[i]! - wheel.suspension) / this.travel[i]!));
       wheel.rotation = c.wheelRotation(i) ?? 0;
       // Velocity of the contact patch (body velocity plus spin about the centre), along the
       // tyre's own sideways axis.

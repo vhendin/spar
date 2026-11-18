@@ -16,11 +16,15 @@ const RADIUS = 28;
 /** Rocks smaller than this pass under the vehicle and are left out. */
 const MIN_ROCK = 0.7;
 
+/** What a solid is, for the sound of hitting it. */
+export type SolidKind = 'tree' | 'rock' | 'object';
+
 interface Entry {
   collider: RAPIER.Collider;
   seen: number;
   wire: THREE.Mesh;
   drawn: boolean;
+  kind: SolidKind;
 }
 
 const UNIT_CYLINDER = new THREE.CylinderGeometry(1, 1, 2, 10, 1);
@@ -41,6 +45,7 @@ export class Obstacles {
   readonly undrawnEver = new Set<string>();
 
   private readonly colliders = new Map<string, Entry>();
+  private readonly byHandle = new Map<number, Entry>();
   private readonly materials = { plant: wireMaterial(0x3cff6e), object: wireMaterial(0x4aa8ff), hidden: wireMaterial(0xff2a2a) };
   private pass = 0;
   private next = 0;
@@ -58,7 +63,13 @@ export class Obstacles {
     this.debug.renderOrder = 10;
   }
 
-  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, plant: boolean): RAPIER.Collider {
+  /** What the collider with this handle is, or null when it is none of these (the ground). */
+  kindOf(handle: number): SolidKind | null {
+    return this.byHandle.get(handle)?.kind ?? null;
+  }
+
+  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, kind: SolidKind): RAPIER.Collider {
+    const plant = kind !== 'object';
     const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
     const wire = new THREE.Mesh(geometry, plant ? this.materials.plant : this.materials.object);
     const t = desc.translation, r = desc.rotation;
@@ -67,7 +78,9 @@ export class Obstacles {
     wire.scale.set(...scale);
     wire.renderOrder = 10;
     this.debug.add(wire);
-    this.colliders.set(key, { collider, seen: this.pass, wire, drawn: true });
+    const entry: Entry = { collider, seen: this.pass, wire, drawn: true, kind };
+    this.colliders.set(key, entry);
+    this.byHandle.set(collider.handle, entry);
     if (plant) this.mark(key, this.colliders.get(key)!, drawn);
     return collider;
   }
@@ -90,6 +103,7 @@ export class Obstacles {
 
   private drop(key: string, entry: Entry): void {
     this.felling?.untrack(entry.collider);
+    this.byHandle.delete(entry.collider.handle);
     this.world.removeCollider(entry.collider, false);
     this.debug.remove(entry.wire);
     this.colliders.delete(key);
@@ -127,7 +141,7 @@ export class Obstacles {
         .cuboid(s.hx, s.hy, s.hz)
         .setTranslation(s.x, s.y, s.z)
         .setRotation({ x: 0, y: Math.sin(s.yaw / 2), z: 0, w: Math.cos(s.yaw / 2) });
-      this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, false);
+      this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, 'object');
     });
     this.vegetation?.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight, drawn) => {
       const known = this.colliders.get(key);
@@ -142,13 +156,13 @@ export class Obstacles {
         let desc = this.R.ColliderDesc.cylinder(half, radius).setTranslation(px, py + half - 0.4, pz);
         const breakable = this.felling && Felling.breakable(radius * 2);
         if (breakable) desc = this.felling!.listen(desc, this.R);
-        const collider = this.add(key, desc, UNIT_CYLINDER, [radius, half, radius], drawn, true);
+        const collider = this.add(key, desc, UNIT_CYLINDER, [radius, half, radius], drawn, 'tree');
         if (breakable) this.felling!.track(collider, { key, diameter: radius * 2 });
       } else {
         if (size < MIN_ROCK) return;
         const radius = radiusPerHeight * size;
         const desc = this.R.ColliderDesc.ball(radius).setTranslation(px, py + 0.25 * size, pz);
-        this.add(key, desc, UNIT_BALL, [radius, radius, radius], drawn, true);
+        this.add(key, desc, UNIT_BALL, [radius, radius, radius], drawn, 'rock');
       }
     });
     let undrawn = 0;

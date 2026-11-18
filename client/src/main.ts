@@ -31,7 +31,7 @@ import { Menu } from './ui/menu';
 import { Look, type Grade } from './sky/look';
 import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
-import { VehicleAudio } from './audio/vehicleAudio';
+import { VehicleAudio, type Impact } from './audio/vehicleAudio';
 import { Guide } from './ui/guide';
 import { MapScreen, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
@@ -803,6 +803,8 @@ async function start(): Promise<void> {
   let frames = 0;
   let fpsSince = last;
   let owed = 0;
+  /** Pushes against the vehicle body gathered over the physics steps of a frame, for its sound. */
+  const impacts: Impact[] = [];
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
@@ -862,7 +864,15 @@ async function start(): Promise<void> {
         w.sim.step(controls, STEP);
         w.felling.before();
         w.physics.step(w.felling.events);
-        w.obstacles?.afterStep(STEP);
+        // The event queue must be emptied every step, with or without obstacles around.
+        if (w.obstacles) w.obstacles.afterStep(STEP);
+        else w.felling.after(STEP);
+        // Pushes against the vehicle's body, sorted by what pushed, for its sound.
+        for (const c of w.felling.contacts.splice(0)) {
+          const mine = w.sim.chassis.has(c.a), theirs = w.sim.chassis.has(c.b);
+          if (mine === theirs || impacts.length >= 32) continue;
+          impacts.push({ kind: w.obstacles?.kindOf(mine ? c.b : c.a) ?? 'ground', force: c.force });
+        }
         w.view.capture();
         // Off the edge of the world or under it: start over.
         if (w.sim.body.translation().y < w.index.heights.min - 50) w.unplaced = true;
@@ -934,7 +944,7 @@ async function start(): Promise<void> {
       const inside = !flying && !starting && chase.mode === 'cab';
       audio.inside = inside;
       audio.listen(camera);
-      w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], w.unplaced);
+      w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], impacts.splice(0), w.unplaced);
       ambience.update(paused ? 0 : dt, {
         sun: THREE.MathUtils.radToDeg(env.sunElevation),
         hour: env.localHour(),

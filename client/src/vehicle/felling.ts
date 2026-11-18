@@ -34,8 +34,18 @@ export interface Felled {
   diameter: number;
 }
 
+/** A push between two colliders in one physics step, for the sound of it. */
+export interface Contact {
+  a: number;
+  b: number;
+  /** Newtons. */
+  force: number;
+}
+
 export class Felling {
   readonly events: RAPIER.EventQueue;
+  /** Every reported contact since the list was last emptied (by whoever plays them). */
+  readonly contacts: Contact[] = [];
   /** Trunks being watched, with the average force on each lately (newtons). */
   private readonly trees = new Map<number, Tree & { collider: RAPIER.Collider; pushed: number }>();
   private readonly v = { x: 0, y: 0, z: 0 };
@@ -81,6 +91,7 @@ export class Felling {
     let restore = false;
     const v = { ...this.v };
     this.events.drainContactForceEvents((e) => {
+      if (this.contacts.length < 64) this.contacts.push({ a: e.collider1(), b: e.collider2(), force: e.totalForceMagnitude() });
       const tree = this.trees.get(e.collider1()) ?? this.trees.get(e.collider2());
       if (!tree || touched.has(tree.collider.handle)) return;
       touched.add(tree.collider.handle);

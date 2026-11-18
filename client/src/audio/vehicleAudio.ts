@@ -1,7 +1,9 @@
 // What the vehicle sounds like: the engine following revs and throttle, a gearbox whine that
 // rises with road speed (loudest in low range and reverse), a clunk at each gear change, the
 // tyres on each kind of ground, splashing through water and squelching in bog, thumps from
-// the suspension over bumps, and the crack of a tree giving way.
+// the suspension over bumps, bangs when it bottoms out or the vehicle lands from a jump, the
+// crash of hitting a tree, rock, building or the ground, the scrape of the body sliding on
+// the ground, and the crack of a tree giving way.
 
 import * as THREE from 'three/webgpu';
 import type { VehicleSim } from '../vehicle/sim';
@@ -45,6 +47,16 @@ export interface Crack {
   diameter: number;
 }
 
+/** Something pushed against the vehicle's body during a frame. */
+export interface Impact {
+  kind: 'ground' | 'tree' | 'rock' | 'object';
+  /** Newtons. */
+  force: number;
+}
+
+/** Contacts gentler than this many times the vehicle's weight are not hits. */
+const HIT_G = 2.5;
+
 export class VehicleAudio {
   private readonly at: PannerNode;
   private engine: AudioWorkletNode | null = null;
@@ -61,11 +73,19 @@ export class VehicleAudio {
   private gear = 1;
   private readonly lastSuspension: number[] = [];
   private readonly lastWater: boolean[] = [];
-  private readonly lastVelocity = new THREE.Vector3();
-  private readonly velocity = new THREE.Vector3();
   private readonly forward = new THREE.Vector3();
   private bumpQuiet = 0;
-  private crashQuiet = 0;
+  private stopQuiet = 0;
+  private readonly hitQuiet = new Map<Impact['kind'], number>();
+  /** The hardest push of each kind last frame: a hit is a sudden rise, not a steady weight. */
+  private readonly lastPush = new Map<Impact['kind'], number>();
+  /** Seconds with every wheel off the ground, and how fast it was falling a moment ago. */
+  private airborne = 0;
+  private falling = 0;
+  private readonly scrapeLevel: GainNode;
+  private readonly scrapeMetal: GainNode;
+  private readonly scrapeSource: AudioBufferSourceNode;
+  private scrape = 0;
   private load = 0;
 
   constructor(private readonly out: AudioOut) {
@@ -118,6 +138,17 @@ export class VehicleAudio {
     this.hissTone.connect(this.hissLevel);
     out.loop(out.buffers.white).connect(this.hissTone);
 
+    // The body sliding on the ground: grinding grit, and a metal screech on top.
+    this.scrapeLevel = ctx.createGain();
+    this.scrapeLevel.gain.value = 0;
+    this.scrapeLevel.connect(this.at);
+    this.scrapeSource = out.loop(out.buffers.gravel);
+    this.scrapeSource.connect(out.filter('bandpass', 1500, 1.1)).connect(this.scrapeLevel);
+    this.scrapeMetal = ctx.createGain();
+    this.scrapeMetal.gain.value = 0;
+    this.scrapeMetal.connect(this.at);
+    out.loop(out.buffers.white).connect(out.filter('bandpass', 3300, 7)).connect(this.scrapeMetal);
+
     for (const [ground, voice] of Object.entries(VOICES)) {
       const source = out.loop(out.buffers[voice.buffer]);
       const filter = out.filter(voice.filter, voice.frequency, voice.q);
@@ -132,7 +163,7 @@ export class VehicleAudio {
    * Call every frame. `group` is the drawn vehicle; `quiet` when it is not on the ground yet,
    * so nothing plays. `pedal` is the throttle pedal in the direction of travel.
    */
-  update(dt: number, sim: VehicleSim, group: THREE.Object3D, pedal: number, wetness: number, cracks: Crack[], quiet: boolean): void {
+  update(dt: number, sim: VehicleSim, group: THREE.Object3D, pedal: number, wetness: number, cracks: Crack[], impacts: Impact[], quiet: boolean): void {
     const ctx = this.out.ctx;
     const t = ctx.currentTime;
     if (!this.engine && this.out.ready) {
@@ -186,7 +217,12 @@ export class VehicleAudio {
       const prev = this.lastSuspension[i] ?? wheel.suspension;
       const push = dt > 0 ? (prev - wheel.suspension) / dt : 0;
       this.lastSuspension[i] = wheel.suspension;
-      if (!quiet && push > 0.7 && this.bumpQuiet <= 0) {
+      if (!quiet && wheel.bump > 0.97 && push > 0.6 && this.stopQuiet <= 0) {
+        // On the bump stops: a hard metallic bang instead of a thump.
+        this.bottomOut(Math.min(1, (push - 0.6) / 2.5));
+        this.stopQuiet = 0.15;
+        this.bumpQuiet = 0.08;
+      } else if (!quiet && push > 0.7 && this.bumpQuiet <= 0) {
         this.thump(Math.min(1, (push - 0.7) / 2.2));
         this.bumpQuiet = 0.08;
       }
@@ -207,6 +243,47 @@ export class VehicleAudio {
       rate = Math.max(rate, surface);
     });
     this.bumpQuiet -= dt;
+    this.stopQuiet -= dt;
+
+    // Landing: after a while with every wheel in the air, the first one down; as hard as the fall was fast.
+    const vy = sim.body.linvel().y;
+    if (sim.wheels.every((w) => !w.contact)) {
+      this.airborne += dt;
+      this.falling = Math.max(0, -vy);
+    } else {
+      if (!quiet && this.airborne > 0.35) {
+        const strength = Math.min(1, (this.falling - 1.5) / 6);
+        if (strength > 0.05) this.land(strength);
+      }
+      this.airborne = 0;
+    }
+
+    // Hits against the body, by what was hit, as hard as the push was against the vehicle's weight.
+    const weight = sim.body.mass() * 9.81;
+    const hardest = new Map<Impact['kind'], number>();
+    let rubbing = 0;
+    for (const i of impacts) {
+      const g = i.force / weight;
+      hardest.set(i.kind, Math.max(hardest.get(i.kind) ?? 0, g));
+      if (i.kind === 'ground') rubbing = Math.max(rubbing, g);
+    }
+    for (const [kind, quietFor] of this.hitQuiet) this.hitQuiet.set(kind, quietFor - dt);
+    for (const kind of ['ground', 'tree', 'rock', 'object'] as const) {
+      const g = hardest.get(kind) ?? 0;
+      const before = this.lastPush.get(kind) ?? 0;
+      this.lastPush.set(kind, g);
+      // Lying on its side or leaning on a trunk pushes all the time; only a jump in the push is a hit.
+      if (quiet || g < HIT_G || g < before * 2 + HIT_G * 0.5 || (this.hitQuiet.get(kind) ?? 0) > 0) continue;
+      this.hit(kind, Math.min(1, (g - HIT_G) / 12));
+      this.hitQuiet.set(kind, 0.25);
+    }
+    // Scraping: the body pressed on the ground while it moves.
+    const scrape = quiet ? 0 : Math.min(1, rubbing / 1.5) * Math.min(1, speed / 5);
+    this.scrape += (scrape - this.scrape) * Math.min(1, dt * (scrape > this.scrape ? 20 : 6));
+    ease(this.scrapeLevel.gain, this.scrape * 0.9, t, 0.03);
+    ease(this.scrapeMetal.gain, this.scrape * 0.12, t, 0.03);
+    ease(this.scrapeSource.playbackRate, 0.7 + Math.min(1.2, speed / 10), t, 0.05);
+
     for (const [ground, v] of this.voices) {
       const s = quiet ? 0 : (levels.get(ground) ?? 0) / v.voice.full;
       const level = v.voice.gain * Math.min(1.4, Math.pow(s, 0.8));
@@ -216,17 +293,6 @@ export class VehicleAudio {
     ease(this.squealLevel.gain, quiet ? 0 : squeal * Math.min(1, speed / 4) * 0.5, t);
     ease(this.hissLevel.gain, quiet ? 0 : Math.min(0.25, wetRoll * 0.02), t);
     ease(this.hissTone.frequency, 2000 + wetRoll * 120, t);
-
-    // A sudden stop sideways or head-on: the vehicle hit something.
-    const v = sim.body.linvel();
-    this.velocity.set(v.x, 0, v.z);
-    const jolt = dt > 0 ? this.velocity.distanceTo(this.lastVelocity) / dt : 0;
-    this.lastVelocity.copy(this.velocity);
-    this.crashQuiet -= dt;
-    if (!quiet && jolt > 25 && this.crashQuiet <= 0) {
-      this.crash(Math.min(1, (jolt - 25) / 60));
-      this.crashQuiet = 0.3;
-    }
 
     for (const c of cracks) if (!quiet) this.crack(c);
   }
@@ -287,11 +353,77 @@ export class VehicleAudio {
     this.burst(b.bubbles, 'lowpass', 2500, 0.7, 0.8 * strength, 0.25, 1.4);
   }
 
-  private crash(strength: number): void {
+  /** A struck metal panel: a few inharmonic partials that ring briefly. */
+  private ring(frequencies: number[], gain: number, decay: number): void {
+    const ctx = this.out.ctx;
+    const t = ctx.currentTime;
+    frequencies.forEach((f, i) => {
+      const o = ctx.createOscillator();
+      o.frequency.value = f * (0.97 + Math.random() * 0.06);
+      const g = ctx.createGain();
+      const level = gain / (1 + i * 0.8);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(level, t + 0.002);
+      g.gain.setTargetAtTime(0, t + 0.002, decay / (1 + i * 0.4));
+      o.connect(g).connect(this.at);
+      o.start(t);
+      o.stop(t + decay * 8 + 0.05);
+      o.onended = () => g.disconnect();
+    });
+  }
+
+  /** The suspension hitting its bump stops: a hard bang through the frame, and everything loose jumps. */
+  private bottomOut(strength: number): void {
     const b = this.out.buffers;
-    this.thud(60, 0.8 + 0.4 * strength, 0.12);
-    this.burst(b.white, 'lowpass', 900, 0.8, 0.5 * strength + 0.15, 0.08);
-    this.burst(b.gravel, 'bandpass', 2500, 0.8, 0.35 * strength, 0.15, 1.3);
+    this.thud(95, 0.9 + 0.5 * strength, 0.07);
+    this.ring([180, 497, 973], 0.12 + 0.18 * strength, 0.08);
+    this.burst(b.white, 'bandpass', 1200, 2, 0.35 * strength + 0.1, 0.03);
+    this.burst(b.crackle, 'bandpass', 2200, 1.2, 0.4 * strength + 0.1, 0.12, 1.6);
+  }
+
+  /** Coming down from a jump: a deep slam of the whole vehicle, rattling, and the body creaking. */
+  private land(strength: number): void {
+    const b = this.out.buffers;
+    this.thud(55, 1 + 0.6 * strength, 0.14 + 0.06 * strength);
+    this.thud(110, 0.4 + 0.4 * strength, 0.06);
+    this.burst(b.white, 'lowpass', 400, 0.7, 0.4 * strength + 0.1, 0.07);
+    this.burst(b.crackle, 'bandpass', 1900, 1, 0.5 * strength + 0.1, 0.18, 1.4);
+    this.burst(b.white, 'bandpass', 700, 9, 0.2 * strength, 0.2, 1, 0.05);
+  }
+
+  /** The body hitting something, sounding of what it hit. */
+  private hit(kind: Impact['kind'], strength: number): void {
+    const b = this.out.buffers;
+    const s = strength;
+    switch (kind) {
+      case 'ground':
+        // Rolling or nosing in: a heavy slam, crumpling metal, earth and bits flying.
+        this.thud(50, 1.2 + 0.6 * s, 0.16);
+        this.ring([140, 389, 812, 1490], 0.18 + 0.25 * s, 0.13);
+        this.burst(b.gravel, 'bandpass', 1500, 0.8, 0.6 * s + 0.15, 0.2, 1.2);
+        this.burst(b.crackle, 'bandpass', 3000, 1, 0.5 * s, 0.25, 1.8, 0.04);
+        this.burst(b.white, 'highpass', 5000, 0.7, 0.15 * s, 0.3, 1, 0.05);
+        break;
+      case 'tree':
+        // A trunk: a dull wooden knock, the bumper ringing, the crown shaking.
+        this.thud(85, 0.9 + 0.6 * s, 0.1);
+        this.burst(b.white, 'bandpass', 450, 1.5, 0.5 * s + 0.15, 0.05);
+        this.ring([210, 580, 1130], 0.12 + 0.18 * s, 0.1);
+        this.burst(b.white, 'highpass', 3000, 0.5, 0.15 + 0.25 * s, 0.35, 1, 0.03);
+        break;
+      case 'rock':
+        // Stone: a hard crack, metal ringing, grit.
+        this.thud(65, 1 + 0.5 * s, 0.12);
+        this.ring([160, 450, 920, 1700], 0.16 + 0.24 * s, 0.12);
+        this.burst(b.gravel, 'bandpass', 2600, 0.9, 0.5 * s + 0.15, 0.12, 1.4);
+        break;
+      case 'object':
+        // A wall, fence or log pile: boards splintering.
+        this.thud(80, 0.9 + 0.5 * s, 0.1);
+        this.burst(b.crackle, 'bandpass', 1400, 0.9, 0.7 * s + 0.2, 0.15, 1.2);
+        this.ring([200, 540, 1050], 0.12 + 0.18 * s, 0.1);
+        break;
+    }
   }
 
   /** A trunk breaking: a sharp crack, a second as it splits, then the crown swishing down. */
