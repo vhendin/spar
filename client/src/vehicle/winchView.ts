@@ -92,7 +92,7 @@ export class WinchView {
     if (winch.state === 'hooked') {
       const slack = Math.max(0, winch.length - d);
       sag = Math.max(Math.sqrt((3 * d * slack) / 8), (d * 0.02) / (1 + winch.tension / 2000));
-    } else sag = d * 0.12; // carried out or wound in: trailing on the ground
+    } else sag = d * 0.04; // shot out or wound in: nearly straight
     for (let i = 0; i <= SEGMENTS; i++) {
       const s = i / SEGMENTS;
       const p = this.points[i]!.lerpVectors(this.from, this.to, s);

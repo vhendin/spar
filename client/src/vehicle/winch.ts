@@ -40,8 +40,8 @@ const DAMPING = 25_000;
 /** Beyond this the cable pulls no harder, so nothing flies off. */
 const MAX_TENSION = 250_000;
 /** How fast the hook is carried out and wound back, metres a second. */
-const CARRY_SPEED = 14;
-const REEL_SPEED = 18;
+const CARRY_SPEED = 45;
+const REEL_SPEED = 40;
 /** Winding in slack cable, and paying out, metres a second. */
 const SLACK_SPEED = 1.6;
 const PAY_OUT_SPEED = 1.2;

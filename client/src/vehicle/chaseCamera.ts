@@ -21,6 +21,7 @@ const RECENTRE_SPEED = 3;
 /**
  * The camera while driving. Dragging with the mouse (either button) or the gamepad's right
  * stick turns it round the vehicle, or looks round the cab; the wheel sets the distance.
+ * While aiming the winch, moving the mouse alone turns it.
  */
 export class ChaseCamera {
   mode: CameraMode = 'chase';
@@ -33,6 +34,8 @@ export class ChaseCamera {
   private yaw = 0;
   private pitch = 0;
   private dragging = false;
+  /** While set, moving the mouse turns the view without a button held: for aiming the winch. */
+  freeLook = false;
   private lookedAt = -Infinity;
   private seedOrbit = false;
   private settled = false;
@@ -64,7 +67,7 @@ export class ChaseCamera {
       element.setPointerCapture(e.pointerId);
     });
     element.addEventListener('pointermove', (e) => {
-      if (!this.dragging) return;
+      if (!this.dragging && !(this.freeLook && this.active() && e.pointerType === 'mouse')) return;
       this.look(-e.movementX * DRAG, (this.mode === 'cab' ? -1 : 1) * e.movementY * DRAG);
     });
     const release = (e: PointerEvent): void => {
@@ -110,12 +113,12 @@ export class ChaseCamera {
 
     // Once under way again, a turned view swings back to straight on.
     const now = performance.now();
-    if (this.mode !== 'orbit' && !this.dragging && now - this.lookedAt > 600 && this.speed > RECENTRE_SPEED) {
+    if (this.mode !== 'orbit' && !this.dragging && !this.freeLook && now - this.lookedAt > 600 && this.speed > RECENTRE_SPEED) {
       const k = Math.exp(-dt * 2.5);
       this.yaw *= k;
       this.pitch *= k;
     }
-    const turning = this.dragging || now - this.lookedAt < 300;
+    const turning = this.dragging || this.freeLook || now - this.lookedAt < 300;
 
     this.forward.set(0, 0, 1).applyQuaternion(vehicle.quaternion).setY(0);
     if (this.forward.lengthSq() < 1e-4) this.forward.set(0, 0, 1);

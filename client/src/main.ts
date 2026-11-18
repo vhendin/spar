@@ -843,7 +843,7 @@ async function start(): Promise<void> {
     if (!paused && !flying && !w.unplaced && !w.map.open) {
       if (w.winch.state === 'choosing') {
         html = w.winch.choices.length
-          ? `Winch · ${key('E', 'winch')} hook on · ${pad ? 'right stick' : `<kbd>Tab</kbd>`} another · ${key('X', 'winchOut')} cancel`
+          ? `Winch · ${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('X', 'winchOut')} cancel`
           : `Nothing to hook the winch to within reach ahead · ${key('X', 'winchOut')} cancel`;
       } else if (w.winch.state === 'hooked') {
         html = `Winch · hold ${key('Z', 'winchIn')} to winch in · ${key('X', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
@@ -939,6 +939,7 @@ async function start(): Promise<void> {
       w.obstacles?.update(now / 1000, at.x, at.z);
 
       // The winch: what can be hooked to, picked by looking towards it; the cable.
+      chase.freeLook = w.winch.state === 'choosing' && !paused && !w.map.open;
       if (w.winch.state === 'choosing') w.winch.aim(now / 1000, camera.getWorldDirection(aim));
       w.winchView.group.visible = !w.unplaced && !starting;
       w.winchView.update(dt, w.winch, w.view.group, (x, z) => w.terrain.heightAt(x, z), camera.position);
