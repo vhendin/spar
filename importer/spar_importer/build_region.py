@@ -31,6 +31,7 @@ from .region import (
     data_dir,
     load_schema,
 )
+from .roadbed import level_roads
 from .sources import ElevationSource, available_sources
 from .vectors import build_vectors
 
@@ -176,6 +177,13 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
     )
     if np.isnan(grid).any():
         raise SystemExit("Elevation data has holes inside the area.")
+    # Roads come from the map; read it now, so the ground under them is levelled before any
+    # level is cut from the grid.
+    print(f"reading {osm_path.name}")
+    osm = load_osm(osm_path)
+    grid = grid.astype(np.float32, copy=False)
+    levelled = level_roads(grid, osm, west=region.west - margin * spacing, north=region.north + margin * spacing, spacing=spacing)
+    print(f"  road beds levelled over {levelled * spacing * spacing / 1e4:.0f} ha")
     area = grid[margin : margin + n, margin : margin + n]
     enc = encoding_for(grid)
     packed = encode(grid, enc)
@@ -221,8 +229,6 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
     encode(horizon, h_enc).tofile(out / HORIZON_PATH)
 
     # Masks and vectors from OpenStreetMap, on a 2 m grid whatever the elevation source.
-    print(f"reading {osm_path.name}")
-    osm = load_osm(osm_path)
     clearcuts, clearcuts_date = find_clearcuts(region, offline=offline)
     if clearcuts_date:
         print(f"  {len(clearcuts)} clear-cut(s) from Skogsstyrelsen, aged to {clearcuts_date}")
@@ -291,7 +297,13 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
             "biome": {"path": HORIZON_BIOME_PATH, "samples": hb_n, "spacing": HORIZON_BIOME_SPACING},
         },
         "vectors": {"path": VECTORS_PATH},
-        "attribution": list(dict.fromkeys([s.attribution for s in sources] + [OSM_ATTRIBUTION] + ([CLEARCUT_ATTRIBUTION] if clearcuts else []))),
+        "attribution": list(
+            dict.fromkeys(
+                [s.attribution for s in sources]
+                + [OSM_ATTRIBUTION]
+                + ([CLEARCUT_ATTRIBUTION] if clearcuts else [])
+            )
+        ),
     }
     jsonschema.validate(index, load_schema("region-index"))
     (out / "index.json").write_text(json.dumps(index, indent=2, ensure_ascii=False) + "\n")

@@ -457,3 +457,49 @@ def test_sea_is_large_low_water_only():
     sea = sea_cells(heights, 2.0)
     assert sea[:, :80].all()
     assert not sea[:, 80:].any()
+
+
+def test_roads_get_verges_by_size():
+    from osgeo import ogr
+    from spar_importer.ground import road_for
+    from spar_importer.masks import clear_verges
+    from spar_importer.osm import OsmData, Road
+
+    assert road_for({"highway": "primary"})[1] >= 7.5
+    assert road_for({"highway": "track", "tracktype": "grade1"})[1] > road_for({"highway": "track", "tracktype": "grade4"})[1]
+    assert road_for({"highway": "unclassified", "lanes": "2"})[1] >= 7.5
+
+    def road(kind: str, northing: float) -> Road:
+        line = ogr.CreateGeometryFromWkt(f"LINESTRING (0 {northing}, 400 {northing})")
+        surface, width, drivable = road_for({"highway": kind})
+        return Road(kind, kind, surface, width, drivable, line, {"highway": kind})
+
+    osm = OsmData.__new__(OsmData)
+    osm.roads = [road("primary", 300.0), road("path", 100.0)]
+    canopy = np.full((201, 201), 20.0, dtype=np.float32)
+    clear_verges(osm, canopy, west=0, north=400, spacing=2, size=201)
+    row = lambda northing: int((400 - northing) / 2)  # noqa: E731
+    assert canopy[row(300 + 4 + 7), 100] == 0  # inside the main road's verge
+    assert canopy[row(300 + 4 + 12), 100] <= 4  # young trees only, a bit further out
+    assert canopy[row(300 + 40), 100] == 20.0
+    assert canopy[row(100 + 3), 100] == 20.0  # a path has trees close by
+
+
+def test_road_beds_are_level_across_and_blend_out():
+    from osgeo import ogr
+    from spar_importer.osm import OsmData, Road
+    from spar_importer.roadbed import level_roads
+
+    # Ground tilted across an east-west road, plus bumps along it.
+    rows = np.arange(100, dtype=np.float32)[:, None]
+    grid = np.repeat(rows * 0.2, 100, axis=1)  # 0.2 m per metre, rising southwards
+    grid[48:53, ::7] += 0.5
+    line = ogr.CreateGeometryFromWkt("LINESTRING (-10 50, 110 50)")  # northing 50 = row 50
+    osm = OsmData.__new__(OsmData)
+    osm.roads = [Road("r", "primary", "asphalt", 8.0, True, line, {"highway": "primary"})]
+    before = grid.copy()
+    level_roads(grid, osm, west=0, north=100, spacing=1)
+    road = grid[47:54, 10:90]
+    assert np.ptp(road[:, 40]) < 0.15  # level across
+    assert road.std(axis=1).max() < 0.1  # the bumps are smoothed out along it
+    assert np.allclose(grid[:40], before[:40]) and np.allclose(grid[61:], before[61:])  # the ground beyond is untouched

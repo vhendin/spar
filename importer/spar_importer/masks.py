@@ -8,7 +8,7 @@ import math
 import numpy as np
 from osgeo import gdal, ogr, osr
 
-from .ground import BIOME_ORDER, SURFACE_ORDER, biome_id, surface_id
+from .ground import BIOME_ORDER, SURFACE_ORDER, VERGES, biome_id, surface_id
 from .clearcuts import GROWTH_DELAY, GROWTH_PER_YEAR, OPEN_YEARS, REGROWTH_YEARS, Clearcut
 from .osm import OsmData
 from .region import CRS
@@ -456,6 +456,20 @@ def apply_clearcuts(cuts: list[Clearcut], biome: np.ndarray, canopy: np.ndarray,
     return int(felled.sum())
 
 
+def clear_verges(osm: OsmData, canopy: np.ndarray, **grid) -> int:
+    """
+    Roads run between cleared verges: no trees right beside the road, only young ones a bit
+    further out, wider along the bigger roads. Returns the samples kept clear.
+    """
+    near = [(r.geom.Buffer(r.width / 2 + VERGES.get(r.kind, 1.0)), 1) for r in osm.roads]
+    far = [(r.geom.Buffer(r.width / 2 + 2 * VERGES.get(r.kind, 1.0)), 1) for r in osm.roads]
+    clear = rasterize(near, all_touched=True, **grid) > 0
+    young = rasterize(far, **grid) > 0
+    canopy[young] = np.minimum(canopy[young], 4.0)
+    canopy[clear] = 0
+    return int(clear.sum())
+
+
 # Half width in metres of the strip kept clear of trees under overhead lines.
 POWER_CORRIDOR = {"line": 14.0, "minor_line": 5.0}
 
@@ -469,7 +483,12 @@ def clear_corridors(osm: OsmData, canopy: np.ndarray, **grid) -> int:
 
 
 def build_planes(
-    osm: OsmData, heights2: np.ndarray, *, west: float, north: float, clearcuts: list[Clearcut] | None = None
+    osm: OsmData,
+    heights2: np.ndarray,
+    *,
+    west: float,
+    north: float,
+    clearcuts: list[Clearcut] | None = None,
 ) -> tuple[dict[str, np.ndarray], float, dict[str, float]]:
     """All mask channels on the 2 m grid of the area, the treeline elevation and lake levels by id."""
     size = heights2.shape[0]
@@ -490,6 +509,7 @@ def build_planes(
     canopy = canopy_estimate(biome, heights2, wetness, treeline)
     felled = apply_clearcuts(clearcuts or [], biome, canopy, **grid)
     clear_corridors(osm, canopy, **grid)
+    clear_verges(osm, canopy, **grid)
     pools = bog_pools(biome, surface, road, heights2, slope)
     print(f"  clear-cuts cover {felled * MASK_SPACING**2 / 1e4:.0f} ha; bog pools {pools * MASK_SPACING**2 / 1e4:.1f} ha")
     planes = {"biome": biome, "surface": surface, "road": road, "wetness": wetness, "canopy": canopy, "slope": slope}

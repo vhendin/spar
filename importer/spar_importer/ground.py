@@ -72,26 +72,43 @@ def biome_for(tags: dict) -> str | None:
 # Narrow features: streams, paths and roads. Later entries are drawn over earlier ones.
 SURFACE_ORDER = ["pool", "stream", "trail", "boardwalk", "dirt", "gravel", "asphalt"]
 
-# highway value -> (default surface, default width in metres, meant for motor vehicles)
+# highway value -> (default surface, default width in metres, meant for motor vehicles).
+# Widths are the whole driven surface with its shoulders, as on Swedish roads: two lanes
+# and edges on the bigger roads, one car's width plus a bit on forest roads.
 HIGHWAYS: dict[str, tuple[str, float, bool]] = {
-    "motorway": ("asphalt", 8.0, True),
-    "trunk": ("asphalt", 7.5, True),
-    "primary": ("asphalt", 7.0, True),
-    "secondary": ("asphalt", 6.5, True),
-    "tertiary": ("asphalt", 6.0, True),
-    "unclassified": ("gravel", 4.5, True),
-    "residential": ("gravel", 4.0, True),
-    "living_street": ("gravel", 4.0, True),
-    "road": ("gravel", 4.0, True),
-    "service": ("gravel", 3.0, True),
-    "track": ("gravel", 2.8, True),
+    "motorway": ("asphalt", 11.0, True),
+    "trunk": ("asphalt", 9.0, True),
+    "primary": ("asphalt", 8.0, True),
+    "secondary": ("asphalt", 7.0, True),
+    "tertiary": ("asphalt", 6.5, True),
+    "unclassified": ("gravel", 5.0, True),
+    "residential": ("gravel", 5.0, True),
+    "living_street": ("gravel", 4.5, True),
+    "road": ("gravel", 4.5, True),
+    "service": ("gravel", 3.5, True),
+    "track": ("gravel", 3.2, True),
     "path": ("trail", 1.2, False),
-    "footway": ("trail", 1.2, False),
+    "footway": ("trail", 1.5, False),
     "bridleway": ("trail", 1.2, False),
-    "cycleway": ("trail", 1.5, False),
+    "cycleway": ("trail", 2.5, False),
 }
 for _kind in ("motorway", "trunk", "primary", "secondary", "tertiary"):
-    HIGHWAYS[f"{_kind}_link"] = HIGHWAYS[_kind]
+    HIGHWAYS[f"{_kind}_link"] = (HIGHWAYS[_kind][0], HIGHWAYS[_kind][1] - 1.5, True)
+
+# Forest roads by grade: grade 1 is a proper gravel road for timber lorries, grade 5 two ruts.
+TRACK_WIDTHS = {"grade1": 4.2, "grade2": 3.6, "grade3": 3.0, "grade4": 2.6, "grade5": 2.4}
+LANE_WIDTH = 3.25
+
+# highway value -> metres beside each edge kept clear of trees (ditch, verge, sight clearing).
+# Beyond that, as far again, only young trees grow.
+VERGES: dict[str, float] = {
+    "motorway": 12.0, "trunk": 10.0, "primary": 8.0, "secondary": 6.0, "tertiary": 5.0,
+    "unclassified": 3.5, "residential": 2.5, "living_street": 2.0, "road": 3.0,
+    "service": 2.0, "track": 1.5, "path": 0.4, "footway": 0.6, "bridleway": 0.6, "cycleway": 1.0,
+}
+for _kind in ("motorway", "trunk", "primary", "secondary", "tertiary"):
+    VERGES[f"{_kind}_link"] = VERGES[_kind]
+
 
 SURFACE_TAGS: dict[str, str] = {
     **dict.fromkeys(["asphalt", "paved", "concrete", "concrete:plates", "concrete:lanes", "paving_stones", "sett", "chipseal"], "asphalt"),
@@ -118,8 +135,16 @@ def road_for(tags: dict) -> tuple[str, float, bool] | None:
             surface = "dirt"
     elif tagged == "boardwalk" or tags.get("bridge") == "boardwalk":
         surface = "boardwalk"
+    if kind == "track" and tags.get("tracktype") in TRACK_WIDTHS:
+        width = TRACK_WIDTHS[tags["tracktype"]]
     try:
-        width = min(12.0, max(0.5, float(tags["width"].replace("m", "").replace(",", ".").strip())))
+        lanes = int(tags["lanes"])
+        if 1 <= lanes <= 8 and drivable:
+            width = max(width, lanes * LANE_WIDTH + 1.0)
+    except (KeyError, ValueError):
+        pass
+    try:
+        width = min(20.0, max(0.5, float(tags["width"].replace("m", "").replace(",", ".").strip())))
     except (KeyError, ValueError):
         pass
     if tags.get("motor_vehicle") == "no" or tags.get("access") == "no":

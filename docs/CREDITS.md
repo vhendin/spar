@@ -18,6 +18,7 @@ Derived in the importer, not downloaded:
 - Field fences come from the outlines of OpenStreetMap farmland and meadows.
 - Log piles stand beside fresh clear-cuts.
 - Tree heights are estimated from land cover, elevation and the age of clear-cuts. They are not measured.
+- Road verges are cleared of trees by road size, as along real Swedish roads.
 
 ## Software
 
