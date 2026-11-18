@@ -56,6 +56,18 @@ function toHorizon(utcMs: number, latitude: number, longitude: number, ra: numbe
   return { azimuth: (fromSouth + Math.PI + 2 * Math.PI) % (2 * Math.PI), elevation };
 }
 
+/**
+ * Where a point fixed among the stars stands at a UTC instant, from its right ascension and
+ * declination in degrees (J2000 is close enough).
+ */
+export function starPosition(utcMs: number, latitude: number, longitude: number, ra: number, dec: number): SkyPosition {
+  return toHorizon(utcMs, latitude, longitude, RAD * ra, RAD * dec);
+}
+
+/** The Milky Way's plane: its north pole, and the direction of the galaxy's centre (in Sagittarius). */
+export const GALACTIC_POLE = { ra: 192.86, dec: 27.13 };
+export const GALACTIC_CENTRE = { ra: 266.4, dec: -28.94 };
+
 /** The sun at a UTC instant (milliseconds) seen from a latitude and longitude in degrees. */
 export function sunPosition(utcMs: number, latitude: number, longitude: number): SkyPosition {
   const { ra, dec } = sunCoords(daysSince2000(utcMs));

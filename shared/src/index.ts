@@ -11,6 +11,7 @@ export type * from './generated/vehicle';
 export * from './vehicle/drivetrain';
 export * from './vehicle/tires';
 export * from './sky/clock';
+export * from './sky/aurora';
 export * from './sky/solar';
 export * from './sky/weather';
 export * from './sweref';

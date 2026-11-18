@@ -83,7 +83,7 @@ export function skyState(sun: Rgb, moon: Rgb, moonPhase: number, cloud: number, 
     cloudLit,
     cloudShade: cloudLit.map((c) => c * shade) as Rgb,
     cloud,
-    starlight: (1 - smoothstep(-0.26, -0.1, sunY)) * (1 - 0.7 * moonUp),
+    starlight: (1 - smoothstep(-0.26, -0.1, sunY)) * (1 - 0.45 * moonUp),
     moonPhase,
   };
 }

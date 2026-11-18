@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../rng';
 import { formatGameTime, gameUtc, parseLocalTime } from './clock';
-import { moonPosition, skyDirection, sunPosition } from './solar';
+import { auroraActivity } from './aurora';
+import { GALACTIC_POLE, moonPosition, skyDirection, starPosition, sunPosition } from './solar';
 import { newWeather, stepWeather } from './weather';
 
 // The middle of the Vålådalen–Ottsjö region.
@@ -82,6 +83,48 @@ describe('moon', () => {
     expect(moon.elevation * DEG).toBeGreaterThan(40); // a winter full moon rides high
     const apart = Math.abs(((moon.azimuth - sun.azimuth) * DEG + 540) % 360 - 180);
     expect(apart).toBeGreaterThan(150);
+  });
+});
+
+describe('stars', () => {
+  it('keeps the pole star as high as the latitude, due north, all night', () => {
+    for (const hour of ['18:00', '23:00', '04:00']) {
+      const p = starPosition(at(`2026-12-21T${hour}`), LAT, LON, 37.95, 89.26);
+      // It is 0.7° off the true pole, so it circles that close.
+      expect(Math.abs(p.elevation * DEG - LAT)).toBeLessThan(1);
+      expect(Math.min(p.azimuth, 2 * Math.PI - p.azimuth) * DEG).toBeLessThan(2);
+    }
+  });
+
+  it('turns the Milky Way overhead on autumn evenings', () => {
+    // Its pole is then low in the sky, so the band itself runs high across it.
+    const p = starPosition(at('2026-09-20T22:00'), LAT, LON, GALACTIC_POLE.ra, GALACTIC_POLE.dec);
+    expect(Math.abs(p.elevation * DEG)).toBeLessThan(25);
+  });
+});
+
+describe('aurora', () => {
+  const nights = Array.from({ length: 200 }, (_, i) => auroraActivity(at('2026-10-01T23:30') + i * 86400000, 1));
+
+  it('is mostly weak, with the odd strong night', () => {
+    const sorted = [...nights].sort((a, b) => a - b);
+    expect(sorted[100]!).toBeLessThan(0.35);
+    expect(sorted[190]!).toBeGreaterThan(0.6);
+    expect(Math.min(...nights)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...nights)).toBeLessThanOrEqual(1);
+  });
+
+  it('peaks around midnight and keeps one strength across it', () => {
+    let evening = 0, midnight = 0;
+    for (let i = 0; i < 200; i++) {
+      const night = at('2026-10-01T00:00') + i * 86400000;
+      evening += auroraActivity(night + 19 * 3600000, 1);
+      midnight += auroraActivity(night + 23.5 * 3600000, 1);
+    }
+    expect(midnight).toBeGreaterThan(evening * 1.4);
+    // Either side of midnight belongs to the same night.
+    const before = auroraActivity(at('2026-10-05T23:55'), 1), after = auroraActivity(at('2026-10-06T00:05'), 1);
+    expect(Math.abs(before - after)).toBeLessThan(0.1);
   });
 });
 

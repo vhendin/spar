@@ -4,13 +4,13 @@
 import * as THREE from 'three/webgpu';
 import { Fn, abs, cameraPosition, exp, float, mix, output, positionWorld, rangeFogFactor, select, uniform, vec4 } from 'three/tsl';
 import {
-  formatGameTime, gameUtc, moonPosition, siderealAngle, skyDirection, sunPosition,
+  GALACTIC_CENTRE, GALACTIC_POLE, auroraActivity, formatGameTime, gameUtc, moonPosition, siderealAngle, skyDirection, starPosition, sunPosition,
   type GameClock, type RegionIndex, type ServerMessage, type Weather,
 } from '@spar/shared';
 import { luminance, skyColor, skyState, smoothstep, sunlight, type Rgb, type SkyState } from './atmosphere';
 import { Clouds, cloudShadow } from './clouds';
 import { Rain } from './rain';
-import { SkyDome } from './skyDome';
+import { SkyDome, type NightSky } from './skyDome';
 
 type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
 
@@ -28,6 +28,8 @@ const MIST_THICKNESS = 60;
 /** Mist density at its floor, per metre, when it is at its thickest. */
 const MIST_DENSITY = 0.006;
 
+const AURORA_GREEN = new THREE.Color(0.35, 1, 0.6);
+
 export interface EnvironmentOptions {
   shadows: boolean;
   /** Texels per side of the sun's shadow map. */
@@ -36,6 +38,8 @@ export interface EnvironmentOptions {
   fixedUtc: number | null;
   /** Use this weather instead of the server's. */
   fixedWeather: Weather | null;
+  /** Northern lights this strong (0..1) whatever the night, for trying them out. */
+  fixedAurora?: number | null;
 }
 
 export class Environment {
@@ -51,6 +55,8 @@ export class Environment {
   readonly windVector = new THREE.Vector2(1, 0);
   /** 0 no mist to 1 thick valley mist. */
   mist = 0;
+  /** How bright the northern lights are from here right now, 0..1. */
+  aurora = 0;
   /**
    * The colour grade for this hour and weather: a tint multiplied over the picture,
    * a saturation multiplier, and how much the darkest parts are lifted.
@@ -74,6 +80,14 @@ export class Environment {
   private readonly cloudDrift = new THREE.Vector2();
   private readonly starTurn = new THREE.Matrix3();
   private readonly pole: THREE.Vector3;
+  private readonly night: NightSky = {
+    galacticPole: new THREE.Vector3(),
+    galacticCentre: new THREE.Vector3(),
+    aurora: 0,
+    auroraReach: 300,
+    time: 0,
+    moonTint: new THREE.Color(1, 1, 1),
+  };
   private clock: GameClock;
   private target: Weather | null = null;
   private first = true;
@@ -194,8 +208,9 @@ export class Environment {
     const state = skyState(sun, moon, moonAt.illumination, w.cloud, w.rain);
 
     this.starTurn.setFromMatrix4(new THREE.Matrix4().makeRotationAxis(this.pole, -siderealAngle(this.utc, longitude)));
+    this.nightSky(now, state, latitude, longitude);
     // The puffy clouds take over from the dome's painted ones until the cover closes up.
-    this.dome.update({ ...state, cloud: smoothstep(0.35, 1, w.cloud) * 0.95 }, this.starTurn, this.drift, camera);
+    this.dome.update({ ...state, cloud: smoothstep(0.35, 1, w.cloud) * 0.95 }, this.starTurn, this.drift, camera, this.night);
     this.cloudDrift.addScaledVector(this.windVector, dt * (2 + w.wind * GALE * 1.5));
     this.clouds.update(state, w.cloud, this.cloudDrift, camera);
     this.mist = this.mistiness(THREE.MathUtils.radToDeg(sunAt.elevation));
@@ -203,6 +218,27 @@ export class Environment {
     this.grading(state.sun[1]);
     this.rain.update(camera, w.rain, this.windVector.x * w.wind * GALE, this.windVector.y * w.wind * GALE);
     this.light(state, moonAt.illumination, focus);
+  }
+
+  /** The Milky Way's place, the moon's colour low down, and the northern lights. */
+  private nightSky(now: number, state: SkyState, latitude: number, longitude: number): void {
+    const n = this.night;
+    n.time = now / 1000;
+    n.galacticPole.fromArray(skyDirection(starPosition(this.utc, latitude, longitude, GALACTIC_POLE.ra, GALACTIC_POLE.dec)));
+    n.galacticCentre.fromArray(skyDirection(starPosition(this.utc, latitude, longitude, GALACTIC_CENTRE.ra, GALACTIC_CENTRE.dec)));
+    const tint = sunlight(Math.max(state.moon[1], 0), 0.6);
+    const peak = Math.max(...tint);
+    n.moonTint.setRGB(tint[0] / peak, tint[1] / peak, tint[2] / peak);
+
+    // The auroral oval lies about at 67° north here, and swells south when it is strong.
+    const activity = this.options.fixedAurora ?? auroraActivity(this.utc, this.clock.utcOffset);
+    n.auroraReach = (67 - latitude) * 111 + 250 - 520 * activity;
+    // Seen only in a proper dark, and not through cloud; strong ones outshine moonlight.
+    const dark = 1 - smoothstep(-0.2, -0.08, state.sun[1]);
+    const clearSky = 1 - smoothstep(0.3, 0.85, this.weather.cloud);
+    // Far south only a strong one rises above the horizon at all.
+    const inReach = smoothstep(-200, 900, 1300 - n.auroraReach);
+    this.aurora = n.aurora = Math.min(1, activity * 1.3) * dark * clearSky * inReach * (1 - 0.4 * state.moonPhase * smoothstep(0, 0.3, state.moon[1]));
   }
 
   /**
@@ -276,7 +312,10 @@ export class Environment {
     // Keep some of the sky's tint, but never so blue that the ground looks dyed.
     this.ambient.color.setRGB(0.55 + 0.45 * (overhead[0] / top), 0.55 + 0.45 * (overhead[1] / top), 0.55 + 0.45 * (overhead[2] / top));
     this.ambient.groundColor.setRGB(0.3, 0.28, 0.22);
-    this.ambient.intensity = 0.05 + 0.06 * moonUp + AMBIENT * day * (1 + 0.4 * w.cloud) * (1 - 0.3 * w.rain);
+    // Under strong northern lights the snow takes a green cast.
+    const auroraGlow = this.aurora * (1 - day);
+    this.ambient.color.lerp(AURORA_GREEN, auroraGlow * 0.6);
+    this.ambient.intensity = 0.05 + 0.06 * moonUp + 0.05 * auroraGlow + AMBIENT * day * (1 + 0.4 * w.cloud) * (1 - 0.3 * w.rain);
 
     // Fog takes the colour of the sky low down, to either side of the sun.
     const side = Math.hypot(state.sun[0], state.sun[2]) || 1;

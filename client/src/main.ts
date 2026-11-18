@@ -330,7 +330,8 @@ async function start(): Promise<void> {
     scene.add(terrain.group, horizon);
 
     // Time and weather come from the server. For a look at a particular moment, the URL can
-    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|cloudy|wet|overcast|rain.
+    // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|cloudy|wet|overcast|rain;
+    // ?aurora=0..1 sets the northern lights' strength whatever the night.
     const fixedTime = params.get('time');
     const sky: Record<string, Weather> = {
       clear: { state: 'clear', cloud: 0.15, rain: 0, wind: 0.2, windDirection: 100, wetness: 0 },
@@ -342,7 +343,7 @@ async function start(): Promise<void> {
     const environment = new Environment(
       scene,
       index,
-      { shadows, shadowMapSize: settings.shadows, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null },
+      { shadows, shadowMapSize: settings.shadows, fixedUtc: fixedTime ? parseLocalTime(fixedTime, 1) : null, fixedWeather: sky[params.get('weather') ?? ''] ?? null, fixedAurora: params.has('aurora') ? Number(params.get('aurora')) : null },
       camera.far,
     );
     if (latestWorld) environment.setWorld(latestWorld, performance.now());
