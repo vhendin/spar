@@ -25,6 +25,8 @@ export interface ServerConfig {
   defsDir: string;
   /** Folder of raw downloads. */
   rawDir: string;
+  /** Folder of start points placed by hand. */
+  startsDir: string;
   /** Command that runs the importer, before `fetch <name>`; empty turns making areas off. */
   importer: string[];
   /** Folder the importer command runs in. */
@@ -65,6 +67,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     regionsDir: resolve(env.REGIONS_DIR ?? '../data/regions'),
     defsDir: resolve(env.DEFS_DIR ?? '../defs/regions'),
     rawDir: resolve(env.RAW_DIR ?? '../data/raw'),
+    startsDir: resolve(env.STARTS_DIR ?? '../data/starts'),
     // Making areas runs the importer through Docker from the repository; inside the game's own
     // container there is no Docker, so it is off there unless IMPORTER says how.
     importer: (env.IMPORTER ?? (existsSync('/.dockerenv') ? '' : 'docker compose run --rm importer')).split(' ').filter(Boolean),

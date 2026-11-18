@@ -4,7 +4,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
-import { AREA_SIZES, AreaMaker, checkRequest, fromHost, type AreaRequest } from './areas';
+import { AREA_SIZES, AreaMaker, checkRequest, cleanStarts, fromHost, readStarts, writeStarts, type AreaRequest } from './areas';
 import { listRegions } from './regions';
 import { serveFile } from './static';
 import { WorldState } from './world';
@@ -84,10 +84,42 @@ async function handleAreas(req: IncomingMessage, res: ServerResponse, path: stri
   json(res, 404, { error: 'Not found.' });
 }
 
+/** /api/starts/<region>: start points placed by hand; anyone may read them, only the host change them. */
+async function handleStarts(req: IncomingMessage, res: ServerResponse, region: string, config: ServerConfig): Promise<void> {
+  if (req.method === 'GET') return json(res, 200, await readStarts(config.startsDir, region));
+  if (req.method !== 'PUT') return json(res, 405, { error: 'GET or PUT.' });
+  if (!fromHost(req)) return json(res, 403, { error: 'Start points can only be changed on the computer running the server.' });
+  if ((await listRegions(config.regionsDir)).every((r) => r.name !== region)) return json(res, 404, { error: 'No such area.' });
+  let starts;
+  try {
+    starts = cleanStarts(await readBody(req, 16384));
+  } catch {
+    starts = null;
+  }
+  if (!starts) return json(res, 400, { error: 'Bad list of start points.' });
+  await writeStarts(config.startsDir, region, starts);
+  json(res, 200, starts);
+}
+
 export function createGameServer(config: ServerConfig): GameServer {
-  const maker = new AreaMaker({ defsDir: config.defsDir, regionsDir: config.regionsDir, rawDir: config.rawDir, importer: config.importer, cwd: config.importerCwd });
+  const maker = new AreaMaker({
+    defsDir: config.defsDir,
+    startsDir: config.startsDir,
+    regionsDir: config.regionsDir,
+    rawDir: config.rawDir,
+    importer: config.importer,
+    cwd: config.importerCwd,
+  });
   const http = createServer((req, res) => {
     const apiPath = (req.url ?? '/').split('?')[0] ?? '/';
+    const starts = /^\/api\/starts\/([a-z0-9_-]+)$/.exec(apiPath);
+    if (starts) {
+      handleStarts(req, res, starts[1]!, config).catch((err: unknown) => {
+        console.error('request failed', apiPath, err);
+        if (!res.headersSent) json(res, 500, { error: 'Server error.' });
+      });
+      return;
+    }
     if (apiPath.startsWith('/api/areas')) {
       handleAreas(req, res, apiPath, maker, config).catch((err: unknown) => {
         console.error('request failed', apiPath, err);

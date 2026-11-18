@@ -45,6 +45,7 @@ if (step === 'build') {
     weather: 'rain',
     defsDir: join(dir, 'defs'),
     rawDir: join(dir, 'raw'),
+    startsDir: join(dir, 'starts'),
     importer: [process.execPath, join(dir, 'importer.mjs')],
     importerCwd: dir,
   });
@@ -145,6 +146,18 @@ describe('areas', () => {
     expect((await post({ title: 'Oslo', west: 100000, north: 6650000, size: 2048 })).status).toBe(400);
     expect((await post({ title: 'Odd', west: 676016, north: 6578463, size: 3000 })).status).toBe(400);
     expect((await fetch(url('/api/areas/demo'), { method: 'DELETE' })).status).toBe(400);
+  });
+
+  it('keeps start points placed by hand, for the host to change', async () => {
+    expect(await (await fetch(url('/api/starts/demo'))).json()).toEqual([]);
+    const put = (body: unknown, headers: Record<string, string> = {}): Promise<Response> =>
+      fetch(url('/api/starts/demo'), { method: 'PUT', headers, body: JSON.stringify(body) });
+    const mine = [{ name: 'Bryggan', x: 512.34, z: 900, heading: 90 }];
+    expect((await put(mine)).status).toBe(200);
+    expect(await (await fetch(url('/api/starts/demo'))).json()).toEqual([{ name: 'Bryggan', x: 512.3, z: 900, heading: 90 }]);
+    expect((await put([{ name: '', x: 1, z: 1, heading: 0 }])).status).toBe(400);
+    expect((await put(mine, { 'X-Forwarded-For': '192.168.1.20' })).status).toBe(403);
+    expect((await fetch(url('/api/starts/nowhere'), { method: 'PUT', body: '[]' })).status).toBe(404);
   });
 
   it('only lets the host make areas', async () => {

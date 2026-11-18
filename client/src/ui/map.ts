@@ -6,6 +6,7 @@
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { paintGround, summits, type MapRasters, type Summit } from './mapImage';
+import { headingAt, type StartStore } from './starts';
 
 export interface Destination {
   name: string;
@@ -18,7 +19,7 @@ type Spawn = RegionVectors['spawns'][number];
 export interface MapActions {
   setDestination(d: Destination | null): void;
   /** Puts the vehicle down at a start point. */
-  travel(spawn: Spawn): void;
+  travel(spawn: Pick<Spawn, 'name' | 'x' | 'z' | 'heading'>): void;
   close(): void;
 }
 
@@ -39,7 +40,7 @@ const TRAIL_MAX = 6000;
 /** min x, min z, max x, max z. */
 type Box = [number, number, number, number];
 
-interface Pick {
+interface MapPick {
   name: string;
   x: number;
   z: number;
@@ -65,12 +66,15 @@ export class MapScreen {
   private hover: { x: number; z: number } | null = null;
   private state: MapState = { x: 0, z: 0, heading: 0, destination: null };
   private sideAt = 0;
+  /** Waiting for a click on the map to place a new start point. */
+  private placing = false;
 
   constructor(
     parent: HTMLElement,
     private readonly index: RegionIndex,
     private readonly vectors: RegionVectors,
     private readonly actions: MapActions,
+    private readonly starts: StartStore,
   ) {
     this.root = document.createElement('div');
     this.root.id = 'map';
@@ -420,16 +424,37 @@ export class MapScreen {
     return [(sx - (w - 320) / 2) / this.scale + this.cx, (sy - h / 2) / this.scale + this.cz];
   }
 
-  private picks(): Pick[] {
+  private picks(): MapPick[] {
     const r = this.rasters;
     return [
-      ...this.vectors.places.map((p): Pick => ({ name: p.name, x: p.x, z: p.z, kind: 'place' })),
-      ...this.tops.map((t): Pick => ({ name: `Summit ${t.height.toFixed(0)} m`, x: t.x * (r?.spacing ?? 1), z: t.y * (r?.spacing ?? 1), kind: 'summit' })),
-      ...this.vectors.spawns.map((s): Pick => ({ name: s.name, x: s.x, z: s.z, kind: 'spawn' })),
+      ...this.vectors.places.map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'place' })),
+      ...this.tops.map((t): MapPick => ({ name: `Summit ${t.height.toFixed(0)} m`, x: t.x * (r?.spacing ?? 1), z: t.y * (r?.spacing ?? 1), kind: 'summit' })),
+      ...this.starts.list.map((s): MapPick => ({ name: s.name, x: s.x, z: s.z, kind: 'spawn' })),
+      ...this.vectors.spawns.map((s): MapPick => ({ name: s.name, x: s.x, z: s.z, kind: 'spawn' })),
     ];
   }
 
   private click(sx: number, sy: number): void {
+    if (this.placing) {
+      const [x, z] = this.toWorld(sx, sy);
+      if (x < 0 || z < 0 || x > this.index.size || z > this.index.size) return;
+      if (this.isWater(x, z)) {
+        window.alert('That is water. Pick a spot on land.');
+        return;
+      }
+      this.placing = false;
+      let n = this.starts.list.length + 1;
+      while (this.starts.list.some((s) => s.name === `Start ${n}`)) n++;
+      this.starts.list.push({ name: `Start ${n}`, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, heading: headingAt(this.vectors, x, z) });
+      void this.saveStarts();
+      this.renderSide();
+      // Ready to be named.
+      const inputs = this.side.querySelectorAll<HTMLInputElement>('input.start-name');
+      const last = inputs[inputs.length - 1];
+      last?.focus();
+      last?.select();
+      return;
+    }
     const d = this.state.destination;
     if (d) {
       const [dx, dy] = this.toScreen(d.x, d.z);
@@ -438,7 +463,7 @@ export class MapScreen {
         return;
       }
     }
-    let best: Pick | null = null;
+    let best: MapPick | null = null;
     let bestD = 14;
     for (const p of this.picks()) {
       const [px, py] = this.toScreen(p.x, p.z);
@@ -500,6 +525,42 @@ export class MapScreen {
         button(name, () => this.choose({ name, x: t.x * s, z: t.y * s }), tops, d?.name === name ? 'on' : '');
       }
     }
+    if (this.starts.list.length || this.starts.editable) {
+      add('div', 'Your start points', box, 'label');
+      const mine = add('div', '', box, 'list');
+      for (const s of this.starts.list) {
+        const line = add('div', '', mine, 'spawn');
+        if (this.starts.editable) {
+          const name = add('input', '', line, 'start-name');
+          name.value = s.name;
+          name.maxLength = 40;
+          // Typing a name must not drive or close the map.
+          name.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') name.blur();
+          });
+          name.addEventListener('change', () => {
+            s.name = name.value.trim() || s.name;
+            name.value = s.name;
+            void this.saveStarts();
+          });
+        } else add('span', s.name, line);
+        button('Drive from here', () => this.actions.travel(s), line);
+        if (this.starts.editable) {
+          button('Remove', () => {
+            this.starts.list.splice(this.starts.list.indexOf(s), 1);
+            void this.saveStarts();
+            this.renderSide();
+          }, line, 'link');
+        }
+      }
+      if (this.starts.editable) {
+        button(this.placing ? 'Click the map where you want to start…' : 'Add a start point', () => {
+          this.placing = !this.placing;
+          this.renderSide();
+        }, mine, this.placing ? 'on' : '');
+      }
+    }
     add('div', 'Start points', box, 'label');
     const spawns = add('div', '', box, 'list');
     for (const s of this.vectors.spawns) {
@@ -511,6 +572,20 @@ export class MapScreen {
     button('Centre on vehicle', () => this.centre(), foot);
     button('Close', () => this.actions.close(), foot);
     add('p', 'Drag to move, wheel to zoom. Click a spot to drive there; click the pin again to clear it. M or Esc closes.', box, 'hint');
+  }
+
+  /** Whether open water covers a spot, by the map's land cover. */
+  private isWater(x: number, z: number): boolean {
+    const r = this.rasters;
+    const water = this.index.masks.biomes.find((b) => b.name === 'water')?.id;
+    if (!r || water === undefined) return false;
+    const i = Math.round(z / r.spacing) * r.n + Math.round(x / r.spacing);
+    return r.biome[i] === water;
+  }
+
+  private async saveStarts(): Promise<void> {
+    const error = await this.starts.save();
+    if (error) window.alert(`The start points were not saved: ${error}`);
   }
 
   private updateDistance(): void {
@@ -651,9 +726,9 @@ export class MapScreen {
       if (p.kind === 'locality' && s < 0.12) continue;
       label(p.name, sx, sy - 12, `${big ? '600 15px' : p.kind === 'locality' ? 'italic 12px' : '600 13px'} system-ui, sans-serif`);
     }
-    for (const sp of this.vectors.spawns) {
+    for (const sp of [...this.vectors.spawns, ...this.starts.list]) {
       const [sx, sy] = this.toScreen(sp.x, sp.z);
-      c.fillStyle = '#2f6f4f';
+      c.fillStyle = this.starts.list.includes(sp as never) ? '#2c6fb0' : '#2f6f4f';
       c.strokeStyle = '#fff';
       c.lineWidth = 1.5;
       c.fillRect(sx - 4, sy - 4, 8, 8);

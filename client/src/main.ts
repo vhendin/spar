@@ -37,6 +37,7 @@ import { MapScreen, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu } from './ui/startMenu';
+import { StartStore } from './ui/starts';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -362,11 +363,15 @@ async function start(): Promise<void> {
     // Vehicle: ?vehicle=<name> picks a definition, ?spawn=<name or number> a start point.
     const defs = Object.values(VEHICLES);
     const def = defs.find((d) => d.name === (params.get('vehicle') ?? stored(VEHICLE_KEY))) ?? defs.find((d) => d.name === 'tgb11') ?? defs[0]!;
+    // Start points placed by hand on the map come first.
+    const starts = new StartStore(index.name);
+    await starts.load();
+    const allSpawns = [...starts.list.map((s) => ({ ...s, road: '' })), ...vectors.spawns];
     const wanted = params.get('spawn');
     const spawn =
-      vectors.spawns.find((s) => s.name.toLowerCase() === wanted?.toLowerCase()) ??
-      vectors.spawns[Number(wanted) || 0] ??
-      vectors.spawns[0] ?? { name: 'the middle', x: index.size / 2, z: index.size / 2, heading: 0 };
+      allSpawns.find((s) => s.name.toLowerCase() === wanted?.toLowerCase()) ??
+      allSpawns[Number(wanted) || 0] ??
+      allSpawns[0] ?? { name: 'the middle', x: index.size / 2, z: index.size / 2, heading: 0 };
 
     const physics = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
     physics.timestep = STEP;
@@ -396,11 +401,19 @@ async function start(): Promise<void> {
         guide.destination = d;
       },
       travel: (s) => {
-        if (world) travel(world, s);
+        const w = world;
+        if (!w) return;
+        // Opened from the start screen: drive off from there, as with the Drive button.
+        if (starting) {
+          w.map.toggle(mapState(w));
+          w.start.driveFrom(s);
+          return;
+        }
+        travel(w, s);
         toggleMap();
       },
       close: () => toggleMap(),
-    });
+    }, starts);
     // The minimap needs the map's picture from the start.
     map.prepare();
     const goToRegion = (name: string): void => {
@@ -423,8 +436,9 @@ async function start(): Promise<void> {
       goToRegion,
       () => start.show(),
     );
-    const start = new StartMenu(startRoot, index, vectors, defs, def.name, listed.regions, {
+    const start = new StartMenu(startRoot, index, vectors, starts, defs, def.name, listed.regions, {
       region: goToRegion,
+      placeStarts: () => toggleMap(),
       newArea: () => {
         start.hide();
         void areaMaker.show();
@@ -453,7 +467,10 @@ async function start(): Promise<void> {
       credits: () => showCredits(true),
     });
     // Only the computer running the server may make and remove areas.
-    void areasInfo().then((info) => start.setMaker(info?.enabled ?? false));
+    void areasInfo().then((info) => {
+      starts.editable = info?.enabled ?? false;
+      start.setMaker(info?.enabled ?? false);
+    });
     world = { index, terrain, shading, environment, vegetation, features, physics, ground, sim, view, spray, tracks, felling, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
@@ -551,7 +568,11 @@ async function start(): Promise<void> {
   const toggleMap = (): void => {
     if (!world) return;
     if (document.pointerLockElement) document.exitPointerLock();
+    // From the start screen the map takes its place for a while, then gives it back.
+    const opening = !world.map.open;
+    if (starting && opening) world.start.hide();
     world.map.toggle(mapState(world));
+    if (starting && !opening) world.start.show();
   };
   const toStart = (w: World): void => {
     w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);

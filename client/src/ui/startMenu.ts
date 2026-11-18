@@ -3,6 +3,7 @@
 
 import type { RegionIndex, RegionVectors, VehicleDef } from '@spar/shared';
 import type { RegionListing } from '../terrain/region';
+import type { StartStore } from './starts';
 
 export interface StartPoint {
   name: string;
@@ -20,6 +21,8 @@ export interface StartChoice {
 export interface StartActions {
   /** Switch to another region: the page loads again with it. */
   region(name: string): void;
+  /** Open the map to place start points by hand. */
+  placeStarts(): void;
   /** Open the screen for making a new area. */
   newArea(): void;
   /** Remove an area for good; resolves with an error message, or null when it is gone. */
@@ -95,6 +98,7 @@ export class StartMenu {
     private readonly root: HTMLElement,
     private readonly index: RegionIndex,
     private readonly vectors: RegionVectors,
+    private readonly custom: StartStore,
     private readonly vehicles: VehicleDef[],
     vehicle: string,
     private readonly regions: RegionListing[],
@@ -146,6 +150,7 @@ export class StartMenu {
     const last = lastPosition(this.index.name);
     this.starts = [
       ...(last ? [{ name: 'Where you left off', x: last.x, z: last.z, heading: last.heading }] : []),
+      ...this.custom.list.map((s) => ({ name: s.name, x: s.x, z: s.z, heading: s.heading })),
       ...this.vectors.spawns.map((s) => ({ name: s.name, x: s.x, z: s.z, heading: s.heading })),
     ];
     const saved = read(START_KEY);
@@ -241,6 +246,7 @@ export class StartMenu {
         this.render();
       }, starts, i === this.start ? 'on' : '');
     });
+    if (this.custom.editable) button('Place your own…', () => this.actions.placeStarts(), starts, 'link-button');
 
     add('div', 'Vehicle', right, 'label');
     const vehicles = add('div', '', right, 'cards');
@@ -278,6 +284,11 @@ export class StartMenu {
     button('Credits', () => this.actions.credits(), foot, 'link');
   }
 
+  /** Drives off from a point picked elsewhere (the big map), with the vehicle chosen here. */
+  driveFrom(start: StartPoint): void {
+    this.actions.drive({ start: { name: start.name, x: start.x, z: start.z, heading: start.heading }, vehicle: this.vehicle, name: this.name });
+  }
+
   /** Drives off with what is chosen (the Drive button, Enter, or Start on a gamepad). */
   drive(): void {
     const start = this.starts[this.start]!;
@@ -312,7 +323,8 @@ export class StartMenu {
     }
     this.starts.forEach((s, i) => {
       const on = i === this.start;
-      c.fillStyle = on ? '#d63c28' : '#2f6f4f';
+      const mine = this.custom.list.some((m) => m.x === s.x && m.z === s.z);
+      c.fillStyle = on ? '#d63c28' : mine ? '#2c6fb0' : '#2f6f4f';
       c.strokeStyle = '#fff';
       c.lineWidth = 1.5;
       c.beginPath();

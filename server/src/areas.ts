@@ -4,7 +4,7 @@
 // data and fills the disk, which is the host's business.
 
 import { spawn } from 'node:child_process';
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { join } from 'node:path';
 
@@ -35,6 +35,8 @@ export interface Job {
 export interface AreaConfig {
   /** Folder holding the region definitions, defs/regions. */
   defsDir: string;
+  /** Folder of start points placed by hand, one file per region. */
+  startsDir: string;
   regionsDir: string;
   /** Folder holding raw downloads, data/raw. */
   rawDir: string;
@@ -156,8 +158,43 @@ export class AreaMaker {
     if (!(await exists(join(this.config.regionsDir, name)))) throw new Error('No such area.');
     await rm(join(this.config.regionsDir, name), { recursive: true, force: true });
     await rm(join(this.config.defsDir, `${name}.json`), { force: true });
+    await rm(join(this.config.startsDir, `${name}.json`), { force: true });
     for (const file of [`osm/${name}.osm.pbf`, `osm/${name}.bbox`, `skogsstyrelsen/${name}.geojson`, `skogsstyrelsen/${name}_tradhojd.tif`]) {
       await rm(join(this.config.rawDir, file), { force: true });
     }
   }
+}
+
+/** A start point placed by hand on the map, in the region's local metres. */
+export interface StartPoint {
+  name: string;
+  x: number;
+  z: number;
+  heading: number;
+}
+
+/** The start points placed by hand in a region; none when there is no file. */
+export async function readStarts(dir: string, region: string): Promise<StartPoint[]> {
+  try {
+    return JSON.parse(await readFile(join(dir, `${region}.json`), 'utf8')) as StartPoint[];
+  } catch {
+    return [];
+  }
+}
+
+/** Checks a list sent by the game; the cleaned list, or null when it is not one. */
+export function cleanStarts(body: unknown): StartPoint[] | null {
+  if (!Array.isArray(body) || body.length > 50) return null;
+  const out: StartPoint[] = [];
+  for (const s of body as Partial<StartPoint>[]) {
+    if (typeof s?.name !== 'string' || !s.name.trim() || s.name.length > 40) return null;
+    if (![s.x, s.z, s.heading].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+    out.push({ name: s.name.trim(), x: Math.round(s.x! * 10) / 10, z: Math.round(s.z! * 10) / 10, heading: Math.round(s.heading! * 10) / 10 });
+  }
+  return out;
+}
+
+export async function writeStarts(dir: string, region: string, starts: StartPoint[]): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${region}.json`), JSON.stringify(starts, null, 2) + '\n');
 }
