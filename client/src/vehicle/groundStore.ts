@@ -13,6 +13,10 @@ const LOAD_MARGIN = 90;
 const KEEP_MARGIN = 260;
 /** Road coverage (0..255) from which a wheel counts as being on the road or in the stream. */
 const ON_SURFACE = 110;
+/** Lakes are searched this many mask samples out for their shore; further in counts as deepest. */
+const SHORE_SEARCH = 14;
+/** Water depths remembered per mask sample, so the shore search runs once per spot. */
+const DEPTH_CACHE = 4096;
 
 interface HeightTile {
   collider: RAPIER.Collider | null;
@@ -31,7 +35,9 @@ export class GroundStore implements GroundProbe {
   private readonly masks = new Map<string, Uint8Array | null>();
   private readonly biomeGround: string[] = [];
   private readonly surfaceGround: (string | undefined)[] = [];
-  private readonly planes: { biome: number; surface: number; road: number };
+  private readonly surfaceName: string[] = [];
+  private readonly planes: { biome: number; surface: number; road: number; wetness: number };
+  private readonly depths = new Map<number, number>();
 
   constructor(
     private readonly R: typeof RAPIER,
@@ -42,9 +48,12 @@ export class GroundStore implements GroundProbe {
     this.maskLevel = index.masks.levels[0]!;
     // Mask files hold ids; the definitions say by name what each class is to drive on.
     for (const c of index.masks.biomes) this.biomeGround[c.id] = GROUND.biomes.find((b) => b.name === c.name)?.ground ?? 'dirt';
-    for (const c of index.masks.surfaces) this.surfaceGround[c.id] = GROUND.surfaces.find((s) => s.name === c.name)?.ground;
+    for (const c of index.masks.surfaces) {
+      this.surfaceGround[c.id] = GROUND.surfaces.find((s) => s.name === c.name)?.ground;
+      this.surfaceName[c.id] = c.name;
+    }
     const plane = (name: string): number => index.masks.channels.findIndex((c) => c.name === name);
-    this.planes = { biome: plane('biome'), surface: plane('surface'), road: plane('road') };
+    this.planes = { biome: plane('biome'), surface: plane('surface'), road: plane('road'), wetness: plane('wetness') };
 
     // Walls around the area, so nothing drives off the edge of the world.
     const half = index.size / 2;
@@ -114,20 +123,83 @@ export class GroundStore implements GroundProbe {
   }
 
   groundAt(x: number, z: number): string {
-    const { span, spacing } = this.maskLevel;
-    const mx = Math.floor(x / span), mz = Math.floor(z / span);
-    const mask = this.masks.get(`${mx},${mz}`);
-    if (!mask) return 'dirt';
-    const n = this.index.masks.samples;
-    const i = Math.min(n - 1, Math.max(0, Math.round((x - mx * span) / spacing)));
-    const j = Math.min(n - 1, Math.max(0, Math.round((z - mz * span) / spacing)));
-    const at = j * n + i;
-    const plane = n * n;
+    const s = this.sample(x, z);
+    if (!s) return 'dirt';
+    const { mask, at, plane } = s;
     if (mask[this.planes.road * plane + at]! >= ON_SURFACE) {
       const surface = this.surfaceGround[mask[this.planes.surface * plane + at]!];
       if (surface) return surface;
     }
     return this.biomeGround[mask[this.planes.biome * plane + at]!] ?? 'dirt';
+  }
+
+  softness(x: number, z: number): number {
+    const ground = this.groundAt(x, z);
+    const soft = GROUND.softness[ground];
+    if (!soft) return 0;
+    const wet = soft.dry + (soft.wet - soft.dry) * Math.min(1, Math.max(0, this.rain));
+    // Low ground where water gathers stays soft longer than a dry ridge.
+    const s = this.sample(x, z);
+    const soaked = s && this.planes.wetness >= 0 ? s.mask[this.planes.wetness * s.plane + s.at]! / 255 : 0;
+    return Math.min(1, wet + Math.max(0, soft.wet - wet) * soaked * 0.6);
+  }
+
+  waterDepth(x: number, z: number): number {
+    const s = this.sample(x, z);
+    if (!s) return 0;
+    const { mask, at, plane } = s;
+    if (mask[this.planes.road * plane + at]! >= ON_SURFACE) {
+      const name = this.surfaceName[mask[this.planes.surface * plane + at]!];
+      if (name === 'stream') return GROUND.water.stream;
+      if (name === 'pool') return GROUND.water.pool;
+    }
+    if (this.biomeGround[mask[this.planes.biome * plane + at]!] !== 'water') return 0;
+    // A lake: deeper the further it is to the shore.
+    const spacing = this.maskLevel.spacing;
+    const ci = Math.round(x / spacing), cj = Math.round(z / spacing);
+    const key = ci * 65536 + cj;
+    const known = this.depths.get(key);
+    if (known !== undefined) return known;
+    let shore = SHORE_SEARCH + 1;
+    let unknown = false;
+    search: for (let r = 1; r <= SHORE_SEARCH; r++) {
+      for (let k = -r; k <= r; k++) {
+        for (const [di, dj] of [[k, -r], [k, r], [-r, k], [r, k]] as const) {
+          const g = this.biomeGroundAt((ci + di) * spacing, (cj + dj) * spacing);
+          if (g === null) unknown = true;
+          else if (g !== 'water') {
+            shore = Math.min(shore, Math.hypot(di, dj));
+            if (shore <= r) break search;
+          }
+        }
+      }
+    }
+    const { lakeMax, lakeShelf } = GROUND.water;
+    const depth = lakeMax * (1 - Math.exp(-(Math.max(0.5, shore - 0.5) * spacing) / lakeShelf));
+    // Not kept while part of the search ran off the loaded masks: it may be shallower.
+    if (!unknown) {
+      if (this.depths.size > DEPTH_CACHE) this.depths.clear();
+      this.depths.set(key, depth);
+    }
+    return depth;
+  }
+
+  /** The land cover's ground at a spot, or null where its mask is not loaded. */
+  private biomeGroundAt(x: number, z: number): string | null {
+    const s = this.sample(x, z);
+    return s ? (this.biomeGround[s.mask[this.planes.biome * s.plane + s.at]!] ?? 'dirt') : null;
+  }
+
+  /** The mask file holding a spot and the spot's index in each of its planes. */
+  private sample(x: number, z: number): { mask: Uint8Array; at: number; plane: number } | null {
+    const { span, spacing } = this.maskLevel;
+    const mx = Math.floor(x / span), mz = Math.floor(z / span);
+    const mask = this.masks.get(`${mx},${mz}`);
+    if (!mask) return null;
+    const n = this.index.masks.samples;
+    const i = Math.min(n - 1, Math.max(0, Math.round((x - mx * span) / spacing)));
+    const j = Math.min(n - 1, Math.max(0, Math.round((z - mz * span) / spacing)));
+    return { mask, at: j * n + i, plane: n * n };
   }
 
   private loadHeights(tx: number, tz: number): void {

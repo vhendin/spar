@@ -65,6 +65,11 @@
           "description": "Height of the lowest part between the axles.",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "wading": {
+          "description": "Deepest water, in metres above the bottom of the tyres, the engine can breathe through; deeper and it drowns. 0.6 if left out.",
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     },

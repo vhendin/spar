@@ -79,7 +79,9 @@ export class Grime {
       const wet = wheel.ground === 'bog' ? 1 : wetness;
       const ground = muddy[0] + (muddy[1] - muddy[0]) * wet;
       const churn = Math.min(1, wheel.spin) + wheel.skid * 0.6 + Math.min(1, Math.abs(wheel.slide) / 4) * 0.5;
-      gain += ground * (0.004 * Math.min(1, speed / 8) + 0.03 * churn);
+      // Ploughing along sunk in deep mud plasters it up the sides.
+      const ploughing = Math.min(1, wheel.sink / 0.2) * Math.min(1, speed / 2);
+      gain += ground * (0.004 * Math.min(1, speed / 8) + 0.03 * churn + 0.02 * ploughing);
     }
     gain /= Math.max(1, sim.wheels.length / 4);
     this.tyres = Math.min(1, Math.max(0, this.tyres + gain * 4 * dt - wash * 2 * dt));

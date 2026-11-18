@@ -22,6 +22,36 @@ const STEER_HALF_SPEED = 13;
 /** How fast the steered wheels turn, radians per second. */
 const STEER_RATE = 1.4;
 
+// Soft ground. A tyre settles into it as it rolls, deeper the softer the ground and the more
+// weight it carries; spinning digs it further down. Rolling on without spinning climbs back
+// out. Every bit of depth adds the drag of pushing through the rut.
+/** Deepest a rolling tyre settles in the softest ground, as a share of its radius. */
+const SETTLE = 0.36;
+/** Deepest a spinning tyre digs itself, as a share of its radius. */
+const DIG_LIMIT = 0.55;
+/** Metres a second a fully spinning tyre digs into the softest ground. */
+const DIG_RATE = 0.14;
+/** Metres of travel to settle into new ground, and to climb out of a rut. */
+const SETTLE_DISTANCE = 0.8;
+const CLIMB_DISTANCE = 2.5;
+/** Drag of the rut: this times (depth / radius)² times the load. */
+const RUT_DRAG = 0.6;
+
+// Water. Wheels go down to the bed, the body pushes through and is lifted a little, and too
+// deep for the air intake drowns the engine.
+const WATER_DENSITY = 1000;
+/** Share of the body's volume that floats it; the rest fills with water. */
+const FLOAT_SHARE = 0.07;
+/** Drag coefficient of the body pushing through water. */
+const WATER_DRAG = 0.9;
+/** How fast the wheels follow a change in depth, metres a second. */
+const DEPTH_RATE = 0.8;
+/** Seconds of water over the intake before the engine drowns, and on dry land before it starts again. */
+const DROWN_TIME = 0.4;
+const DRY_TIME = 3;
+/** Wading depth when the definition has none. */
+const WADING = 0.6;
+
 export interface VehicleInput {
   /** Pedals, 0..1. In reverse they swap roles: the brake pedal drives backwards. */
   throttle: number;
@@ -51,6 +81,11 @@ export interface WheelTelemetry {
   /** Steering angle and accumulated roll, radians. */
   steer: number;
   rotation: number;
+  /** How far the tyre has sunk into soft ground, metres, and how soft that ground is (0..1). */
+  sink: number;
+  softness: number;
+  /** Depth of water over the ground under the tyre, metres. */
+  water: number;
   /** Where the tyre touches the ground, and the ground's normal there (world frame); valid while in contact. */
   point: { x: number; y: number; z: number };
   normal: { x: number; y: number; z: number };
@@ -62,6 +97,10 @@ export interface GroundProbe {
   groundAt(x: number, z: number): string;
   /** 0 dry to 1 soaked. */
   wetness(): number;
+  /** How far the ground gives under a tyre: 0 firm to 1 a soft bog. */
+  softness(x: number, z: number): number;
+  /** Metres of water over the ground at a world position; 0 on land. */
+  waterDepth(x: number, z: number): number;
 }
 
 /** Seconds the vehicle takes to roll back onto its wheels. */
@@ -107,6 +146,10 @@ export class VehicleSim {
   holding = true;
   /** Set while a winch pulls the vehicle along, so it does not hold itself still against it. */
   pulled = false;
+  /** True once water has got into the engine; it starts again after a while out of the water. */
+  drowned = false;
+  /** Deepest water around the vehicle, metres above the bottom of its tyres. */
+  wading = 0;
 
   private readonly controller: RAPIER.DynamicRayCastVehicleController;
   private readonly restLength: number[] = [];
@@ -114,6 +157,11 @@ export class VehicleSim {
   /** Handles of the body's own colliders, to tell its contacts from others'. */
   readonly chassis = new Set<number>();
   private readonly connectionY: number[] = [];
+  private readonly colliders: RAPIER.Collider[] = [];
+  /** Whether the body still bumps into the ground; not while it sits deep in a lake. */
+  private bodyMeetsGround = true;
+  /** Seconds with the intake under water, or the engine drowned and out of it. */
+  private drowning = 0;
   private steerAngle = 0;
   /** While being put back on its wheels: where from, where to, and how far along (0..1). */
   private righting: { from: { p: { x: number; y: number; z: number }; q: Quat }; to: { p: { x: number; y: number; z: number }; q: Quat }; t: number } | null = null;
@@ -154,6 +202,7 @@ export class VehicleSim {
         this.body,
       );
       this.chassis.add(collider.handle);
+      this.colliders.push(collider);
     };
     // Bodywork, and under it the frame between the axles: what grounds out on a crest.
     solid(w / 2, h / 2, l / 2, box.center[0]!, box.center[1]!, box.center[2]!);
@@ -187,7 +236,7 @@ export class VehicleSim {
         this.controller.setWheelMaxSuspensionTravel(i, s.travel);
         this.controller.setWheelMaxSuspensionForce(i, staticLoad * 8);
         this.controller.setWheelSideFrictionStiffness(i, 1);
-        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
+        this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, sink: 0, softness: 0, water: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
         void a;
       }
     });
@@ -206,6 +255,9 @@ export class VehicleSim {
     this.drivetrain.gear = 1;
     this.holding = true;
     this.righting = null;
+    this.drowned = false;
+    this.drowning = 0;
+    for (const wheel of this.wheels) wheel.sink = wheel.water = 0;
   }
 
   /** How upright the vehicle stands: 1 on its wheels, 0 on its side, -1 on its roof. */
@@ -238,6 +290,7 @@ export class VehicleSim {
     };
     this.drivetrain.gear = 1;
     this.holding = true;
+    for (const wheel of this.wheels) wheel.sink = 0;
   }
 
   /** Moves the righting along; true while it is still going. */
@@ -268,7 +321,10 @@ export class VehicleSim {
     if (this.def.axles[axle]?.differential === 'lockable') this.locks[axle] = !this.locks[axle];
   }
 
-  /** Where wheel i's centre is in the vehicle's own frame right now. */
+  /**
+   * Where wheel i's centre is in the vehicle's own frame right now: down in the mud or on the
+   * bed of the water, below where the physics rests it on the surface.
+   */
   wheelPosition(i: number): { x: number; y: number; z: number } {
     const axle = this.def.axles[i >> 1]!;
     return { x: ((i & 1 ? -1 : 1) * axle.track) / 2, y: this.connectionY[i]! - this.wheels[i]!.suspension, z: axle.z };
@@ -291,7 +347,7 @@ export class VehicleSim {
     const state = this.drivetrain;
     if (state.gear > 0 && input.brake > 0.1 && input.throttle < 0.1 && this.speed < 0.5) selectDirection(state, true);
     else if (state.gear < 0 && input.throttle > 0.1 && input.brake < 0.1 && this.speed > -0.5) selectDirection(state, false);
-    const drive = state.gear > 0 ? input.throttle : input.brake;
+    const drive = this.drowned ? 0 : state.gear > 0 ? input.throttle : input.brake;
     const brake = state.gear > 0 ? input.brake : input.throttle;
     this.pedal = drive;
 
@@ -309,8 +365,14 @@ export class VehicleSim {
       if (normal) Object.assign(wheel.normal, { x: normal.x, y: normal.y, z: normal.z });
       wheel.grip = tireOnGround(def, wheel.ground, wet).grip;
     }
+    this.sinkWheels(dt);
 
     const out = stepDrivetrain(def, state, drive, this.speed, dt);
+    if (this.drowned) {
+      out.driveForce = 0;
+      out.engineBrakeForce = 0;
+      state.rpm = 0;
+    }
     const driven: AxleDrive[] = [];
     def.axles.forEach((axle, a) => {
       if (!axle.driven) return;
@@ -339,6 +401,17 @@ export class VehicleSim {
         const wheel = this.wheels[i]!;
         const tire = tireOnGround(def, wheel.ground, wet);
         let hold = (brake * def.brakes.force * axle.brakeShare) / 2 + tire.rollingResistance * wheel.load;
+        // Rolling resistance and the rut's drag. Rapier leaves out a wheel's brake while it is
+        // driven, so on a driven wheel it comes off the drive force instead: holding it back from
+        // a standstill, slowing it once rolling. Off the drive it all goes on the brake.
+        const sunk = RUT_DRAG * (wheel.sink / def.wheels.radius) ** 2 * wheel.load;
+        let force = axle.driven ? split.forces[d]! : 0;
+        if (force !== 0) {
+          const drag = tire.rollingResistance * wheel.load + sunk;
+          if (Math.abs(this.speed) > 0.3) force -= drag * Math.sign(this.speed);
+          else force = Math.sign(force) * Math.max(0, Math.abs(force) - drag);
+        }
+        if (force === 0) hold += sunk;
         if (axle.driven) hold += out.engineBrakeForce / (driven.length * 2);
         if (input.handbrake && (axle.handbrake || handbraked === this.wheels.length)) hold += (0.7 * weight) / handbraked;
         // How far the brakes outdo the tyre, counted only while really moving.
@@ -348,7 +421,7 @@ export class VehicleSim {
           : 0;
         if (this.holding) hold += (0.8 * weight) / this.wheels.length;
         c.setWheelBrake(i, hold * dt); // Rapier takes the brake as an impulse per step
-        c.setWheelEngineForce(i, axle.driven ? split.forces[d]! : 0);
+        c.setWheelEngineForce(i, force);
         wheel.spin = axle.driven ? split.spin[d]! : 0;
         if (axle.driven) d++;
         c.setWheelFrictionSlip(i, Math.max(0.05, wheel.grip));
@@ -357,6 +430,7 @@ export class VehicleSim {
       }
     });
 
+    this.pushThroughWater(dt);
     c.updateVehicle(dt, undefined, groups(0xffff, GROUP_GROUND));
     const w = this.body.angvel();
     for (let i = 0; i < this.wheels.length; i++) {
@@ -371,6 +445,107 @@ export class VehicleSim {
       const vx = v.x + w.y * oz - w.z * oy, vy = v.y + w.z * ox - w.x * oz, vz = v.z + w.x * oy - w.y * ox;
       const [sx, sy, sz] = rotate(r, Math.cos(wheel.steer), 0, -Math.sin(wheel.steer));
       wheel.slide = wheel.contact ? vx * sx + vy * sy + vz * sz : 0;
+    }
+  }
+
+  /**
+   * Lets each tyre settle into soft ground, dig in while spinning and climb out while rolling,
+   * and go down to the bed of any water; the body sits that much lower.
+   */
+  private sinkWheels(dt: number): void {
+    const r = this.def.wheels.radius;
+    const staticLoad = (this.def.chassis.mass * GRAVITY) / this.wheels.length;
+    const travelled = Math.abs(this.speed) * dt;
+    let wading = 0, wet = false;
+    for (let i = 0; i < this.wheels.length; i++) {
+      const wheel = this.wheels[i]!;
+      if (wheel.contact) {
+        const { x, z } = wheel.point;
+        wheel.softness = this.ground.softness(x, z);
+        const depth = this.ground.waterDepth(x, z);
+        wheel.water += Math.max(-DEPTH_RATE * dt, Math.min(DEPTH_RATE * dt, depth - wheel.water));
+        const soft = wheel.softness;
+        const settle = SETTLE * r * soft * Math.sqrt(Math.min(2, wheel.load / staticLoad));
+        if (wheel.sink < settle) wheel.sink += (settle - wheel.sink) * Math.min(1, travelled / SETTLE_DISTANCE + dt * 0.1);
+        else if (wheel.spin < 0.1) wheel.sink -= (wheel.sink - settle) * Math.min(1, travelled / CLIMB_DISTANCE);
+        wheel.sink = Math.min(DIG_LIMIT * r, wheel.sink + wheel.spin * DIG_RATE * soft * dt);
+      } else {
+        // Lifted clear: out of the rut, and the water drains towards nothing until it lands again.
+        wheel.sink = Math.max(0, wheel.sink - dt);
+        wheel.water = Math.max(0, wheel.water - DEPTH_RATE * dt * 0.25);
+      }
+      if (wheel.water > 0.02) wet = true;
+      wading = Math.max(wading, wheel.water + wheel.sink);
+      const at = this.wheelPosition(i);
+      this.controller.setWheelChassisConnectionPointCs(i, { x: at.x, y: this.connectionY[i]! + wheel.sink + wheel.water, z: at.z });
+    }
+    this.wading = wet ? wading : 0;
+
+    // Deep in a lake the body sits below the water's surface, which is where the ground's
+    // collider is; it bumps the ground again once the water is shallow.
+    const deep = this.wheels.some((w) => w.water > this.def.chassis.groundClearance * 0.6);
+    const shallow = this.wheels.every((w) => w.water < 0.08);
+    if (this.bodyMeetsGround === deep || (!this.bodyMeetsGround && shallow)) {
+      this.bodyMeetsGround = !deep;
+      const filter = (this.bodyMeetsGround ? GROUP_GROUND : 0) | GROUP_OBSTACLE | GROUP_VEHICLE;
+      for (const collider of this.colliders) collider.setCollisionGroups(groups(GROUP_VEHICLE, filter));
+    }
+
+    // The engine drowns with water over its intake for a moment, and starts again a while after.
+    const limit = this.def.chassis.wading ?? WADING;
+    if (!this.drowned) {
+      this.drowning = this.wading > limit ? this.drowning + dt : 0;
+      if (this.drowning > DROWN_TIME) {
+        this.drowned = true;
+        this.drowning = 0;
+      }
+    } else {
+      this.drowning = wet ? 0 : this.drowning + dt;
+      if (this.drowning > DRY_TIME) {
+        this.drowned = false;
+        this.drowning = 0;
+      }
+    }
+  }
+
+  /** Lift and drag on the body where it is under water, worked out at the corners of its underside. */
+  private pushThroughWater(dt: number): void {
+    let level = 0, n = 0;
+    for (const wheel of this.wheels) {
+      if (wheel.contact && wheel.water > 0.02) {
+        level += wheel.point.y;
+        n++;
+      }
+    }
+    if (!n) return;
+    level /= n; // the surface: the ground's collider lies at the water's top
+    const { box, groundClearance } = this.def.chassis;
+    const [w, h, l] = box.size as [number, number, number];
+    const top = box.center[1]! + h / 2;
+    const tall = top - groundClearance;
+    const p = this.body.translation(), q = this.body.rotation(), v = this.body.linvel(), av = this.body.angvel();
+    const area = (w * l) / 4;
+    for (const [cx, cz] of [[w / 2, l / 2], [-w / 2, l / 2], [w / 2, -l / 2], [-w / 2, -l / 2]] as const) {
+      const [ox, oy, oz] = rotate(q, cx * 0.8, groundClearance, cz * 0.8);
+      const x = p.x + ox, y = p.y + oy, z = p.z + oz;
+      if (this.ground.waterDepth(x, z) <= 0) continue;
+      const under = Math.min(tall, level - y);
+      if (under <= 0) continue;
+      // Velocity of this corner, then its parts along the body's own axes.
+      const vx = v.x + av.y * oz - av.z * oy, vy = v.y + av.z * ox - av.x * oz, vz = v.z + av.x * oy - av.y * ox;
+      const [ax, ay, az] = rotate(q, 1, 0, 0);
+      const [fx, fy, fz] = rotate(q, 0, 0, 1);
+      const side = vx * ax + vy * ay + vz * az, ahead = vx * fx + vy * fy + vz * fz;
+      const k = 0.5 * WATER_DENSITY * WATER_DRAG * under;
+      // Each corner carries half of a face: the front or back is w wide, a side l long.
+      const dragAhead = -k * (w / 2) * ahead * Math.abs(ahead);
+      const dragSide = -k * (l / 2) * side * Math.abs(side);
+      const lift = WATER_DENSITY * GRAVITY * FLOAT_SHARE * area * under - 0.5 * WATER_DENSITY * area * vy * Math.abs(vy);
+      this.body.applyImpulseAtPoint({
+        x: (fx * dragAhead + ax * dragSide) * dt,
+        y: (fy * dragAhead + ay * dragSide + lift) * dt,
+        z: (fz * dragAhead + az * dragSide) * dt,
+      }, { x, y, z }, true);
     }
   }
 

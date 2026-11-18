@@ -12,7 +12,7 @@ const idle: VehicleInput = { throttle: 0, brake: 0, steer: 0, handbrake: false }
 beforeAll(() => RAPIER.init());
 
 /** A world with a big flat slab tilted `slope` degrees, rising towards -z (the way a vehicle placed at heading 0 faces). */
-function setup(name: string, opts: { slope?: number; ground?: (x: number, z: number) => string } = {}) {
+function setup(name: string, opts: { slope?: number; ground?: (x: number, z: number) => string; soft?: (x: number, z: number) => number; water?: (x: number, z: number) => number; wet?: number } = {}) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   const tilt = ((opts.slope ?? 0) * Math.PI) / 360;
@@ -22,7 +22,12 @@ function setup(name: string, opts: { slope?: number; ground?: (x: number, z: num
       .setRotation({ x: Math.sin(tilt), y: 0, z: 0, w: Math.cos(tilt) })
       .setCollisionGroups(groups(GROUP_GROUND, 0xffff)),
   );
-  const probe: GroundProbe = { groundAt: opts.ground ?? (() => 'gravel'), wetness: () => 0 };
+  const probe: GroundProbe = {
+    groundAt: opts.ground ?? (() => 'gravel'),
+    wetness: () => opts.wet ?? 0,
+    softness: opts.soft ?? (() => 0),
+    waterDepth: opts.water ?? (() => 0),
+  };
   const car = new VehicleSim(RAPIER, world, load(name), probe);
   car.place(0, 0.05, 0, 0);
   const run = (seconds: number, input: Partial<VehicleInput> = {}) => {
@@ -149,3 +154,88 @@ describe('differential locks', () => {
     expect(locked).toBeGreaterThan(1.5);
   });
 });
+
+describe('soft ground', () => {
+  const bog = { ground: () => 'bog', soft: () => 1 };
+
+  it('stays on top of firm ground', () => {
+    const { car, run } = setup('tgb11');
+    run(1);
+    run(4, { throttle: 0.5 });
+    expect(Math.max(...car.wheels.map((w) => w.sink))).toBe(0);
+  });
+
+  it('settles into a bog and crawls through it in low range', () => {
+    const { car, run } = setup('tgb11', bog);
+    car.toggleRange();
+    car.def.axles.forEach((_, a) => car.toggleLock(a));
+    run(1);
+    run(12, { throttle: 0.35 });
+    const sink = Math.max(...car.wheels.map((w) => w.sink));
+    expect(sink).toBeGreaterThan(0.08);
+    expect(sink).toBeLessThan(0.25);
+    expect(car.body.translation().z).toBeLessThan(-8);
+  });
+
+  it('digs itself in when the wheels are spun in the rain, and crawls out with the locks in', () => {
+    const { car, run } = setup('tgb11', { ...bog, wet: 1 });
+    run(1);
+    run(8, { throttle: 1 });
+    // With open differentials the wheels with the least weight spin, and dig far deeper than rolling settles them.
+    expect(Math.max(...car.wheels.map((w) => w.sink))).toBeGreaterThan(0.22);
+    // Dug in, it goes nowhere on open differentials.
+    let z = car.body.translation().z;
+    run(4, { throttle: 1 });
+    expect(Math.abs(car.body.translation().z - z)).toBeLessThan(0.5);
+    // In low range with the differentials locked all four wheels pull, and it crawls out.
+    car.toggleRange();
+    car.def.axles.forEach((_, a) => car.toggleLock(a));
+    z = car.body.translation().z;
+    run(10, { throttle: 1 });
+    expect(car.body.translation().z).toBeLessThan(z - 2);
+  });
+});
+
+describe('water', () => {
+  /** Water from 6 m ahead, deepening by a metre every 4 m to `deepest`. */
+  const ford = (deepest: number) => (_x: number, z: number) => Math.max(0, Math.min(deepest, (-z - 6) * 0.25));
+
+  it('fords shallow water, slowed by it, and comes out the other side', () => {
+    // 0.5 m deep from 8 m to 30 m ahead, with sloping banks.
+    const across = (_x: number, z: number) => Math.max(0, Math.min(0.5, (-z - 6) * 0.25, (34 - -z) * 0.25));
+    const { car, run } = setup('tgb11', { water: across });
+    run(1);
+    let deepest = 0, lowest = 0, slowest = Infinity;
+    for (let s = 0; s < 14 * 60 && car.body.translation().z > -45; s++) {
+      run(1 / 60, { throttle: 0.6 });
+      deepest = Math.max(deepest, car.wading);
+      lowest = Math.min(lowest, car.body.translation().y);
+      if (car.wading > 0.45) slowest = Math.min(slowest, car.speed);
+    }
+    expect(car.drowned).toBe(false);
+    expect(deepest).toBeGreaterThan(0.45);
+    // Down on the bed, half a metre below the surface.
+    expect(lowest).toBeLessThan(-0.4);
+    expect(car.body.translation().z).toBeLessThan(-45);
+    // Out again, back up on dry ground.
+    run(2, { throttle: 0.3 });
+    expect(car.wading).toBe(0);
+    expect(Math.abs(car.body.translation().y)).toBeLessThan(0.1);
+    expect(slowest).toBeLessThan(8);
+  });
+
+  it('drowns its engine in water deeper than it can wade, and starts again on dry land', () => {
+    const { car, run } = setup('tgb11', { water: ford(1.4) });
+    run(1);
+    run(10, { throttle: 0.6 });
+    expect(car.drowned).toBe(true);
+    expect(car.drivetrain.rpm).toBe(0);
+    // Pulled out (put on dry ground), it dries and goes again.
+    car.place(0, 0.05, 30, 0);
+    car.drowned = true;
+    run(DRY_SECONDS);
+    expect(car.drowned).toBe(false);
+  });
+});
+
+const DRY_SECONDS = 4;

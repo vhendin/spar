@@ -9,6 +9,7 @@
       0.12
     ],
     "groundClearance": 0.39,
+    "wading": 0.75,
     "box": {
       "center": [
         0,
@@ -134,8 +135,8 @@
       "grass": 0.07,
       "rock": 0.035,
       "sand": 0.16,
-      "bog": 0.26,
-      "water": 0.5
+      "bog": 0.12,
+      "water": 0.15
     }
   },
   "body": {

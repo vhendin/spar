@@ -224,7 +224,9 @@ export class VehicleAudio {
 
     const d = sim.drivetrain;
     const def = sim.def.drivetrain;
-    const rpm = quiet ? 0 : Math.max(def.idle, d.rpm || def.idle);
+    // A drowned engine is silent like one not yet started.
+    const dead = quiet || sim.drowned;
+    const rpm = dead ? 0 : Math.max(def.idle, d.rpm || def.idle);
     const rev = rpm / def.redline;
     // Off the throttle while the clutch is out for a gear change.
     this.load += ((d.shifting > 0 ? 0 : pedal) - this.load) * Math.min(1, dt * 12);
@@ -234,9 +236,9 @@ export class VehicleAudio {
       ease(this.engine.parameters.get('load')!, load, t, 0.03);
     }
     ease(this.engineTone.frequency, 140 + rpm * 0.1 + load * 380, t);
-    ease(this.engineLevel.gain, quiet ? 0 : 1.1 + 0.6 * load + 0.4 * rev, t);
+    ease(this.engineLevel.gain, dead ? 0 : 1.1 + 0.6 * load + 0.4 * rev, t);
     ease(this.intakeTone.frequency, 250 + rpm * 0.2, t);
-    ease(this.intakeLevel.gain, quiet ? 0 : (0.004 + 0.02 * load) * (0.3 + rev), t);
+    ease(this.intakeLevel.gain, dead ? 0 : (0.004 + 0.02 * load) * (0.3 + rev), t);
 
     // Gears: the transfer case turns with the wheels, faster in low range; reverse is straight-cut and sings.
     const speed = Math.abs(sim.speed);

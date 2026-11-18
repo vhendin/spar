@@ -18,6 +18,36 @@ export interface GroundClasses {
    * @minItems 1
    */
   surfaces: [GroundClass, ...GroundClass[]];
+  /**
+   * How far each kind of ground gives under a tyre, 0 firm to 1 a soft bog, when dry and when soaked by rain. Grounds left out are firm. For water it is the bed under it.
+   */
+  softness: {
+    [k: string]: {
+      dry: number;
+      wet: number;
+    };
+  };
+  /**
+   * Water depth in metres: streams and pools on the surface layer, and how lakes deepen away from the shore.
+   */
+  water: {
+    /**
+     * Depth of a stream.
+     */
+    stream: number;
+    /**
+     * Depth of a pool.
+     */
+    pool: number;
+    /**
+     * Deepest a lake gets, far from its shore.
+     */
+    lakeMax: number;
+    /**
+     * Metres from the shore over which a lake reaches about two thirds of its greatest depth.
+     */
+    lakeShelf: number;
+  };
 }
 export interface GroundClass {
   id: number;

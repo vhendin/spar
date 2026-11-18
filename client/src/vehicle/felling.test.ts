@@ -19,7 +19,7 @@ function ram(diameter: number, kmh: number, opts: { push?: boolean } = {}) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   world.createCollider(RAPIER.ColliderDesc.cuboid(400, 1, 400).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, 0xffff)));
-  const car = new VehicleSim(RAPIER, world, def, { groundAt: () => 'gravel', wetness: () => 0 });
+  const car = new VehicleSim(RAPIER, world, def, { groundAt: () => 'gravel', wetness: () => 0, softness: () => 0, waterDepth: () => 0 });
   car.place(0, 0.05, 24, 0);
   const felling = new Felling(RAPIER, car.body);
   const desc = felling.listen(RAPIER.ColliderDesc.cylinder(3, diameter / 2).setTranslation(0, 2.6, 15), RAPIER)

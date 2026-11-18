@@ -7,7 +7,9 @@
   "required": [
     "grounds",
     "biomes",
-    "surfaces"
+    "surfaces",
+    "softness",
+    "water"
   ],
   "properties": {
     "grounds": {
@@ -31,6 +33,63 @@
       "minItems": 1,
       "items": {
         "$ref": "#/definitions/GroundClass"
+      }
+    },
+    "softness": {
+      "description": "How far each kind of ground gives under a tyre, 0 firm to 1 a soft bog, when dry and when soaked by rain. Grounds left out are firm. For water it is the bed under it.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dry",
+          "wet"
+        ],
+        "properties": {
+          "dry": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "wet": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "water": {
+      "description": "Water depth in metres: streams and pools on the surface layer, and how lakes deepen away from the shore.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stream",
+        "pool",
+        "lakeMax",
+        "lakeShelf"
+      ],
+      "properties": {
+        "stream": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Depth of a stream."
+        },
+        "pool": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Depth of a pool."
+        },
+        "lakeMax": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Deepest a lake gets, far from its shore."
+        },
+        "lakeShelf": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Metres from the shore over which a lake reaches about two thirds of its greatest depth."
+        }
       }
     }
   },

@@ -144,7 +144,7 @@ describe('tireOnGround', () => {
     expect(tireOnGround(def, 'gravel').grip).toBeGreaterThan(tireOnGround(def, 'bog').grip);
     expect(tireOnGround(def, 'asphalt', 1).grip).toBeCloseTo(0.95 * 0.8, 6);
     expect(tireOnGround(def, 'asphalt', 0.5).grip).toBeCloseTo(0.95 * 0.9, 6);
-    expect(tireOnGround(def, 'bog').rollingResistance).toBeGreaterThan(tireOnGround(def, 'asphalt').rollingResistance * 10);
+    expect(tireOnGround(def, 'bog').rollingResistance).toBeGreaterThan(tireOnGround(def, 'asphalt').rollingResistance * 5);
     expect(tireOnGround(def, 'moon dust')).toEqual({ grip: 0.6, rollingResistance: 0.05 });
   });
 });

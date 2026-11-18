@@ -228,7 +228,11 @@ async function start(): Promise<void> {
   document.body.append(winchHelp);
   const prompt = document.createElement('div');
   prompt.id = 'prompt';
-  prompt.innerHTML = 'Overturned · press <kbd>R</kbd> to get back on the wheels';
+  const PROMPTS = {
+    overturned: 'Overturned · press <kbd>R</kbd> to get back on the wheels',
+    drowned: 'Water in the engine · winch out with <kbd>E</kbd>; it starts again a few seconds after leaving the water',
+  };
+  let prompted = '';
   document.body.append(prompt);
   const startRoot = document.createElement('div');
   startRoot.id = 'start';
@@ -369,7 +373,8 @@ async function start(): Promise<void> {
       scene.add(features.group);
     }
 
-    // Vehicle: ?vehicle=<name> picks a definition, ?spawn=<name or number> a start point.
+    // Vehicle: ?vehicle=<name> picks a definition, ?spawn=<name or number> a start point
+    // (or ?at=x,z,heading anywhere).
     const defs = Object.values(VEHICLES);
     const def = defs.find((d) => d.name === (params.get('vehicle') ?? stored(VEHICLE_KEY))) ?? defs.find((d) => d.name === 'tgb11') ?? defs[0]!;
     // Start points placed by hand on the map come first.
@@ -377,7 +382,10 @@ async function start(): Promise<void> {
     await starts.load();
     const allSpawns = [...starts.list.map((s) => ({ ...s, road: '' })), ...vectors.spawns];
     const wanted = params.get('spawn');
+    // ?at=x,z,heading starts anywhere, for trying out a spot.
+    const at = numbers(params, 'at', 3);
     const spawn =
+      (at ? { name: 'here', x: at[0]!, z: at[1]!, heading: at[2]!, road: '' } : undefined) ??
       allSpawns.find((s) => s.name.toLowerCase() === wanted?.toLowerCase()) ??
       allSpawns[Number(wanted) || 0] ??
       allSpawns[0] ?? { name: 'the middle', x: index.size / 2, z: index.size / 2, heading: 0 };
@@ -1044,7 +1052,10 @@ async function start(): Promise<void> {
       // On its side or roof and not going anywhere: say how to get back on the wheels.
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;
       overturned = lying && !paused ? overturned + dt : lying ? overturned : 0;
-      prompt.style.opacity = overturned > 1.5 && !paused && !w.map.open ? '1' : '0';
+      const say = paused || w.map.open || w.unplaced || flying ? '' : overturned > 1.5 ? 'overturned' : w.sim.drowned ? 'drowned' : '';
+      if (say && say !== prompted) prompt.innerHTML = PROMPTS[say];
+      if (say) prompted = say;
+      prompt.style.opacity = say ? '1' : '0';
 
       dash.visible = !flying && !w.unplaced;
       const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;

@@ -31,7 +31,7 @@ function setup(anchors: Anchor[], slope = 0) {
       .setRotation({ x: Math.sin(tilt), y: 0, z: 0, w: Math.cos(tilt) })
       .setCollisionGroups(groups(GROUP_GROUND, 0xffff)),
   );
-  const car = new VehicleSim(RAPIER, world, load('tgb11'), { groundAt: () => 'dirt', wetness: () => 0 });
+  const car = new VehicleSim(RAPIER, world, load('tgb11'), { groundAt: () => 'dirt', wetness: () => 0, softness: () => 0, waterDepth: () => 0 });
   car.place(0, 0.05, 0, 0);
   const felled = new Set<string>();
   const winch = new Winch(car, {
