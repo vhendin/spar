@@ -198,19 +198,6 @@ same as the Terrängkombi.
   the back. Worth having a load to carry (heavier, lower, sinks deeper)?
 - **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
-### Multiplayer (docs/MULTIPLAYER.md)
-
-Stage 1 (seeing each other) is built; these came up on the way.
-
-- **Headlight beams of other vehicles.** Their lamps glow, but they light nothing: every extra
-  light makes all materials on screen more expensive, and adding one rebuilds them all (a
-  stutter as someone joins). Fine, or should the nearest one or two others get real beams?
-- **Keeping your place after a dropped connection.** Reconnecting now makes you a new player
-  ("left", then "joined"). Worth keeping the slot for a minute, as planned for stage 5?
-- **Chat key.** Enter opens the chat line. Does it clash with anything you are used to?
-- **Paints.** Nine to choose from (the vehicle's own, Falu red, mustard, lake blue, moss, birch
-  white, night, rowan orange, lingon). Enough, or a free colour picker?
-
 ## Answered
 
 - Power on slopes: the vehicles struggled on slopes that should be easy; both power and grip
@@ -242,6 +229,12 @@ Stage 1 (seeing each other) is built; these came up on the way.
   driving and ice after.
 - Light 4×4 body: a hard top, not open, so there is no empty driver's seat to see.
 
+- Multiplayer stage 1, after trying it: works well. Others' headlights should light the road
+  (the nearest two with lights on get real beams). A dropped player keeps their place for a
+  minute. Enter for chat is fine. Nine paints are enough as long as they are clearly different
+  (now one of each hue: red, orange, mustard, green, blue, heather, white, night, and the
+  vehicle's own). Drivers starting at the same point were set down inside each other; now each
+  is set down behind anyone already there.
 - Multiplayer: started on 2026-11-19 with nothing blocking it; single-player tuning carries
   on alongside. Each region is a room (others are drawn only in the same region); anyone may
   change the time and weather, and a chat line says who did; vehicles will be solid to each

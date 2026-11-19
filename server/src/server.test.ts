@@ -46,6 +46,7 @@ if (step === 'build') {
     startsDir: join(dir, 'starts'),
     importer: [process.execPath, join(dir, 'importer.mjs')],
     importerCwd: dir,
+    rejoinSeconds: 0.6,
   });
   port = (await server.listen()).port;
 });
@@ -71,7 +72,7 @@ interface Client {
 }
 
 /** Joins as a player and collects what the server sends, checking each against the schema. */
-function connect(name?: string, color?: string): Promise<Client> {
+function connect(name?: string, color?: string, token?: string): Promise<Client> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
     const all: ServerMessage[] = [];
@@ -112,7 +113,7 @@ function connect(name?: string, color?: string): Promise<Client> {
       }
       for (const w of waiters.splice(0)) w();
     });
-    ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, ...(name !== undefined && { name }), ...(color && { color }) })));
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, ...(name !== undefined && { name }), ...(color && { color }), ...(token && { token }) })));
     ws.on('error', reject);
   });
 }
@@ -305,6 +306,25 @@ describe('websocket', () => {
     const left = await b.waitFor('players', (m) => !m.players.some((p) => p.id === a.id));
     expect(left.players.some((p) => p.id === b.id)).toBe(true);
     b.ws.close();
+  });
+
+  it('keeps a dropped player\'s place for a while, then tells the others they left', async () => {
+    const watcher = await connect('Bo');
+    const a = await connect('Anna', undefined, 'tab-anna-1');
+    a.ws.close();
+    await new Promise((r) => setTimeout(r, 150));
+    const back = await connect('Anna', undefined, 'tab-anna-1');
+    expect(back.id).toBe(a.id);
+    // Gone again, and this time not back in time.
+    back.ws.close();
+    const left = await watcher.waitFor('chat', (m) => m.text === 'Anna left');
+    expect(left.from).toBeUndefined();
+    expect(watcher.seen('chat').filter((m) => m.text === 'Anna joined')).toHaveLength(1);
+    expect(watcher.seen('chat').filter((m) => m.text === 'Anna left')).toHaveLength(1);
+    const again = await connect('Anna', undefined, 'tab-anna-1');
+    expect(again.id).not.toBe(a.id);
+    again.ws.close();
+    watcher.ws.close();
   });
 
   it('passes on nothing before hello, and refuses a malformed vehicle', async () => {

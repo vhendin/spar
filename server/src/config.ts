@@ -31,6 +31,8 @@ export interface ServerConfig {
   importer: string[];
   /** Folder the importer command runs in. */
   importerCwd: string;
+  /** Seconds a dropped player keeps their place for, to come back as the same player; 60 if left out. */
+  rejoinSeconds?: number;
 }
 
 /** Central European standard time; the game does not follow summer time. */

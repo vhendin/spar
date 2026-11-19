@@ -21,7 +21,7 @@ export interface VehicleShape {
 export interface ViewOptions {
   /** Paint for the body, #rrggbb; the definition's own colours otherwise. */
   color?: string;
-  /** Headlight beams that light the ground; without them only the lamps glow. */
+  /** Headlight beams that light the ground; without them only the lamps glow (others lend theirs, see Others). */
   beams?: boolean;
 }
 
@@ -33,7 +33,18 @@ export function painted(def: VehicleDef, color: string | undefined): VehicleDef 
 }
 
 /** Strength of one headlight beam. */
-const HEADLIGHT = 34;
+export const HEADLIGHT = 34;
+
+/** One headlight's beam, dark until switched on. */
+export function newBeam(): THREE.SpotLight {
+  return new THREE.SpotLight(0xfff0d2, 0, 160, 0.62, 0.7, 1);
+}
+
+/** Places a beam (and its target, in the same parent) at a lamp, `at` in the body's frame. */
+export function aimBeam(beam: THREE.SpotLight, at: readonly number[]): void {
+  beam.position.set(at[0]!, at[1]!, at[2]! + 0.05);
+  beam.target.position.set(at[0]! * 0.6, at[1]! - 1.1, at[2]! + 22);
+}
 
 /** Draws a simulated vehicle, smoothing between physics steps. */
 export class VehicleView {
@@ -62,9 +73,8 @@ export class VehicleView {
     meshes.interior.receiveShadow = true;
     for (const at of options.beams === false ? [] : sim.def.body.headlights) {
       // Present from the start, at zero strength: adding lights later makes every material rebuild.
-      const beam = new THREE.SpotLight(0xfff0d2, 0, 160, 0.62, 0.7, 1);
-      beam.position.set(at[0]!, at[1]!, at[2]! + 0.05);
-      beam.target.position.set(at[0]! * 0.6, at[1]! - 1.1, at[2]! + 22);
+      const beam = newBeam();
+      aimBeam(beam, at);
       this.beams.push(beam);
       this.group.add(beam, beam.target);
     }

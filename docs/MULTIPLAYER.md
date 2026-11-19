@@ -122,7 +122,7 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
 - **Address:** friends open `http://<host-ip>:8080`. The host's start menu shows that address,
   because the server knows its own network interfaces.
 - **Name and colour:** asked for the first time and remembered in the browser. No passwords; it
-  is a home network. A player who reconnects within a minute keeps their slot.
+  is a home network. A player who reconnects within a minute keeps their slot (built).
 - **Chat:** Enter opens a line at the bottom; messages fade after a while. Arrivals, players
   joining and leaving, and world changes are also shown there.
 - **Player list:** in the menu (Esc) and the start menu; the other players also show on the
@@ -145,8 +145,12 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    Others are drawn 100 ms behind, carried on 250 ms, removed after 5 s
    (`multiplayer/others.ts`), only in the same region. The view takes a small `VehicleShape`
    (definition, body pose, wheels) that both the simulation and a remote vehicle provide; the
-   rest (`VehicleState` for spray, tracks, grime, exhaust and sound) comes with stage 2. Remote
-   lamps glow but cast no beams. Name tags fade by 600 m; markers on the map and minimap;
+   rest (`VehicleState` for spray, tracks, grime, exhaust and sound) comes with stage 2. The
+   two nearest others with their lights on get real beams, from a pool of four made when the
+   first other vehicle shows (adding lights rebuilds every material). Setting off from a start
+   point where someone already stands puts you 9 m behind them. A tab keeps a token
+   (`sessionStorage`); reconnecting with it within a minute is the same player, with no
+   "left" or "joined". Name tags fade by 600 m; markers on the map and minimap;
    player lists in the start screen and the menu; chat on Enter, with lines from the server
    for joining, leaving, renaming and changes to the time and weather. Protocol 4.
 2. **Touching.** Kinematic bodies, pushes sent to the owner; others' tracks, spray, exhaust,

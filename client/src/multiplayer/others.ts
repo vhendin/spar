@@ -4,7 +4,7 @@
 
 import * as THREE from 'three/webgpu';
 import type { Player, VehicleDef, VehicleSnapshot } from '@spar/shared';
-import { VehicleView, type VehicleShape } from '../vehicle/view';
+import { aimBeam, HEADLIGHT, newBeam, VehicleView, type VehicleShape } from '../vehicle/view';
 import { Track, type Pose } from './track';
 
 /** A vehicle not heard from for this long (ms) is taken away. */
@@ -12,6 +12,14 @@ const SILENT = 5000;
 /** Name tags are fully clear up to this distance (m) and gone at FADE_TO. */
 const FADE_FROM = 120;
 const FADE_TO = 600;
+/**
+ * How many of the others get real headlight beams, the nearest with their lights on. The
+ * beams are made once, when the first other vehicle shows, and handed between vehicles after:
+ * every light costs all materials on screen, and adding or removing one rebuilds them all.
+ */
+const BEAM_CARS = 2;
+/** Metres between vehicles set down at the same start point. */
+const SPACING = 9;
 
 /** Another driver's vehicle as the view needs it, moved along by their snapshots. */
 class RemoteVehicle implements VehicleShape {
@@ -86,6 +94,8 @@ export class Others {
   private readonly others = new Map<string, Other>();
   private readonly tags: HTMLDivElement;
   private readonly at = new THREE.Vector3();
+  /** Pairs of beams lent to the nearest others; made with the first other vehicle. */
+  private beams: [THREE.SpotLight, THREE.SpotLight][] = [];
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -144,6 +154,22 @@ export class Others {
     });
   }
 
+  /**
+   * A place at or behind (x, z) facing `heading` (degrees, 0 north) with no other vehicle
+   * within reach, so two drivers setting off from one start point do not end up in each other.
+   */
+  clearSpot(x: number, z: number, heading: number): { x: number; z: number } {
+    const others = this.markers();
+    const h = THREE.MathUtils.degToRad(heading);
+    // Behind is south for a vehicle facing north; world z grows southwards.
+    const bx = -Math.sin(h), bz = Math.cos(h);
+    for (let k = 0; k < 8; k++) {
+      const px = x + bx * k * SPACING, pz = z + bz * k * SPACING;
+      if (others.every((o) => Math.hypot(o.x - px, o.z - pz) > SPACING)) return { x: px, z: pz };
+    }
+    return { x, z };
+  }
+
   /** The other vehicles in our region, for the map. */
   markers(): Marker[] {
     const out: Marker[] = [];
@@ -159,6 +185,8 @@ export class Others {
   /** Call every frame, after the camera has moved. `now` in ms. */
   update(now: number, dt: number, camera: THREE.Camera, show: boolean): void {
     const width = window.innerWidth, height = window.innerHeight;
+    /** Others with their lights on, and how far away, for the beams. */
+    const lit: { o: Other; distance: number }[] = [];
     for (const [id, o] of this.others) {
       if (now - o.track.heard > SILENT) {
         this.remove(id, o);
@@ -176,6 +204,7 @@ export class Others {
       // A new vehicle or new paint: build it again.
       const built = `${def.name} ${o.player.color ?? ''}`;
       if (!o.view || !o.vehicle || o.built !== built) {
+        this.release(o);
         o.view?.dispose();
         o.vehicle = new RemoteVehicle(def);
         // Lamps glow, but their beams are left out: each extra light costs every material on screen.
@@ -188,6 +217,7 @@ export class Others {
       o.view.snap();
       o.view.render(1);
       o.view.setLights(pose.lights, pose.braking);
+      if (pose.lights) lit.push({ o, distance: o.view.group.position.distanceTo(camera.position) });
 
       // The name, over the roof.
       this.at.set(0, def.body.height + 0.7, 0).applyMatrix4(o.view.group.matrixWorld);
@@ -212,9 +242,49 @@ export class Others {
       o.tag.style.opacity = String(Math.min(1, fade));
       o.tag.style.transform = `translate(${((this.at.x + 1) / 2) * width}px, ${((1 - this.at.y) / 2) * height}px) translate(-50%, -100%)`;
     }
+    this.lendBeams(lit);
+  }
+
+  /** The beams go to the nearest others with their lights on; the rest wait, dark. */
+  private lendBeams(lit: { o: Other; distance: number }[]): void {
+    if (this.beams.length === 0) {
+      if (this.others.size === 0) return;
+      for (let k = 0; k < BEAM_CARS; k++) {
+        const pair: [THREE.SpotLight, THREE.SpotLight] = [newBeam(), newBeam()];
+        for (const beam of pair) this.scene.add(beam, beam.target);
+        this.beams.push(pair);
+      }
+    }
+    lit.sort((a, b) => a.distance - b.distance);
+    this.beams.forEach((pair, k) => {
+      const view = lit[k]?.o.view;
+      const lamps = lit[k]?.o.vehicle?.def.body.headlights;
+      pair.forEach((beam, side) => {
+        if (!view || !lamps?.length) {
+          beam.intensity = 0;
+          return;
+        }
+        if (beam.parent !== view.group) view.group.add(beam, beam.target);
+        aimBeam(beam, side === 0 ? lamps[0]! : lamps.at(-1)!);
+        beam.intensity = HEADLIGHT;
+      });
+    });
+  }
+
+  /** Takes back any beams lent to `o`, before its view goes. */
+  private release(o: Other): void {
+    for (const pair of this.beams) {
+      for (const beam of pair) {
+        if (o.view && beam.parent === o.view.group) {
+          beam.intensity = 0;
+          this.scene.add(beam, beam.target);
+        }
+      }
+    }
   }
 
   private remove(id: string, o: Other): void {
+    this.release(o);
     o.view?.dispose();
     o.tag.remove();
     this.others.delete(id);

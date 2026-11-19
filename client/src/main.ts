@@ -361,7 +361,9 @@ async function start(): Promise<void> {
   };
   drawHud();
 
-  const setDown = (w: World, x: number, z: number, heading: number): boolean => {
+  const setDown = (w: World, x0: number, z0: number, heading: number, clear = false): boolean => {
+    // At a start point, not on top of another driver who set off from the same one.
+    const { x, z } = clear ? others.clearSpot(x0, z0, heading) : { x: x0, z: z0 };
     const y = w.ground.heightAt(x, z);
     if (y === null) return false;
     w.tracks.break();
@@ -674,7 +676,7 @@ async function start(): Promise<void> {
   };
   const toStart = (w: World): void => {
     trips.jumped();
-    w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
+    w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading, true);
   };
 
   /** Starts over with the saved settings, putting the vehicle back where it is now. */
@@ -1029,7 +1031,7 @@ async function start(): Promise<void> {
         // Physics waits until the ground under the vehicle has arrived.
         if (!w.ground.update(p.x, p.z)) continue;
         if (w.unplaced) {
-          w.unplaced = !setDown(w, w.arrival.x, w.arrival.z, w.arrival.heading);
+          w.unplaced = !setDown(w, w.arrival.x, w.arrival.z, w.arrival.heading, true);
           if (!w.unplaced) {
             if (w.arrival.name !== 'where you were') chapter(w.arrival.name, `${w.index.title} · ${w.sim.def.title}`);
             // From now on, falling off the world means back to the spawn point.

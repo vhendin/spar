@@ -1,17 +1,17 @@
 // What the start screen and the menu share about the drivers: the paints to choose from, and
 // the list of who is connected.
 
-/** Paints a driver may choose for their vehicle, from the game's palette; '' keeps its own colours. */
+/** Paints a driver may choose for their vehicle, one of each hue so drivers tell each other apart; '' keeps its own colours. */
 export const PAINTS: { name: string; color: string }[] = [
   { name: 'Its own colours', color: '' },
   { name: 'Falu red', color: '#8e3b2d' },
+  { name: 'Rowan orange', color: '#c8642a' },
   { name: 'Mustard', color: '#c9a44a' },
-  { name: 'Lake blue', color: '#4e6573' },
-  { name: 'Moss', color: '#6e7a55' },
+  { name: 'Spruce green', color: '#3e6b48' },
+  { name: 'Lake blue', color: '#3f6f9e' },
+  { name: 'Heather', color: '#6f4a7e' },
   { name: 'Birch white', color: '#dcdad2' },
   { name: 'Night', color: '#262c38' },
-  { name: 'Rowan orange', color: '#b8562a' },
-  { name: 'Lingon', color: '#7d2a3c' },
 ];
 
 export interface PlayerLine {

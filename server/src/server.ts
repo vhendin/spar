@@ -161,6 +161,14 @@ export function createGameServer(config: ServerConfig): GameServer {
   const world = new WorldState(config);
   /** Everyone who has said hello, by their socket. */
   const joined = new Map<WebSocket, Player>();
+  /**
+   * Players whose connection dropped, by the token their browser chose: coming back with it
+   * before the timer runs out, they are the same player again, and nobody is told they left.
+   */
+  const dropped = new Map<string, { player: Player; timer: NodeJS.Timeout }>();
+  /** The token each socket joined with. */
+  const tokens = new Map<WebSocket, string>();
+  const rejoinMs = (config.rejoinSeconds ?? 60) * 1000;
   let ticks = 0;
   const timer = setInterval(() => {
     world.step();
@@ -177,6 +185,11 @@ export function createGameServer(config: ServerConfig): GameServer {
   };
   const announcePlayers = (): void => broadcast({ type: 'players', players: playerList(joined.values()) });
   const say = (text: string): void => broadcast({ type: 'chat', text });
+  const gone = (player: Player): void => {
+    broadcast({ type: 'away', id: player.id });
+    announcePlayers();
+    say(`${player.name} left`);
+  };
 
   wss.on('connection', (ws) => {
     const number = nextPlayer++;
@@ -186,9 +199,15 @@ export function createGameServer(config: ServerConfig): GameServer {
       const player = joined.get(ws);
       if (!player) return;
       joined.delete(ws);
-      broadcast({ type: 'away', id: player.id });
-      announcePlayers();
-      say(`${player.name} left`);
+      const token = tokens.get(ws);
+      tokens.delete(ws);
+      if (!token || rejoinMs <= 0) return gone(player);
+      // Kept for a while: a reload or a dropped network comes back as the same player.
+      const timer = setTimeout(() => {
+        dropped.delete(token);
+        gone(player);
+      }, rejoinMs);
+      dropped.set(token, { player, timer });
     });
     ws.on('message', (data, isBinary) => {
       let msg: unknown;
@@ -214,13 +233,25 @@ export function createGameServer(config: ServerConfig): GameServer {
           return;
         }
         if (joined.has(ws)) return;
-        send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId, region: config.region, seed: config.seed });
+        // Back within the minute, and not already connected from elsewhere: the same player again.
+        const back = msg.token ? dropped.get(msg.token) : undefined;
+        const taken = msg.token !== undefined && [...tokens.values()].includes(msg.token);
+        if (back) {
+          clearTimeout(back.timer);
+          dropped.delete(msg.token!);
+        }
+        const player: Player = back?.player ?? { id: playerId, name: cleanName(msg.name, `Driver ${number}`) };
+        if (back) {
+          player.name = cleanName(msg.name, player.name);
+          if (msg.color) player.color = msg.color;
+          else delete player.color;
+        } else if (msg.color) player.color = msg.color;
+        send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId: player.id, region: config.region, seed: config.seed });
         send(ws, world.message());
-        const player: Player = { id: playerId, name: cleanName(msg.name, `Driver ${number}`) };
-        if (msg.color) player.color = msg.color;
         joined.set(ws, player);
+        if (msg.token && !taken) tokens.set(ws, msg.token);
         announcePlayers();
-        say(`${player.name} joined`);
+        if (!back) say(`${player.name} joined`);
         return;
       }
       // Everything else needs a hello first.
@@ -275,6 +306,8 @@ export function createGameServer(config: ServerConfig): GameServer {
         clearInterval(timer);
         for (const ws of wss.clients) ws.terminate();
         joined.clear();
+        for (const d of dropped.values()) clearTimeout(d.timer);
+        dropped.clear();
         wss.close();
         http.close((err) => (err ? reject(err) : resolve()));
       }),

@@ -23,6 +23,26 @@ export interface Profile {
   color?: string;
 }
 
+const TOKEN_KEY = 'spar.token';
+
+/**
+ * This tab's token, so a reload or a dropped network comes back as the same player. Kept for
+ * the tab only (a second tab is a second player); random bytes, since plain http on a home
+ * network has no crypto.randomUUID.
+ */
+function tabToken(): string | undefined {
+  try {
+    let token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      token = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join('');
+      sessionStorage.setItem(TOKEN_KEY, token);
+    }
+    return token;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Keeps one WebSocket to the game server open, reconnecting when it drops. */
 export class Connection {
   state: ConnectionState = { status: 'connecting' };
@@ -57,7 +77,8 @@ export class Connection {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(`${scheme}://${location.host}/ws`);
     this.ws = ws;
-    ws.onopen = () => this.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...this.profile });
+    const token = tabToken();
+    ws.onopen = () => this.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...this.profile, ...(token && { token }) });
     ws.onmessage = (ev) => {
       const msg = JSON.parse(String(ev.data)) as ServerMessage;
       switch (msg.type) {

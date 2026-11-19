@@ -19,6 +19,10 @@ export interface Hello {
    * The vehicle's paint as #rrggbb; left out, the vehicle keeps its own colours.
    */
   color?: string;
+  /**
+   * Chosen by the browser tab and kept across reconnects: coming back with it within a minute keeps the same player.
+   */
+  token?: string;
 }
 /**
  * Asks the server to change the clock or the weather for everyone. Any field left out stays as it is.
