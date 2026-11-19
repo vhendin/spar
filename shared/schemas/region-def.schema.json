@@ -25,6 +25,11 @@
       "type": "integer",
       "minimum": 2048,
       "multipleOf": 2048
+    },
+    "generator": {
+      "description": "Made up instead of read from map data: the importer writes the raw data itself.",
+      "type": "string",
+      "enum": ["proving"]
     }
   }
 }

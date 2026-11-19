@@ -44,6 +44,7 @@ class Region:
     west: int  # easting of the west edge
     north: int  # northing of the north edge
     size: int
+    generator: str | None = None  # "proving": a made-up test area, not map data
 
     @property
     def east(self) -> int:
@@ -88,7 +89,7 @@ def region_from_def(d: dict) -> Region:
     import jsonschema
 
     jsonschema.validate(d, load_schema("region-def"))
-    return Region(d["name"], d["title"], d["origin"]["easting"], d["origin"]["northing"], d["size"])
+    return Region(d["name"], d["title"], d["origin"]["easting"], d["origin"]["northing"], d["size"], d.get("generator"))
 
 
 def load_region(name: str) -> Region:

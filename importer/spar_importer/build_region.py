@@ -155,6 +155,12 @@ def write_masks(out: Path, planes: dict[str, np.ndarray], size: int) -> list[dic
 
 
 def build_region(region: Region, *, offline: bool = False, source_name: str | None = None) -> Path:
+    if region.generator == "proving":
+        from .proving import prepare
+
+        print("writing the proving ground's made-up raw data")
+        prepare(region)
+        offline = True
     primary, sources = choose_sources(region, offline=offline, source_name=source_name)
     osm_path = find_osm(region, offline=offline)
     spacing = finest_spacing(primary.resolution)
@@ -300,8 +306,8 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
         "attribution": list(
             dict.fromkeys(
                 [s.attribution for s in sources]
-                + [OSM_ATTRIBUTION]
-                + ([CLEARCUT_ATTRIBUTION] if clearcuts else [])
+                + ([] if region.generator else [OSM_ATTRIBUTION])
+                + ([CLEARCUT_ATTRIBUTION] if clearcuts and not region.generator else [])
             )
         ),
     }

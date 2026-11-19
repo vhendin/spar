@@ -96,6 +96,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   12 °C in July, 5 °C warmer by day than at night). The plume shows below about 8 °C. Should
   the weather (clouds, rain) change the temperature too, or the height above sea level?
 
+### Proving ground (`docs/PLAYTEST.md`)
+
+- **Stations.** Ground strips, ramps of 10–35°, a side slope of 10–35°, a twist lane, steps,
+  ditches, a boulder field, clear-cuts, a bog with a mud track, a lake with a beach, a fell
+  and a forest. Anything missing, or anything to measure more exactly (a ramp at 40°, a
+  deeper ford, a rock ramp without boulders)?
+- **Read-outs.** Would a measuring aid help: the slope and side tilt under the vehicle in the
+  F3 read-out, or a timer between two points for comparing ground?
+
 ### Multiplayer (docs/MULTIPLAYER.md)
 
 Not to be built until single player is called complete; answers shape the plan.

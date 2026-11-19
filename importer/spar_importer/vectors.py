@@ -153,7 +153,7 @@ def fences(osm: OsmData, region: Region, box: ogr.Geometry) -> list[dict]:
     gaps += [b.geom.Buffer(2) for b in osm.buildings]
     gap_boxes = [g.GetEnvelope() for g in gaps]
     for area in osm.areas:
-        if area.tags.get("landuse") not in FIELD_FENCE_LANDUSE or not area.geom.Intersects(box):
+        if area.tags.get("landuse") not in FIELD_FENCE_LANDUSE or area.tags.get("fence") == "no" or not area.geom.Intersects(box):
             continue
         min_e, max_e, min_n, max_n = area.geom.GetEnvelope()
         edge = area.geom.Boundary()

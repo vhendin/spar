@@ -23,7 +23,9 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     region = load_region(args.region)
 
-    if args.command == "fetch":
+    if args.command == "fetch" and region.generator:
+        print(f"{region.title} is made up; there is nothing to download")
+    elif args.command == "fetch":
         from .fetch import fetch
 
         fetch(region, dem=args.only in (None, "dem"), osm=args.only in (None, "osm"), forest=args.only in (None, "forest"))

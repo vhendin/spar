@@ -21,6 +21,10 @@ export interface RegionDef {
    * Side of the square area in metres; a whole number of 2048 m root tiles.
    */
   size: number;
+  /**
+   * Made up instead of read from map data: the importer writes the raw data itself.
+   */
+  generator?: 'proving';
 }
 /**
  * North-west corner of the area.

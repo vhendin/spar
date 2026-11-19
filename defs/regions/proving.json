@@ -1,0 +1,8 @@
+{
+  "name": "proving",
+  "title": "Proving ground",
+  "crs": "EPSG:3006",
+  "origin": { "easting": 381000, "northing": 7031000 },
+  "size": 2048,
+  "generator": "proving"
+}

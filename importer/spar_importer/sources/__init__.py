@@ -21,7 +21,9 @@ class ElevationSource:
 
 def available_sources(region: Region, *, offline: bool) -> list[ElevationSource]:
     """Every source with data on disk (or downloadable), finest first."""
-    from . import copernicus, lantmateriet
+    from . import copernicus, lantmateriet, proving
 
+    if region.generator:
+        return proving.find(region)
     found = [m.find(region, offline=offline) for m in (lantmateriet, copernicus)]
     return sorted((s for s in found if s is not None), key=lambda s: s.resolution)
