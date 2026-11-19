@@ -71,12 +71,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Driving on snow (this commit)
 
-- **Deep snow, retuned.** Snow is now: grip 0.42; tyres pack it to at most a quarter of their
-  radius (about 11 cm), and spinning digs to 38 %; ruts in snow drag half as much as mud; the
-  body ploughs once packed snow reaches its underside. On the flat it goes in any depth (75 cm:
-  about 45 km/h flat out; 1.2 m: about 20 km/h). Slopes: 30 cm takes 15° in low range with the
-  locks; 75 cm 10° (15° only the 4×4); 1.2 m 10° only the 4×4 in low range. The light 4×4
-  struggles first, from its low clearance. Better? Still too hard, or now too easy?
 - **Eased W.** On a key the throttle now comes in over 0.15 s on firm ground and up to 1.8 s
   on ice, and backs off (to no less than a quarter) while the driven tyres spin. A gamepad
   trigger is left alone. Does it feel right, or does it take too long to get going?
@@ -93,6 +87,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
 - Keyboard throttle: ease W in gently where grip is low.
+- Deep snow after the retune (8657af6) and eased W: works very well.
 - Driving on snow: next after the ice. First tuning was far too hard (stuck at once); retuned.
 - Frozen lakes: yes, drivable, with thin ice near streams that breaks and drowns the engine.
 - Seasons: the colours first (trees, plants and ground through the year), winter snow, snow
