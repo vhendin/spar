@@ -37,18 +37,27 @@ const CLIMB_DISTANCE = 2.5;
 /** Drag of the rut: this times (depth / radius)² times the load. */
 const RUT_DRAG = 0.6;
 /**
- * Snow: a tyre packs it down to about half its depth before it bears, but never deeper than
- * this share of its radius on its own; spinning digs on to near the frozen ground beneath.
+ * Snow: a tyre packs it down by this share of its depth before it bears, but never deeper
+ * than SNOW_SINK of its radius; spinning digs on, at most to SNOW_DIG_LIMIT of the radius.
+ * Packed snow gives way under the tyre, so its rut drags less than mud's (SNOW_RUT).
  */
-const SNOW_SETTLE = 0.5;
-const SNOW_SINK = 0.45;
+const SNOW_SETTLE = 0.3;
+const SNOW_SINK = 0.25;
+const SNOW_DIG_LIMIT = 0.38;
+const SNOW_RUT = 0.3;
 /** How soft snow this deep (metres) and deeper is to dig into, 0..1. */
 const SNOW_SOFT_DEPTH = 0.5;
 const SNOW_SOFTNESS = 0.7;
 /** Drag of pushing through snow, as a share of the wheel's load per metre of depth. */
-const SNOW_DRAG = 0.12;
+const SNOW_DRAG = 0.06;
+/**
+ * Snow deep enough to reach the underside once packed (SNOW_PACK of its depth) is pushed
+ * along by the body too: this share of the load per metre it stands above the clearance.
+ */
+const SNOW_PACK = 0.7;
+const SNOW_BELLY = 0.25;
 /** How much more slowly a spinning tyre digs into snow than into mud. */
-const SNOW_DIG = 0.5;
+const SNOW_DIG = 0.3;
 /** Thinner than this (metres) and the snow is only a dusting: the ground beneath decides. */
 const SNOW_DUSTING = 0.03;
 
@@ -442,7 +451,8 @@ export class VehicleSim {
         // driven, so on a driven wheel it comes off the drive force instead: holding it back from
         // a standstill, slowing it once rolling. Off the drive it all goes on the brake.
         // Ruts drag, and so does snow pushed aside.
-        const sunk = (RUT_DRAG * (wheel.sink / def.wheels.radius) ** 2 + SNOW_DRAG * wheel.snow) * wheel.load;
+        const belly = Math.max(0, wheel.snow * SNOW_PACK - def.chassis.groundClearance - wheel.sink);
+        const sunk = ((wheel.snow ? SNOW_RUT : RUT_DRAG) * (wheel.sink / def.wheels.radius) ** 2 + SNOW_DRAG * wheel.snow + SNOW_BELLY * belly) * wheel.load;
         let force = axle.driven ? split.forces[d]! : 0;
         if (force !== 0) {
           const drag = tire.rollingResistance * wheel.load + sunk;
@@ -507,7 +517,7 @@ export class VehicleSim {
         const soft = wheel.softness;
         const loaded = Math.sqrt(Math.min(2, wheel.load / staticLoad));
         const settle = snow ? Math.min(SNOW_SETTLE * snow, SNOW_SINK * r) * loaded : SETTLE * r * soft * loaded;
-        const bottom = snow ? Math.min(snow * 0.85, DIG_LIMIT * r) : DIG_LIMIT * r;
+        const bottom = snow ? Math.min(snow * 0.85, SNOW_DIG_LIMIT * r) : DIG_LIMIT * r;
         if (wheel.sink < settle) wheel.sink += (settle - wheel.sink) * Math.min(1, travelled / SETTLE_DISTANCE + dt * 0.1);
         else if (wheel.spin < 0.1) wheel.sink -= (wheel.sink - settle) * Math.min(1, travelled / CLIMB_DISTANCE);
         // A spinning tyre polishes snow as much as it digs it.

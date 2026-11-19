@@ -307,24 +307,26 @@ describe('snow', () => {
     expect(Math.max(...car.wheels.map((w) => w.sink))).toBeLessThan(0.08);
   });
 
-  it('is hard going when deep: the tyres sink, it slows to a crawl, and spinning digs deeper', () => {
-    const deep = (crawl: boolean) => {
-      const { car, run } = setup('tgb11', { snow: 0.75 });
+  it('slows down the deeper it is, and on a slope deep snow takes low range and the locks', () => {
+    const drive = (snow: number, slope: number, crawl: boolean) => {
+      const { car, run } = setup('tgb11', { snow, slope });
       if (crawl) {
         car.toggleRange();
         car.def.axles.forEach((_, a) => car.toggleLock(a));
       }
       run(1);
-      run(10, { throttle: crawl ? 0.6 : 1 });
+      run(10, { throttle: 1 });
       return { gone: -car.body.translation().z, sink: Math.max(...car.wheels.map((w) => w.sink)) };
     };
-    const crawl = deep(true);
-    expect(crawl.sink).toBeGreaterThan(0.15);
-    expect(crawl.gone).toBeGreaterThan(4);
-    // On gravel the same ten seconds flat out cover well over a hundred metres.
-    const spun = deep(false);
-    expect(spun.gone).toBeLessThan(45);
-    expect(spun.sink).toBeGreaterThan(0.22);
+    // On the flat it goes in any depth, more slowly the deeper.
+    const shallow = drive(0.3, 0, false), deep = drive(0.75, 0, false), deeper = drive(1.2, 0, false);
+    expect(deeper.gone).toBeGreaterThan(20);
+    expect(deeper.gone).toBeLessThan(deep.gone);
+    expect(deep.gone).toBeLessThan(shallow.gone);
+    expect(deep.sink).toBeGreaterThan(0.06);
+    expect(deep.sink).toBeLessThan(0.15);
+    // A 10° slope in deep snow: low range with the locks in climbs it.
+    expect(drive(1.2, 10, true).gone).toBeGreaterThan(8);
   });
 
   it('lies on thick lake ice, which then grips better than bare ice', () => {

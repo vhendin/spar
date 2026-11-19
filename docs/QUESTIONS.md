@@ -74,10 +74,12 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Driving on snow (this commit)
 
-- **How hard is deep snow?** I chose: it can get you stuck. Tyres pack it to about half its
-  depth (at most 20 cm for the 4×4), it drags, and spinning digs on, though half as fast as
-  in mud. At the end of March off-road, high range on open differentials bogs down within
-  seconds; low range with both locks crawls at about 9 km/h on the flat. Too hard?
+- **Deep snow, retuned.** Snow is now: grip 0.42; tyres pack it to at most a quarter of their
+  radius (about 11 cm), and spinning digs to 38 %; ruts in snow drag half as much as mud; the
+  body ploughs once packed snow reaches its underside. On the flat it goes in any depth (75 cm:
+  about 45 km/h flat out; 1.2 m: about 20 km/h). Slopes: 30 cm takes 15° in low range with the
+  locks; 75 cm 10° (15° only the 4×4); 1.2 m 10° only the 4×4 in low range. The light 4×4
+  struggles first, from its low clearance. Better? Still too hard, or now too easy?
 - **Flooring it on a snowy road.** With W all or nothing, the wheels spin and the vehicle
   slides off a cambered road into the deep snow beside it. This makes the earlier keyboard
   throttle question more pressing: ease W in gently on low grip?
@@ -93,7 +95,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
-- Driving on snow: next after the ice (done; see the questions on how hard it is).
+- Driving on snow: next after the ice. First tuning was far too hard (stuck at once); retuned.
 - Frozen lakes: yes, drivable, with thin ice near streams that breaks and drowns the engine.
 - Seasons: the colours first (trees, plants and ground through the year), winter snow, snow
   driving and ice after.
