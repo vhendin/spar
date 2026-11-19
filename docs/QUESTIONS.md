@@ -89,9 +89,9 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Exhaust fumes (8b1c66c, 0d36826)
 
-- **Strength.** A faint grey haze at idle, darker when the engine is pushed or winching, and a
-  white plume in cold air that lasts longer. The wind carries it off quickly; in a breeze it is
-  easy to miss. Stronger, or right as it is?
+- **Strength, after the change (this commit).** Puffs now leave the pipe slower (about 1 m/s at
+  idle, 4 m/s pushed) and the air stops them within about 0.3 m at idle and a metre when
+  pushed, then they drift; the idle haze is fainter. Right now?
 - **Air temperature** is a rough guess from the month and the sun (about -10 °C in January,
   12 °C in July, 5 °C warmer by day than at night). The plume shows below about 8 °C. Should
   the weather (clouds, rain) change the temperature too, or the height above sea level?
@@ -105,12 +105,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Read-outs.** Would a measuring aid help: the slope and side tilt under the vehicle in the
   F3 read-out, or a timer between two points for comparing ground?
 
-### Big minimap (this commit)
+### Big minimap (d68c603)
 
 - **Hold Tab** and the minimap grows from the corner to about 600 px (at most 80 % of the
   window), at the same scale, so it shows about three times as far around. Big enough, too
   big? Should it grow in the corner (as now) or open in the middle of the screen? On a
   gamepad there is no hold yet; the minimap button still steps near, far, hidden.
+
+### Power and grip (this commit)
+
+- **Climbing, after the change.** The military vehicles' engine now gives the real B30's
+  230 Nm (was 206), the light 4×4's 165 Nm (was 150); pulling away, the clutch holds the
+  engine where it pulls hardest (was 1900 rpm); dry grip is higher on grass (0.68, was 0.55),
+  dirt (0.72, was 0.62) and gravel (0.76, was 0.72). From a standstill on dry grass the 4×4
+  now climbs about 20° in high range (was 15°) and 30° in low (was 22.5°); the light one 22.5°
+  and 30°. Soft or wet ground takes a few degrees off. Enough, or still weak?
 
 ### Multiplayer (docs/MULTIPLAYER.md)
 
@@ -132,6 +141,10 @@ Not to be built until single player is called complete; answers shape the plan.
   logbook with who else arrived. Enough to start with?
 
 ## Answered
+
+- Power on slopes: the vehicles struggled on slopes that should be easy; both power and grip
+  were raised (see "Power and grip" above for the retest).
+- Exhaust: shot out like a water cannon, even standing still; slowed and softened.
 
 - Drowned engine: restarting by itself three seconds after leaving the water is fine.
 - Wading depths: 0.75 m for the 4×4 and 0.9 m for the 6×6 are fine.

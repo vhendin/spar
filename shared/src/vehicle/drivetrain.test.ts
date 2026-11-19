@@ -11,10 +11,10 @@ const DT = 1 / 60;
 describe('engineTorque', () => {
   it('follows the curve and holds its ends', () => {
     const curve = def.drivetrain.torqueCurve;
-    expect(engineTorque(curve, 2500)).toBe(206);
-    expect(engineTorque(curve, 2000)).toBe(198);
-    expect(engineTorque(curve, 100)).toBe(150);
-    expect(engineTorque(curve, 9000)).toBe(165);
+    expect(engineTorque(curve, 2500)).toBe(230);
+    expect(engineTorque(curve, 2000)).toBe(221);
+    expect(engineTorque(curve, 100)).toBe(167);
+    expect(engineTorque(curve, 9000)).toBe(184);
   });
 });
 
@@ -23,8 +23,8 @@ describe('stepDrivetrain', () => {
     const s = newDrivetrainState();
     const out = stepDrivetrain(def, s, 1, 0, DT);
     expect(s.gear).toBe(1);
-    expect(s.rpm).toBe(1900);
-    const expected = (engineTorque(def.drivetrain.torqueCurve, 1900) * 4.03 * 5.99 * 0.85) / 0.45;
+    expect(s.rpm).toBe(2500);
+    const expected = (engineTorque(def.drivetrain.torqueCurve, 2500) * 4.03 * 5.99 * 0.85) / 0.45;
     expect(out.driveForce).toBeCloseTo(expected, 3);
     expect(out.driveForce).toBeGreaterThan(8000); // enough to climb steeply: weight is about 23.5 kN
     expect(out.engineBrakeForce).toBe(0);
@@ -70,7 +70,7 @@ describe('stepDrivetrain', () => {
     const s = newDrivetrainState();
     for (let k = 0; k < 120; k++) stepDrivetrain(def, s, 1, -6, DT);
     expect(s.gear).toBe(1);
-    expect(s.rpm).toBe(1900);
+    expect(s.rpm).toBe(2500);
     expect(stepDrivetrain(def, s, 1, -6, DT).driveForce).toBeGreaterThan(8000);
   });
 

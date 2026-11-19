@@ -10,6 +10,8 @@ import { Batch } from './spray';
 import type { VehicleSim } from './sim';
 
 const PUFFS = 500;
+/** How fast a puff takes on the air's own motion, per second. */
+const AIR_DRAG = 3.5;
 /** Only emitted while the camera is this close to the vehicle, metres. */
 const NEAR = 160;
 
@@ -104,14 +106,16 @@ export class Exhaust {
     // Out of the pipe backwards, a little down and out.
     this.d.set(-0.25, -0.15, -1).normalize().applyQuaternion(vehicle.quaternion);
     for (let k = 0; k < n; k++) {
-      const speed = 2 + 4 * rev + 3 * load;
-      const jitter = (): number => (Math.random() * 2 - 1) * 0.4;
+      // Gas leaves the pipe fast but is stopped by the air within a few decimetres; what you
+      // see is the puff drifting after that. About 0.3 m at idle, a metre or so when pushed.
+      const speed = 0.7 + 1.5 * rev + 2 * load;
+      const jitter = (): number => (Math.random() * 2 - 1) * 0.2;
       // Haze, darkened by soot under effort; whitened by vapour in the cold.
       const rgb = HAZE.map((c, i) => {
         const sooty = c + (SOOT[i]! - c) * soot;
         return sooty + (VAPOUR[i]! - sooty) * cold * (1 - soot * 0.6);
       }) as [number, number, number];
-      const alpha = 0.2 + 0.35 * soot + 0.5 * cold;
+      const alpha = 0.14 + 0.35 * soot + 0.45 * cold;
       const life = 0.9 + 0.6 * load + 2.6 * cold + Math.random() * 0.6;
       const t = Math.random() * dt;
       this.p.copy(this.outlet).addScaledVector(this.d, speed * t);
@@ -124,9 +128,9 @@ export class Exhaust {
   }
 
   private move(dt: number, wind: THREE.Vector2): void {
-    // Slowed by the air and taken by the wind (less of it close to the ground), warm gas rising.
+    // Stopped quickly by the air and taken by the wind (less of it close to the ground), warm gas rising.
     const p = this.puffs;
-    const k = 1 - Math.exp(-1.6 * dt);
+    const k = 1 - Math.exp(-AIR_DRAG * dt);
     const wx = wind.x * 0.5, wz = wind.y * 0.5;
     for (let i = p.count - 1; i >= 0; i--) {
       if ((p.life[i]! -= dt) <= 0) {

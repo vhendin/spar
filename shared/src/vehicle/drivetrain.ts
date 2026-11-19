@@ -22,9 +22,14 @@ export const newDrivetrainState = (): DrivetrainState => ({ gear: 1, range: 'hig
 
 const SHIFT_TIME = 0.25;
 const MIN_TIME_IN_GEAR = 0.9;
-/** Engine speed the clutch slips at when pulling away at full throttle. */
-const LAUNCH_RPM = 1900;
 const RPM_PER_RAD_S = 60 / (2 * Math.PI);
+
+/** The engine speed of the most torque on the curve. */
+export function peakTorqueRpm(curve: number[][]): number {
+  let best = curve[0]!;
+  for (const point of curve) if (point[1]! > best[1]!) best = point;
+  return best[0]!;
+}
 
 /** Full-throttle torque at an engine speed, interpolated along the curve. */
 export function engineTorque(curve: number[][], rpm: number): number {
@@ -80,8 +85,9 @@ export function stepDrivetrain(def: VehicleDef, state: DrivetrainState, throttle
 
   const ratio = totalRatio(def, state);
   const coupled = wheelRpm * ratio;
-  // Below idle the clutch slips: the engine holds its own speed, higher the more throttle.
-  const slipping = d.idle + throttle * (LAUNCH_RPM - d.idle);
+  // Below idle the clutch slips: the engine holds its own speed, higher the more throttle,
+  // up to where it pulls hardest at full throttle (as a driver pulling away on a hill would).
+  const slipping = d.idle + throttle * (peakTorqueRpm(d.torqueCurve) - d.idle);
   state.rpm = Math.min(d.redline, Math.max(coupled, slipping));
 
   if (state.shifting > 0) {
