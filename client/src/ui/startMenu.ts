@@ -200,7 +200,7 @@ export class StartMenu {
     };
 
     add('h1', 'Spår');
-    add('p', 'Off-road driving through real Swedish landscapes', box, 'sub');
+    add('p', 'A quiet off-road game about Swedish backroads, weather and slow light.', box, 'sub');
 
     const columns = add('div', '', box, 'columns');
     const left = add('div', '', columns, 'column');
@@ -284,6 +284,7 @@ export class StartMenu {
     button('Settings', () => this.actions.settings(), foot);
     button('Controls', () => this.actions.controls(), foot);
     button('Credits', () => this.actions.credits(), foot, 'link');
+    add('div', '', box, 'motto').innerHTML = 'Ingen klocka. Ingen poäng. <em>Bara vägen.</em>';
   }
 
   /** Drives off from a point picked elsewhere (the big map), with the vehicle chosen here. */
@@ -305,13 +306,13 @@ export class StartMenu {
     const dpr = Math.min(2, window.devicePixelRatio);
     this.preview.width = this.preview.height = Math.round(css * dpr);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    c.fillStyle = '#2a3236';
+    c.fillStyle = '#bfc2b6';
     c.fillRect(0, 0, css, css);
     const k = css / this.index.size;
     if (this.picture) c.drawImage(this.picture, 0, 0, css, css);
     else {
-      c.fillStyle = '#9fb4bc';
-      c.font = '13px system-ui, sans-serif';
+      c.fillStyle = '#2f3b33';
+      c.font = '18px "Instrument Serif", Georgia, serif';
       c.textAlign = 'center';
       c.fillText('Drawing the map…', css / 2, css / 2);
     }
@@ -326,8 +327,8 @@ export class StartMenu {
     this.starts.forEach((s, i) => {
       const on = i === this.start;
       const mine = this.custom.list.some((m) => m.x === s.x && m.z === s.z);
-      c.fillStyle = on ? '#d63c28' : mine ? '#2c6fb0' : '#2f6f4f';
-      c.strokeStyle = '#fff';
+      c.fillStyle = on ? '#c9a44a' : mine ? '#4e6573' : '#2f3b33';
+      c.strokeStyle = '#ecebe6';
       c.lineWidth = 1.5;
       c.beginPath();
       c.arc(s.x * k, s.z * k, on ? 6 : 4, 0, Math.PI * 2);

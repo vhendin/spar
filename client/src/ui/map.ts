@@ -307,7 +307,7 @@ export class MapScreen {
     for (const p of this.vectors.places) {
       if (Math.hypot(p.x - state.x, p.z - state.z) > range / 2) continue;
       const [px, py] = at(p.x, p.z);
-      c.font = '600 11px system-ui, sans-serif';
+      c.font = '600 11px Inter, system-ui, sans-serif';
       c.lineWidth = 3;
       c.strokeStyle = 'rgba(255,255,255,0.85)';
       c.strokeText(p.name, px, py);
@@ -321,7 +321,7 @@ export class MapScreen {
       const [px, py] = at(d.x, d.z);
       const dx = px - half, dy = py - half;
       const out = Math.hypot(dx, dy);
-      c.fillStyle = '#d63c28';
+      c.fillStyle = '#8e3b2d';
       c.strokeStyle = '#fff';
       c.lineWidth = 1.5;
       if (out < half - 10) {
@@ -347,8 +347,8 @@ export class MapScreen {
     }
 
     // The vehicle in the middle, always facing up.
-    c.fillStyle = '#f08a24';
-    c.strokeStyle = '#111';
+    c.fillStyle = '#c9a44a';
+    c.strokeStyle = '#2f3b33';
     c.lineWidth = 1.5;
     c.beginPath();
     c.moveTo(half, half - 9);
@@ -361,16 +361,16 @@ export class MapScreen {
 
     // North on the rim.
     const nx = half + sin * (half - 11), ny = half - cos * (half - 11);
-    c.fillStyle = 'rgba(10,15,18,0.85)';
+    c.fillStyle = 'rgba(47,59,51,0.9)';
     c.beginPath();
     c.arc(nx, ny, 8, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = '#fff';
-    c.font = '700 10px system-ui, sans-serif';
+    c.fillStyle = '#ecebe6';
+    c.font = '600 10px Inter, system-ui, sans-serif';
     c.fillText('N', nx, ny + 0.5);
     c.restore();
 
-    c.strokeStyle = 'rgba(10,15,18,0.8)';
+    c.strokeStyle = 'rgba(47,59,51,0.85)';
     c.lineWidth = 2;
     c.beginPath();
     c.arc(half, half, half - 1, 0, Math.PI * 2);
@@ -632,7 +632,7 @@ export class MapScreen {
   private draw(w: number, h: number): void {
     const c = this.ctx;
     const s = this.scale;
-    c.fillStyle = '#20282c';
+    c.fillStyle = '#1c2230';
     c.fillRect(0, 0, w, h);
     const [x0, y0] = this.toScreen(0, 0);
     const size = this.index.size * s;
@@ -643,7 +643,7 @@ export class MapScreen {
       c.fillStyle = '#e9e6da';
       c.fillRect(x0, y0, size, size);
       c.fillStyle = '#555';
-      c.font = '15px system-ui, sans-serif';
+      c.font = '15px Inter, system-ui, sans-serif';
       c.textAlign = 'center';
       c.fillText('Drawing the map…', x0 + size / 2, y0 + size / 2);
     }
@@ -753,7 +753,7 @@ export class MapScreen {
       c.lineTo(sx - 5, sy + 4);
       c.closePath();
       c.fill();
-      label(top.height.toFixed(0), sx, sy + 13, '11px system-ui, sans-serif');
+      label(top.height.toFixed(0), sx, sy + 13, '11px Inter, system-ui, sans-serif');
     }
     // Destinations: a dot in the colour of their kind, ringed once reached; named when zoomed in.
     const reached = this.actions.reached();
@@ -773,17 +773,17 @@ export class MapScreen {
         c.arc(sx, sy, 8, 0, Math.PI * 2);
         c.stroke();
       }
-      if (s >= 0.25 || (s >= 0.08 && !/ (of|at) /.test(p.name))) label(p.name, sx, sy + 13, '11px system-ui, sans-serif');
+      if (s >= 0.25 || (s >= 0.08 && !/ (of|at) /.test(p.name))) label(p.name, sx, sy + 13, '11px Inter, system-ui, sans-serif');
     }
     for (const p of this.vectors.places) {
       const [sx, sy] = this.toScreen(p.x, p.z);
       const big = p.kind === 'village' || p.kind === 'town';
       if (p.kind === 'locality' && s < 0.12) continue;
-      label(p.name, sx, sy - 12, `${big ? '600 15px' : p.kind === 'locality' ? 'italic 12px' : '600 13px'} system-ui, sans-serif`);
+      label(p.name, sx, sy - 12, `${big ? '600 15px' : p.kind === 'locality' ? 'italic 12px' : '600 13px'} Inter, system-ui, sans-serif`);
     }
     for (const sp of [...this.vectors.spawns, ...this.starts.list]) {
       const [sx, sy] = this.toScreen(sp.x, sp.z);
-      c.fillStyle = this.starts.list.includes(sp as never) ? '#2c6fb0' : '#2f6f4f';
+      c.fillStyle = this.starts.list.includes(sp as never) ? '#4e6573' : '#2f3b33';
       c.strokeStyle = '#fff';
       c.lineWidth = 1.5;
       c.fillRect(sx - 4, sy - 4, 8, 8);
@@ -797,14 +797,14 @@ export class MapScreen {
     if (d) {
       const [dx, dy] = this.toScreen(d.x, d.z);
       c.setLineDash([6, 5]);
-      c.strokeStyle = 'rgba(214,60,40,0.8)';
+      c.strokeStyle = 'rgba(142,59,45,0.85)';
       c.lineWidth = 2;
       c.beginPath();
       c.moveTo(vx, vy);
       c.lineTo(dx, dy);
       c.stroke();
       c.setLineDash([]);
-      c.fillStyle = '#d63c28';
+      c.fillStyle = '#8e3b2d';
       c.strokeStyle = '#fff';
       c.lineWidth = 2;
       c.beginPath();
@@ -813,15 +813,15 @@ export class MapScreen {
       c.closePath();
       c.fill();
       c.stroke();
-      if (d.name !== 'Marked spot') label(d.name, dx, dy - 32, '600 13px system-ui, sans-serif');
+      if (d.name !== 'Marked spot') label(d.name, dx, dy - 32, '600 13px Inter, system-ui, sans-serif');
     }
 
     // The vehicle: an arrow the way it faces.
     c.save();
     c.translate(vx, vy);
     c.rotate((st.heading * Math.PI) / 180);
-    c.fillStyle = '#f08a24';
-    c.strokeStyle = '#111';
+    c.fillStyle = '#c9a44a';
+    c.strokeStyle = '#2f3b33';
     c.lineWidth = 2;
     c.beginPath();
     c.moveTo(0, -11);
@@ -853,7 +853,7 @@ export class MapScreen {
     c.lineTo(x + px, y - 4);
     c.stroke();
     c.fillStyle = '#222';
-    c.font = '11px system-ui, sans-serif';
+    c.font = '11px Inter, system-ui, sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'alphabetic';
     c.fillText(nice >= 1000 ? `${nice / 1000} km` : `${nice} m`, x + px / 2, y - 6);

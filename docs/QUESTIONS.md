@@ -88,6 +88,22 @@ same as the Terrängkombi.
 - **The power dial** shows kW drawn instead of revs, and the gear lamp shows D or R. Should it
   show regeneration (a needle below zero) too?
 
+### Interface after the mood board (this commit, `docs/DESIGN.md`)
+
+- **Paper and glass.** Menus and panels are now birch paper with spruce ink and serif titles;
+  what sits over the driving (instruments, notes, the way to go) is dark spruce glass, with
+  mustard as the one accent. Right balance, or should the menus be dark too?
+- **Chapter cards.** The start place fades in large over the view when you set off ("Ottsjö ·
+  Vålådalen–Ottsjö · Elpickup") and the destination when you arrive. Too much, too long
+  (about 4 s)? Should the line say something else, like the season or the road ("14 km
+  grusväg")?
+- **The beacon and the arrow** to a destination are mustard now (were orange). Still easy to
+  see against autumn hills and at dusk?
+- **The map itself** keeps its topographic colours, with Inter for its labels as the board
+  says. Should the map be redrawn in the palette too (muted greens, birch roads)?
+- **Next from the board:** the world's own light and colour ("only the palette turns": dawn
+  fog in the hollows, dusk, night), and the mustard 4×4 as a vehicle colour. Wanted next?
+
 ### Seasons: colours (a0d0cec)
 
 - **Bare trees.** Out of leaf, birch, aspen, rowan and alder crowns turn a grey-brown haze of

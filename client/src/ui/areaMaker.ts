@@ -153,7 +153,7 @@ export class AreaMaker {
     }).addTo(map);
     for (const r of this.regions) {
       if (!r.origin) continue;
-      L.polygon(corners(r.origin.easting, r.origin.northing, r.size), { color: '#2f6f4f', weight: 1.5, fillOpacity: 0.12 })
+      L.polygon(corners(r.origin.easting, r.origin.northing, r.size), { color: '#2f3b33', weight: 1.5, fillOpacity: 0.12 })
         .bindTooltip(r.title)
         .addTo(map);
     }
@@ -161,7 +161,7 @@ export class AreaMaker {
       const c = fromSweref(this.near.easting + this.near.size / 2, this.near.northing - this.near.size / 2);
       map.setView([c.lat, c.lon], 10);
     } else map.setView([62.5, 16], 5);
-    this.square = L.polygon([], { color: '#d63c28', weight: 2, fillOpacity: 0.1, interactive: false }).addTo(map);
+    this.square = L.polygon([], { color: '#8e3b2d', weight: 2, fillOpacity: 0.1, interactive: false }).addTo(map);
     map.on('move', () => this.place());
     this.map = map;
     this.place();

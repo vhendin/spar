@@ -29,7 +29,7 @@ export class Guide {
     this.arrow = document.createElement('span');
     this.arrow.className = 'arrow';
     // Points up, at what is straight ahead; turned to point the way.
-    this.arrow.innerHTML = '<svg viewBox="-10 -10 20 20" width="20" height="20"><path d="M0 -9.5 L7.5 -1.5 L2.6 -1.5 L2.6 9 L-2.6 9 L-2.6 -1.5 L-7.5 -1.5 Z" fill="#ff7a2e" stroke="#fff" stroke-width="1.1" stroke-linejoin="round"/></svg>';
+    this.arrow.innerHTML = '<svg viewBox="-10 -10 20 20" width="20" height="20"><path d="M0 -9.5 L7.5 -1.5 L2.6 -1.5 L2.6 9 L-2.6 9 L-2.6 -1.5 L-7.5 -1.5 Z" fill="#c9a44a" stroke="#2f3b33" stroke-width="1.1" stroke-linejoin="round"/></svg>';
     this.text = document.createElement('span');
     this.el.append(this.arrow, this.text);
     parent.append(this.el);
@@ -37,7 +37,7 @@ export class Guide {
     const geometry = new THREE.CylinderGeometry(2.2, 2.2, BEACON_HEIGHT, 16, 1, true);
     geometry.translate(0, BEACON_HEIGHT / 2, 0);
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    material.color = new THREE.Color(0xff7a2e);
+    material.color = new THREE.Color(0xc9a44a);
     // Strong at the foot, gone at the top; faint when you are right next to it.
     material.opacityNode = float(1).sub(smoothstep(0, BEACON_HEIGHT, positionLocal.y)).mul(0.55).mul(this.near);
     this.beacon = new THREE.Mesh(geometry, material);

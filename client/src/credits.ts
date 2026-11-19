@@ -8,6 +8,7 @@ const SOFTWARE = [
   'Rapier physics (@dimforge/rapier3d-compat) — Apache License 2.0',
   'ws — MIT licence',
   'Ajv — MIT licence',
+  'Inter and Instrument Serif typefaces — SIL Open Font License 1.1',
 ];
 
 /** Data used everywhere, not per region. */

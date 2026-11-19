@@ -1,3 +1,4 @@
+import './ui/theme.css';
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
 import { parseLocalTime, seasonAt, type RegionIndex, type SeasonCalendar, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
@@ -199,11 +200,22 @@ async function start(): Promise<void> {
   const guide = new Guide(document.body);
   // Trips to the destination and the logbook of arrivals.
   const trips = new Trips();
+  // A place name fading in and out over the view, like a chapter card: on setting off and on arriving.
+  const chapterCard = document.getElementById('chapter')!;
+  let chapterTimer = 0;
+  const chapter = (name: string, line: string): void => {
+    chapterCard.querySelector('.name')!.textContent = name;
+    chapterCard.querySelector('.line')!.textContent = line;
+    chapterCard.classList.add('show');
+    window.clearTimeout(chapterTimer);
+    chapterTimer = window.setTimeout(() => chapterCard.classList.remove('show'), 4200);
+  };
   /** Destinations on the map of the area being driven. */
   let placesToReach = 0;
   let tripFrom: { x: number; z: number } | null = null;
-  guide.onArrive = () => {
+  guide.onArrive = (d) => {
     const w = world;
+    chapter(d.name === 'Marked spot' ? 'The marked spot' : d.name, 'Arrived');
     // Flying there is not a trip.
     if (!w || flying || w.unplaced) {
       trips.begin(null);
@@ -965,6 +977,7 @@ async function start(): Promise<void> {
         if (w.unplaced) {
           w.unplaced = !setDown(w, w.arrival.x, w.arrival.z, w.arrival.heading);
           if (!w.unplaced) {
+            if (w.arrival.name !== 'where you were') chapter(w.arrival.name, `${w.index.title} · ${w.sim.def.title}`);
             // From now on, falling off the world means back to the spawn point.
             w.arrival = w.spawn;
             hintUntil = now + 8000;

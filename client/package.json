@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
+    "@fontsource/instrument-serif": "5.2.5",
+    "@fontsource/inter": "5.2.5",
     "@spar/shared": "workspace:*",
     "leaflet": "1.9.4",
     "three": "^0.187.0"

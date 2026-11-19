@@ -29,6 +29,8 @@ Derived in the importer, not downloaded:
 | [Rapier](https://rapier.rs) (`@dimforge/rapier3d-compat`) | Apache 2.0 |
 | [ws](https://github.com/websockets/ws) | MIT |
 | [Ajv](https://ajv.js.org) | MIT |
+| [Inter](https://rsms.me/inter/) typeface (via Fontsource, bundled) | SIL OFL 1.1 |
+| [Instrument Serif](https://github.com/Instrument/instrument-serif) typeface (via Fontsource, bundled) | SIL OFL 1.1 |
 | [GDAL](https://gdal.org) (importer only) | MIT |
 | [osmium-tool](https://osmcode.org/osmium-tool/) (importer only) | GPL 3.0, run as a separate program |
 
