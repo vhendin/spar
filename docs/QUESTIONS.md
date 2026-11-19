@@ -10,10 +10,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **How stuck is stuck?** Spinning digs a tyre down to at most 25 cm. With open diffs that leaves
   the vehicle stuck in a wet bog; low range with both locks crawls out on the flat; a slope needs
   the winch. Too punishing, too easy, or about right?
-- **Drowned engine.** It restarts by itself three seconds after leaving the water. Should it
-  instead need something more (a wait, a key, a tow to a road)?
-- **Wading depths.** 0.75 m for the 4×4, 0.9 m for the 6×6. Right for these vehicles?
-- **Lake depth.** About 1 m some 10 m from the shore, at most 2.2 m. Steep enough?
 - **Lighter patches on shallow water** near the shore, seen in headless screenshots. A shading
   quirk to fix, or not visible in normal play?
 - **Pace off road.** Rolling resistance now acts under throttle too (it was being ignored
@@ -24,7 +20,8 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Live check of the real stars, moon and aurora** in a normal browser (only seen headless so far).
 - **Frame rate** at night with the aurora (`?aurora=1`) and in dense forest: the F3 read-out on
   your machine. Never measured outside the headless browser.
-- **Moonlight glinting on lakes:** wanted?
+- **Moon glint on lakes** (this commit): a path of white glints towards the moon, four times
+  brighter than its light alone would make it. Too strong, too faint?
 
 ### Light 4×4 (ltb4)
 
@@ -101,6 +98,12 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Answered
 
+- Drowned engine: restarting by itself three seconds after leaving the water is fine.
+- Wading depths: 0.75 m for the 4×4 and 0.9 m for the 6×6 are fine.
+- Lake depth: deeper, so a vehicle really disappears. Now at most 3.5 m (was 2.2), reached a
+  little more slowly from the shore: about 2 m some 10 m out, deeper than a 4×4's roof about
+  15 m out.
+- Moonlight glinting on lakes: yes.
 - Eased W on a key (9e43570): feels right together with the deep-snow retune.
 - Exhaust fumes from the pipe: yes.
 - Something to do on a drive: trips and the logbook (a5334ff) are the first answer; see the

@@ -202,6 +202,10 @@ export class Environment {
     return this.sunRadiance.value;
   }
 
+  /** Towards the light in the sky (sun, or moon when it outshines the sun), and whether it is the moon. */
+  readonly lightFrom = new THREE.Vector3(0, 1, 0);
+  moonlit = false;
+
   /** True while it is cold enough that rain falls as snow; set from the season each frame. */
   snowing = false;
 
@@ -352,6 +356,8 @@ export class Environment {
     // One light does for both: the sun while it is up, the moon after.
     const bySun = sunPower >= moonPower;
     const from = bySun ? state.sun : state.moon;
+    this.lightFrom.fromArray(from);
+    this.moonlit = !bySun;
     const peak = Math.max(direct[0], direct[1], direct[2], 1e-6);
     if (bySun) this.sun.color.setRGB(direct[0] / peak, direct[1] / peak, direct[2] / peak);
     else this.sun.color.setRGB(0.62, 0.72, 1);

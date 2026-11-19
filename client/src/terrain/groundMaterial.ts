@@ -113,6 +113,9 @@ const colors = (classes: Classes, table: Record<string, number>): THREE.Vector3[
     return new THREE.Vector3(c.r, c.g, c.b);
   });
 
+/** How much brighter the moon glints off water than its light alone would make it. */
+const MOON_GLINT = 4;
+
 /** Builds the ground materials of one region; they share the view switch. */
 export class GroundShading {
   /** Index into GROUND_VIEWS. */
@@ -122,6 +125,12 @@ export class GroundShading {
   /** Colour of the sky near the horizon, which water mirrors; and of the sunlight. Linear RGB. */
   readonly sky = uniform(new THREE.Vector3(0.34, 0.48, 0.58));
   readonly sunColor = uniform(new THREE.Vector3(1, 1, 1));
+  /**
+   * Towards the light that glints off the water: the sun, or the moon at night (then
+   * `moonlit` is 1, and the clouds' shadows, cast for the sun, are left out).
+   */
+  readonly lightFrom = uniform(new THREE.Vector3(0, 1, 0));
+  readonly moonlit = uniform(0);
   /** Wind 0..1 and the way it blows (x east, y south), for the ripples. */
   readonly wind = uniform(0.3);
   readonly windDirection = uniform(new THREE.Vector2(1, 0));
@@ -319,11 +328,13 @@ export class GroundShading {
         const facing = max(dot(n, view), 0);
         // The sky mirrored, strongly at a glancing angle, and a cartoon edge to it.
         const fresnel = float(0.05).add(pow(float(1).sub(facing), 4).mul(0.7)).clamp(0, 1);
-        const sun = cloudShadow.sun;
+        const sun = this.lightFrom;
         const glance = max(dot(reflect(view.negate(), n), sun), 0);
         // Crisp sparkles where the sun's reflection catches a ripple, and a soft sheen around them.
         const sparkle = smoothstep(0.9965, 0.9985, glance).mul(3).mul(near).add(pow(glance, 80).mul(0.35));
-        const sunLight = this.sunColor.mul(cloudShadow.light).mul(select(sun.y.greaterThan(0), 1, 0));
+        // By night the moon's path across the water: brighter than its light alone, as eyes adjust.
+        const shadowed = mix(cloudShadow.light, float(MOON_GLINT), this.moonlit);
+        const sunLight = this.sunColor.mul(shadowed).mul(select(sun.y.greaterThan(0), 1, 0));
         // Shallows show the bed through tinted water; depths are dark blue-green.
         const shallow = vec3(0.16, 0.17, 0.1);
         const depth = vec3(0.02, 0.06, 0.075);

@@ -1036,6 +1036,8 @@ async function start(): Promise<void> {
       w.shading.wet.value = env.weather.wetness;
       w.shading.sky.value.set(env.skyColor.r, env.skyColor.g, env.skyColor.b);
       w.shading.sunColor.value.set(env.sunLight.r, env.sunLight.g, env.sunLight.b);
+      w.shading.lightFrom.value.copy(env.lightFrom);
+      w.shading.moonlit.value = env.moonlit ? 1 : 0;
       w.shading.wind.value = env.weather.wind;
       w.shading.windDirection.value.copy(env.windVector);
       // ?snow=<metres> puts the snow line there instead of where the month has it.
