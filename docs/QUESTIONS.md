@@ -105,6 +105,13 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Read-outs.** Would a measuring aid help: the slope and side tilt under the vehicle in the
   F3 read-out, or a timer between two points for comparing ground?
 
+### Big minimap (this commit)
+
+- **Hold Tab** and the minimap grows from the corner to about 600 px (at most 80 % of the
+  window), at the same scale, so it shows about three times as far around. Big enough, too
+  big? Should it grow in the corner (as now) or open in the middle of the screen? On a
+  gamepad there is no hold yet; the minimap button still steps near, far, hidden.
+
 ### Multiplayer (docs/MULTIPLAYER.md)
 
 Not to be built until single player is called complete; answers shape the plan.

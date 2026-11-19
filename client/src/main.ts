@@ -758,6 +758,11 @@ async function start(): Promise<void> {
     if (document.hidden && world) pause();
   });
 
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Tab') minimap.expand(false);
+  });
+  window.addEventListener('blur', () => minimap.expand(false));
+
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const w = world;
@@ -840,7 +845,9 @@ async function start(): Promise<void> {
         if (w && !flying && !w.unplaced) w.winch.toggle();
         break;
       case 'Tab':
+        // Choosing an anchor, Tab picks the next one; otherwise it holds the minimap open large.
         if (w?.winch.state === 'choosing') w.winch.next();
+        else minimap.expand(true);
         break;
       case 'KeyK':
         if (w?.winch.state === 'choosing') w.winch.cancel();

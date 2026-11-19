@@ -126,7 +126,8 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
   is a home network. A player who reconnects within a minute keeps their slot.
 - **Chat:** Enter opens a line at the bottom; messages fade after a while. Arrivals, players
   joining and leaving, and world changes are also shown there.
-- **Player list:** on Tab, or in the start menu.
+- **Player list:** in the menu (Esc) and the start menu; the other players also show on the
+  minimap, so holding Tab for the big minimap shows where everyone is.
 
 ## Trips together
 

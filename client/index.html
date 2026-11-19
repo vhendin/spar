@@ -262,7 +262,9 @@
       #minimap {
         position: fixed; left: 16px; bottom: 16px; width: min(190px, 30vw); height: min(190px, 30vw); display: none; z-index: 5;
         border-radius: 50%; pointer-events: none; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+        transition: width 0.15s ease-out, height 0.15s ease-out;
       }
+      #minimap.big { width: min(620px, 80vh, 80vw); height: min(620px, 80vh, 80vw); }
       #guide {
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
         padding: 5px 14px 5px 10px; border-radius: 18px; pointer-events: none;
@@ -279,7 +281,7 @@
     <canvas id="view"></canvas>
     <div id="hud"></div>
     <div id="status"></div>
-    <div id="hint"><kbd>Esc</kbd> menu and pause · <kbd>M</kbd> map · <kbd>N</kbd> minimap · <kbd>T</kbd> time and weather · <kbd>V</kbd> camera</div>
+    <div id="hint"><kbd>Esc</kbd> menu and pause · <kbd>M</kbd> map · <kbd>N</kbd> minimap (hold <kbd>Tab</kbd> for a big one) · <kbd>T</kbd> time and weather · <kbd>V</kbd> camera</div>
     <div id="menu"></div>
     <div id="credits"></div>
     <div id="world"></div>
