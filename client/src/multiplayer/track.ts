@@ -4,7 +4,7 @@
 // is late. Past the newest it is carried on at its last velocity for up to AHEAD, then it
 // stands still until more arrive.
 
-import type { VehicleSnapshot } from '@spar/shared';
+import type { SnapshotWinch, VehicleSnapshot } from '@spar/shared';
 
 /** How far behind the newest snapshot the vehicle is drawn, milliseconds. */
 export const DELAY = 100;
@@ -35,6 +35,8 @@ export interface Pose {
   lights: boolean;
   braking: boolean;
   paused: boolean;
+  /** The winch's cable, while it is out. */
+  winch?: SnapshotWinch;
 }
 
 /** Forward (+z of the body) speed of a velocity under a rotation. */
@@ -50,14 +52,23 @@ export class Track {
   private offset: number | null = null;
   /** Our clock when the last snapshot arrived. */
   heard = -Infinity;
+  /** Whose browser sent the snapshots: the driver's own, or one running the vehicle for them. */
+  private by = '';
 
   /** The newest snapshot. */
   get latest(): VehicleSnapshot | undefined {
     return this.snaps.at(-1);
   }
 
-  /** Takes a snapshot as it arrives; `now` is our clock, milliseconds. */
-  push(s: VehicleSnapshot, now: number): void {
+  /**
+   * Takes a snapshot as it arrives; `now` is our clock, milliseconds, and `by` whose browser
+   * sent it. Another sender has another clock: then it starts afresh.
+   */
+  push(s: VehicleSnapshot, now: number, by = ''): void {
+    if (by !== this.by) {
+      this.by = by;
+      this.reset();
+    }
     const last = this.latest;
     // Put somewhere new: start afresh there, instead of sliding across the map.
     if (last && (s.jump !== last.jump || s.vehicle !== last.vehicle || s.region !== last.region)) this.snaps.length = 0;
@@ -66,6 +77,12 @@ export class Track {
     const gap = now - s.t;
     this.offset = this.offset === null || gap < this.offset ? gap : this.offset + (gap - this.offset) * CREEP;
     this.snaps.push(s);
+  }
+
+  /** Forgets every snapshot, and the sender's clock. */
+  reset(): void {
+    this.snaps.length = 0;
+    this.offset = null;
   }
 
   /** Where to draw it at our time `now`, or null before any snapshot. */
@@ -95,6 +112,7 @@ export class Track {
     const q = [0, 1, 2, 3].map((j) => lerp(a.q[j]!, b.q[j]! * sign));
     const len = Math.hypot(...q) || 1;
     const near = k < 0.5 ? a : b;
+    const winch = near.winch && { ...near.winch, end: near.winch.end.map((x, j) => (a.winch && b.winch ? lerp(a.winch.end[j]!, b.winch.end[j]!) : x)) as SnapshotWinch['end'] };
     return {
       p: [lerp(a.p[0]!, b.p[0]!), lerp(a.p[1]!, b.p[1]!), lerp(a.p[2]!, b.p[2]!)],
       q: [q[0]! / len, q[1]! / len, q[2]! / len, q[3]! / len],
@@ -110,8 +128,14 @@ export class Track {
       lights: near.lights,
       braking: near.braking,
       paused: near.paused,
+      ...(winch && { winch }),
     };
   }
+}
+
+/** A snapshot as it is drawn. */
+export function snapshotPose(s: VehicleSnapshot): Pose {
+  return shape(s);
 }
 
 function shape(s: VehicleSnapshot): Pose {
@@ -127,6 +151,7 @@ function shape(s: VehicleSnapshot): Pose {
     lights: s.lights,
     braking: s.braking,
     paused: s.paused,
+    ...(s.winch && { winch: s.winch }),
   };
 }
 
@@ -153,7 +178,7 @@ export interface SnapshotSource {
 /** The snapshot to send of our own vehicle. */
 export function takeSnapshot(
   sim: SnapshotSource,
-  extra: { region: string; jump: number; t: number; paused: boolean; lights: boolean; braking: boolean },
+  extra: { region: string; jump: number; t: number; paused: boolean; lights: boolean; braking: boolean; winch?: SnapshotWinch },
 ): VehicleSnapshot {
   const p = sim.body.translation(), q = sim.body.rotation(), v = sim.body.linvel();
   return {
@@ -186,5 +211,6 @@ export function takeSnapshot(
     wading: round(Math.max(0, sim.wading), 2),
     lights: extra.lights,
     braking: extra.braking,
+    ...(extra.winch && { winch: extra.winch }),
   };
 }

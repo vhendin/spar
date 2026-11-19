@@ -1,8 +1,11 @@
-// The winch: a cable from the front of the vehicle hooked round a tree, rock or building.
-// Choosing shows what is in reach; hooking on carries the cable there; winching in shortens
-// it, pulling as hard as the winch can until it stalls. A thin tree pulled too hard gives way.
+// The winch: a cable from the front of the vehicle hooked round a tree, rock or building, or
+// on to another driver's vehicle. Choosing shows what is in reach; hooking on carries the
+// cable there; winching in shortens it, pulling as hard as the winch can until it stalls. A
+// thin tree pulled too hard gives way. Hooked to another vehicle, the cable pulls both ends,
+// once this browser runs that vehicle too (multiplayer/towing.ts).
 // No rendering in here, so it runs in tests.
 
+import type { AnchorData, SnapshotWinch, VehicleDef, WinchHandover } from '@spar/shared';
 import { Felling, pushForce } from './felling';
 import type { Anchor } from './obstacles';
 import type { VehicleSim } from './sim';
@@ -25,14 +28,32 @@ export interface WinchControls {
   slack: boolean;
 }
 
+type V3 = { x: number; y: number; z: number };
+type Q = { x: number; y: number; z: number; w: number };
+
+/** Another driver's vehicle, as a cable hooked to it sees it. */
+export interface TowedBody {
+  translation(): V3;
+  rotation(): Q;
+  /** Present while this browser runs that vehicle: the cable then pulls on it too. */
+  dynamic?: {
+    linvel(): V3;
+    angvel(): V3;
+    worldCom(): V3;
+    applyImpulseAtPoint(impulse: V3, point: V3, wakeUp: boolean): void;
+  };
+  /** Being winched in: it lets go of its parking hold, for this step. */
+  towed?(): void;
+}
+
 /** What the winch needs from the world. */
 export interface AnchorSource {
   anchorsNear(x: number, z: number, radius: number): Anchor[];
   /** False once a tree has been knocked down. */
   standing(key: string): boolean;
+  /** Another driver's vehicle by player id, or null when it is not on the road here. */
+  vehicle?(id: string): TowedBody | null;
 }
-
-type V3 = { x: number; y: number; z: number };
 
 /** The cable as a spring: newtons per metre stretched, and per metre a second of stretching. */
 const STIFFNESS = 250_000;
@@ -57,7 +78,7 @@ const MAX_CHOICES = 24;
 const STRAIN_TIME = 0.5;
 
 /** Turns a vector by a unit quaternion. */
-function rotate(q: { x: number; y: number; z: number; w: number }, v: V3): V3 {
+function rotate(q: Q, v: V3): V3 {
   const tx = 2 * (q.y * v.z - q.z * v.y), ty = 2 * (q.z * v.x - q.x * v.z), tz = 2 * (q.x * v.y - q.y * v.x);
   return { x: v.x + q.w * tx + (q.y * tz - q.z * ty), y: v.y + q.w * ty + (q.z * tx - q.x * tz), z: v.z + q.w * tz + (q.x * ty - q.y * tx) };
 }
@@ -112,6 +133,16 @@ export class Winch {
     public sim: VehicleSim,
     private readonly world: AnchorSource | null,
   ) {}
+
+  /** The vehicle's definition. */
+  get def(): VehicleDef {
+    return this.sim.def;
+  }
+
+  /** The other driver's vehicle the cable is hooked to, or on its way to: their player id. */
+  get towing(): string | null {
+    return (this.state === 'carrying' || this.state === 'hooked') && this.anchor?.kind === 'vehicle' ? (this.anchor.vehicle ?? null) : null;
+  }
 
   /** Whether this vehicle has a winch at all. */
   get fitted(): boolean {
@@ -220,6 +251,12 @@ export class Winch {
       this.cancel();
       return;
     }
+    this.hookTo(a);
+  }
+
+  /** Hooks on to `a` (picked here, or in the browser of the driver whose winch it is). */
+  hookTo(a: Anchor): void {
+    if (!this.spec) return;
     this.anchor = a;
     Object.assign(this.point, hookPoint(a, this.origin()));
     Object.assign(this.end, this.origin());
@@ -269,6 +306,13 @@ export class Winch {
       return;
     }
     const o = this.origin();
+    // Hooked to another vehicle, the hook moves with it.
+    const towed = this.anchor?.kind === 'vehicle' && (this.state === 'carrying' || this.state === 'hooked') ? this.towedBody() : undefined;
+    if (towed === null) {
+      // Gone from the road: the cable comes free.
+      this.release();
+      return;
+    }
     if (this.state === 'carrying') {
       const d = Math.max(1, Math.hypot(this.point.x - o.x, this.point.y - o.y, this.point.z - o.z));
       this.carried = Math.min(1, this.carried + (dt * CARRY_SPEED) / d);
@@ -295,7 +339,7 @@ export class Winch {
     }
     if (this.state !== 'hooked' || !this.anchor) return;
     // Knocked down by other means (driven into): the cable comes free.
-    if (this.world && !this.world.standing(this.anchor.key)) {
+    if (!towed && this.world && !this.world.standing(this.anchor.key)) {
       this.release();
       return;
     }
@@ -304,11 +348,22 @@ export class Winch {
     const dx = this.point.x - o.x, dy = this.point.y - o.y, dz = this.point.z - o.z;
     const d = Math.hypot(dx, dy, dz) || 1e-6;
     const nx = dx / d, ny = dy / d, nz = dz / d;
-    // How fast the cable's end on the vehicle moves away from the anchor.
+    if (towed && !towed.dynamic) {
+      // Hooked to a vehicle another browser still runs, for the moment it takes to hand it
+      // over: the cable pays out freely rather than pull on one end only.
+      this.length = Math.max(this.length, Math.min(spec.cable, d));
+      this.tension = 0;
+      this.drum = 0;
+      return;
+    }
+    // How fast the cable's end on the vehicle moves away from the anchor (and the anchor, if it moves, away from it).
     const v = this.sim.body.linvel(), w = this.sim.body.angvel(), c = this.sim.body.worldCom();
-    const rx = o.x - c.x, ry = o.y - c.y, rz = o.z - c.z;
-    const vx = v.x + w.y * rz - w.z * ry, vy = v.y + w.z * rx - w.x * rz, vz = v.z + w.x * ry - w.y * rx;
-    const away = -(vx * nx + vy * ny + vz * nz);
+    const [vx, vy, vz] = pointVelocity(v, w, c, o);
+    let away = -(vx * nx + vy * ny + vz * nz);
+    if (towed?.dynamic) {
+      const [ax, ay, az] = pointVelocity(towed.dynamic.linvel(), towed.dynamic.angvel(), towed.dynamic.worldCom(), this.point);
+      away += ax * nx + ay * ny + az * nz;
+    }
     const stretch = d - this.length;
     this.tension = stretch > 0 ? Math.min(MAX_TENSION, Math.max(0, STIFFNESS * stretch + DAMPING * away)) : 0;
 
@@ -326,7 +381,10 @@ export class Winch {
     if (this.tension > 0) {
       const j = this.tension * dt;
       this.sim.body.applyImpulseAtPoint({ x: nx * j, y: ny * j, z: nz * j }, o, true);
+      // The other end: the same pull the other way.
+      towed?.dynamic?.applyImpulseAtPoint({ x: -nx * j, y: -ny * j, z: -nz * j }, { ...this.point }, true);
     }
+    if (towed && controls.pull) towed.towed?.();
 
     // A thin tree bends over and goes when pulled on harder than it can take for a moment.
     const a = this.anchor;
@@ -341,9 +399,102 @@ export class Winch {
     }
   }
 
+  /**
+   * The vehicle the cable is hooked to, with the hook point moved to where it is on it now;
+   * null when that vehicle is gone, undefined when the anchor is no vehicle.
+   */
+  private towedBody(): TowedBody | null | undefined {
+    const a = this.anchor;
+    if (a?.kind !== 'vehicle' || !a.vehicle || !a.local) return undefined;
+    const body = this.world?.vehicle?.(a.vehicle) ?? null;
+    if (!body) return null;
+    const p = body.translation();
+    const at = rotate(body.rotation(), { x: a.local[0], y: a.local[1], z: a.local[2] });
+    Object.assign(this.point, { x: p.x + at.x, y: p.y + at.y, z: p.z + at.z });
+    return body;
+  }
+
+  /** Everything needed to carry on running the winch in another browser. */
+  save(): WinchHandover {
+    const v = (p: V3): [number, number, number] => [p.x, p.y, p.z];
+    const state = this.state === 'choosing' ? 'stowed' : this.state;
+    return {
+      state,
+      ...(this.anchor && state !== 'stowed' && state !== 'reeling' && { anchor: { ...this.anchor } as AnchorData }),
+      point: v(this.point),
+      end: v(this.end),
+      length: this.length,
+      carried: this.carried,
+      reelFrom: this.reelFrom,
+      reelStart: v(this.reelStart),
+    };
+  }
+
+  /** Carries on from what another browser saved; nothing saved, the cable is on the drum. */
+  restore(s: WinchHandover | undefined): void {
+    this.stow();
+    if (!s || !this.spec) return;
+    const p = (a: readonly number[]): V3 => ({ x: a[0]!, y: a[1]!, z: a[2]! });
+    this.state = s.state;
+    this.anchor = s.anchor ? (s.anchor as Anchor) : null;
+    if ((this.state === 'carrying' || this.state === 'hooked') && !this.anchor) this.state = 'stowed';
+    Object.assign(this.point, p(s.point));
+    Object.assign(this.end, p(s.end));
+    Object.assign(this.reelStart, p(s.reelStart));
+    this.length = s.length;
+    this.carried = s.carried;
+    this.reelFrom = s.reelFrom;
+    this.strain = 0;
+  }
+
+  /** The cable as others need it to draw it, or undefined while it is on the drum. */
+  info(): SnapshotWinch | undefined {
+    if (this.state === 'stowed' || this.state === 'choosing') return undefined;
+    const r = (x: number, k = 100): number => Math.round(x * k) / k;
+    const a = this.anchor;
+    return {
+      state: this.state,
+      end: [r(this.end.x), r(this.end.y), r(this.end.z)],
+      length: r(Math.max(0, this.length)),
+      tension: Math.round(this.tension),
+      drum: r(this.drum),
+      ...(a && !a.box && a.kind !== 'vehicle' && this.state === 'hooked' && { strap: [r(a.x), r(a.y), r(a.z), r(a.radius)] }),
+    };
+  }
+
+  /**
+   * While another browser runs the vehicle: the cable as it says. Choosing stays this
+   * browser's own, since what to hook on to is picked here and sent there.
+   */
+  mirror(w: SnapshotWinch | undefined): void {
+    const state = w?.state ?? 'stowed';
+    if (!(this.state === 'choosing' && (state === 'stowed' || state === 'reeling'))) {
+      if (state === 'hooked' && this.state !== 'hooked') this.events.push('hooked');
+      if (state === 'reeling' && (this.state === 'hooked' || this.state === 'carrying')) this.events.push('unhooked');
+      this.state = state;
+    }
+    if (!w) {
+      this.tension = this.drum = 0;
+      this.anchor = null;
+      return;
+    }
+    Object.assign(this.end, { x: w.end[0], y: w.end[1], z: w.end[2] });
+    this.length = w.length;
+    this.tension = w.tension;
+    this.drum = w.drum;
+    const s = w.strap;
+    this.anchor = s ? { key: '', kind: 'tree', x: s[0]!, y: s[1]!, z: s[2]!, radius: s[3]!, diameter: 0 } : null;
+  }
+
   /** The winch's pull as a share of what it can manage, for the gauge. */
   get load(): number {
     const spec = this.spec;
     return spec ? this.tension / spec.pull : 0;
   }
+}
+
+/** Velocity of a point on a body moving at `v` and turning at `w` about `c`. */
+function pointVelocity(v: V3, w: V3, c: V3, p: V3): [number, number, number] {
+  const rx = p.x - c.x, ry = p.y - c.y, rz = p.z - c.z;
+  return [v.x + w.y * rz - w.z * ry, v.y + w.z * rx - w.x * rz, v.z + w.x * ry - w.y * rx];
 }

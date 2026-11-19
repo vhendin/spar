@@ -101,20 +101,27 @@ export class GroundStore implements GroundProbe {
   }
 
   /**
-   * Keeps colliders and mask data loaded around a position. Returns true when the ground
-   * right under it is solid, so the caller knows it is safe to let physics run.
+   * Keeps colliders and mask data loaded around a position, and around `more` (other vehicles
+   * this browser runs). Returns true when the ground right under each is solid, so the caller
+   * knows it is safe to let physics run.
    */
-  update(x: number, z: number): boolean {
+  update(x: number, z: number, more: readonly { x: number; z: number }[] = []): boolean {
+    const points = [{ x, z }, ...more];
     const span = this.level.span;
     const last = this.level.count - 1;
     const range = (v: number): [number, number] => [Math.max(0, Math.floor((v - LOAD_MARGIN) / span)), Math.min(last, Math.floor((v + LOAD_MARGIN) / span))];
-    const [x0, x1] = range(x);
-    const [z0, z1] = range(z);
-    for (let tz = z0; tz <= z1; tz++) for (let tx = x0; tx <= x1; tx++) if (!this.tiles.has(`${tx},${tz}`)) this.loadHeights(tx, tz);
+    for (const p of points) {
+      const [x0, x1] = range(p.x);
+      const [z0, z1] = range(p.z);
+      for (let tz = z0; tz <= z1; tz++) for (let tx = x0; tx <= x1; tx++) if (!this.tiles.has(`${tx},${tz}`)) this.loadHeights(tx, tz);
+    }
     for (const [key, tile] of this.tiles) {
-      const dx = Math.max(tile.x * span - x, 0, x - (tile.x + 1) * span);
-      const dz = Math.max(tile.z * span - z, 0, z - (tile.z + 1) * span);
-      if (tile.collider && Math.max(dx, dz) > KEEP_MARGIN) {
+      const far = points.every((p) => {
+        const dx = Math.max(tile.x * span - p.x, 0, p.x - (tile.x + 1) * span);
+        const dz = Math.max(tile.z * span - p.z, 0, p.z - (tile.z + 1) * span);
+        return Math.max(dx, dz) > KEEP_MARGIN;
+      });
+      if (tile.collider && far) {
         this.world.removeCollider(tile.collider, false);
         this.tiles.delete(key);
       }
@@ -122,19 +129,24 @@ export class GroundStore implements GroundProbe {
 
     const mspan = this.maskLevel.span;
     const mlast = this.maskLevel.count - 1;
-    for (let mz = Math.max(0, Math.floor((z - 40) / mspan)); mz <= Math.min(mlast, Math.floor((z + 40) / mspan)); mz++) {
-      for (let mx = Math.max(0, Math.floor((x - 40) / mspan)); mx <= Math.min(mlast, Math.floor((x + 40) / mspan)); mx++) {
-        if (!this.masks.has(`${mx},${mz}`)) this.loadMask(mx, mz);
+    for (const p of points) {
+      for (let mz = Math.max(0, Math.floor((p.z - 40) / mspan)); mz <= Math.min(mlast, Math.floor((p.z + 40) / mspan)); mz++) {
+        for (let mx = Math.max(0, Math.floor((p.x - 40) / mspan)); mx <= Math.min(mlast, Math.floor((p.x + 40) / mspan)); mx++) {
+          if (!this.masks.has(`${mx},${mz}`)) this.loadMask(mx, mz);
+        }
       }
     }
-    if (this.masks.size > 12) {
+    if (this.masks.size > 12 + 4 * more.length) {
       for (const key of this.masks.keys()) {
         const [mx, mz] = key.split(',').map(Number) as [number, number];
-        if (Math.abs((mx + 0.5) * mspan - x) > mspan * 2 || Math.abs((mz + 0.5) * mspan - z) > mspan * 2) this.masks.delete(key);
+        const far = points.every((p) => Math.abs((mx + 0.5) * mspan - p.x) > mspan * 2 || Math.abs((mz + 0.5) * mspan - p.z) > mspan * 2);
+        if (far) this.masks.delete(key);
       }
     }
 
-    return this.tiles.get(`${Math.min(last, Math.max(0, Math.floor(x / span)))},${Math.min(last, Math.max(0, Math.floor(z / span)))}`)?.collider != null;
+    const solid = (p: { x: number; z: number }): boolean =>
+      this.tiles.get(`${Math.min(last, Math.max(0, Math.floor(p.x / span)))},${Math.min(last, Math.max(0, Math.floor(p.z / span)))}`)?.collider != null;
+    return points.every(solid);
   }
 
   /** Ground height in metres from the finest data, or null where it is not loaded. */

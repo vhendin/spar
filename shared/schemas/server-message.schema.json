@@ -35,6 +35,15 @@
     },
     {
       "$ref": "#/definitions/IceBroken"
+    },
+    {
+      "$ref": "#/definitions/Towing"
+    },
+    {
+      "$ref": "#/definitions/DriveFrom"
+    },
+    {
+      "$ref": "#/definitions/HandoverTo"
     }
   ],
   "definitions": {
@@ -245,7 +254,7 @@
     },
     "PlayerState": {
       "title": "PlayerState",
-      "description": "Another driver's vehicle now, passed on as they sent it.",
+      "description": "A vehicle now, passed on as it was sent: by its driver, or (`by`) by the browser that runs it while it is joined to another by a cable.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -264,6 +273,11 @@
         },
         "vehicle": {
           "$ref": "client-message.schema.json#/definitions/VehicleSnapshot"
+        },
+        "by": {
+          "description": "The player whose browser sent it, when not the vehicle's own driver.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -318,14 +332,15 @@
     },
     "PlayerPush": {
       "title": "PlayerPush",
-      "description": "Another driver's vehicle pushed against ours; apply it to our body.",
+      "description": "Another vehicle pushed against one this browser runs (`to`); apply it to that body.",
       "type": "object",
       "additionalProperties": false,
       "required": [
         "type",
         "from",
         "impulse",
-        "at"
+        "at",
+        "to"
       ],
       "properties": {
         "type": {
@@ -352,6 +367,10 @@
           },
           "minItems": 3,
           "maxItems": 3
+        },
+        "to": {
+          "description": "The player whose vehicle was pushed.",
+          "type": "string"
         }
       }
     },
@@ -438,6 +457,121 @@
         },
         "hole": {
           "$ref": "client-message.schema.json#/definitions/IceHole"
+        }
+      }
+    },
+    "Towing": {
+      "title": "Towing",
+      "description": "Every cable between two drivers' vehicles, and which browser runs each vehicle that is not run by its own driver's. Sent to everyone on every change, and in answer to `cable`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "cables",
+        "runs",
+        "ack"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "towing"
+        },
+        "cables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "description": "The player whose vehicle's winch it is.",
+                "type": "string"
+              },
+              "to": {
+                "description": "The player whose vehicle it is hooked to.",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "vehicle",
+              "by"
+            ],
+            "properties": {
+              "vehicle": {
+                "type": "string"
+              },
+              "by": {
+                "description": "The player whose browser runs it.",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "ack": {
+          "description": "The last `cable` message from this browser the list takes into account; 0 for none.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "DriveFrom": {
+      "title": "DriveFrom",
+      "description": "The controls of a driver whose vehicle this browser runs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "from",
+        "controls"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "drive"
+        },
+        "from": {
+          "type": "string"
+        },
+        "controls": {
+          "$ref": "client-message.schema.json#/definitions/DriveControls"
+        }
+      }
+    },
+    "HandoverTo": {
+      "title": "HandoverTo",
+      "description": "A vehicle this browser runs from now on, as the browser that ran it left it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "from",
+        "vehicle",
+        "state"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "handover"
+        },
+        "from": {
+          "type": "string"
+        },
+        "vehicle": {
+          "description": "The player whose vehicle it is.",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "client-message.schema.json#/definitions/VehicleHandover"
         }
       }
     }

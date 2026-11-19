@@ -19,6 +19,9 @@ export interface ConnectionHandlers {
   room?(msg: Of<'room'>): void;
   felled?(msg: Of<'felled'>): void;
   iceHole?(msg: Of<'ice_hole'>): void;
+  towing?(msg: Of<'towing'>): void;
+  drive?(msg: Of<'drive'>): void;
+  handover?(msg: Of<'handover'>): void;
 }
 
 /** The driver as others see them, sent on joining and whenever it changes. */
@@ -116,6 +119,15 @@ export class Connection {
           break;
         case 'ice_hole':
           this.on.iceHole?.(msg);
+          break;
+        case 'towing':
+          this.on.towing?.(msg);
+          break;
+        case 'drive':
+          this.on.drive?.(msg);
+          break;
+        case 'handover':
+          this.on.handover?.(msg);
           break;
         case 'error':
           // A version mismatch will not fix itself by retrying; a refused message is only that one.

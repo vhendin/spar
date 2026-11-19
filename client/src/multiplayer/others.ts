@@ -2,11 +2,12 @@
 // with their name over each. Only those in the same region as us are drawn. Each has its
 // spray, exhaust, tracks, mud and sound, worked out here from what its snapshots tell, and a
 // solid body in our physics: our vehicle bounces off it, and the push goes to its driver,
-// whose browser moves it.
+// whose browser moves it. A vehicle this browser runs for its driver (joined to ours by a
+// cable) is drawn from that simulation instead (`host`). Everyone's winch cable is drawn too.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
-import type { Player, VehicleDef, VehicleSnapshot } from '@spar/shared';
+import type { Player, SnapshotWinch, VehicleDef, VehicleSnapshot } from '@spar/shared';
 import type { AudioOut } from '../audio/output';
 import { VehicleAudio } from '../audio/vehicleAudio';
 import { Exhaust } from '../vehicle/exhaust';
@@ -15,8 +16,10 @@ import { Spray } from '../vehicle/spray';
 import type { VehicleState } from '../vehicle/state';
 import { Tracks } from '../vehicle/tracks';
 import { aimBeam, HEADLIGHT, newBeam, VehicleView } from '../vehicle/view';
+import type { Anchor } from '../vehicle/obstacles';
+import { WinchView, type CableView } from '../vehicle/winchView';
 import type { PlayerLine } from '../ui/players';
-import { Track, type Pose } from './track';
+import { snapshotPose, Track, type Pose } from './track';
 
 type Rapier = typeof RAPIER;
 
@@ -133,6 +136,37 @@ class RemoteVehicle implements VehicleState {
   }
 }
 
+/** Another driver's cable, drawn from what their snapshots say. */
+class RemoteCable implements CableView {
+  readonly choices: Anchor[] = [];
+  readonly picked = 0;
+  state: CableView['state'] = 'stowed';
+  readonly end = { x: 0, y: 0, z: 0 };
+  length = 0;
+  tension = 0;
+  anchor: CableView['anchor'] = null;
+
+  constructor(readonly def: VehicleDef) {}
+
+  set(w: SnapshotWinch): void {
+    this.state = w.state;
+    Object.assign(this.end, { x: w.end[0], y: w.end[1], z: w.end[2] });
+    this.length = w.length;
+    this.tension = w.tension;
+    const s = w.strap;
+    this.anchor = s ? { kind: 'tree', x: s[0]!, y: s[1]!, z: s[2]!, radius: s[3]! } : null;
+  }
+
+  origin(): { x: number; y: number; z: number } {
+    return this.end;
+  }
+}
+
+/** A vehicle this browser runs for another driver, as it is now. */
+export interface HostedView {
+  snapshot(): VehicleSnapshot;
+}
+
 /** Something to put on the map: another driver's vehicle. */
 export interface Marker {
   x: number;
@@ -189,11 +223,17 @@ interface Other {
   push: THREE.Vector3;
   pushAt: THREE.Vector3;
   pushWeight: number;
+  /** Set while this browser runs the vehicle: drawn from that, not from snapshots. */
+  hosted: HostedView | null;
+  /** Its winch cable, while out. */
+  cable: { view: WinchView; state: RemoteCable } | null;
 }
 
 export class Others {
   /** Everyone connected, ourselves included, in the server's order. */
   players: Player[] = [];
+  /** Snapshots of our own vehicle, sent by another browser while it runs it for us. */
+  readonly selfTrack = new Track();
   /** Our own player id once welcomed. */
   me = '';
   /** The region we drive in; others elsewhere are not drawn. */
@@ -245,9 +285,17 @@ export class Others {
     this.physics = { R, world };
   }
 
-  /** A snapshot of another driver's vehicle; true when they have just come on the road, or moved region. */
-  receive(id: string, s: VehicleSnapshot, now: number): boolean {
-    if (id === this.me) return false;
+  /**
+   * A snapshot of a driver's vehicle, sent by `by`'s browser (theirs, unless another runs it);
+   * true when they have just come on the road, or moved region. Our own vehicle's go to
+   * `selfTrack`; those of a vehicle we run ourselves are stale and left out.
+   */
+  receive(id: string, s: VehicleSnapshot, now: number, by = id): boolean {
+    if (id === this.me) {
+      this.selfTrack.push(s, now, by);
+      return false;
+    }
+    if (this.others.get(id)?.hosted) return false;
     let o = this.others.get(id);
     const news = !o || o.away || o.track.latest?.region !== s.region;
     if (!o) {
@@ -257,13 +305,68 @@ export class Others {
       this.tags.append(tag);
       o = {
         player, track: new Track(), vehicle: null, view: null, built: '', tag, away: false, effects: null, sound: null,
-        solid: null, solidFor: '', push: new THREE.Vector3(), pushAt: new THREE.Vector3(), pushWeight: 0,
+        solid: null, solidFor: '', push: new THREE.Vector3(), pushAt: new THREE.Vector3(), pushWeight: 0, hosted: null, cable: null,
       };
       this.others.set(id, o);
     }
     o.away = false;
-    o.track.push(s, now);
+    o.track.push(s, now, by);
     return news;
+  }
+
+  /**
+   * This browser runs another driver's vehicle from now on (`view`), or no longer (null): then
+   * it is drawn from snapshots again, starting where it was last run here.
+   */
+  host(id: string, view: HostedView | null, now: number): void {
+    if (id === this.me) return;
+    const was = this.others.get(id)?.hosted;
+    if (view) {
+      if (!this.others.has(id)) this.receive(id, view.snapshot(), now, 'here');
+      this.others.get(id)!.hosted = view;
+      return;
+    }
+    const o = this.others.get(id);
+    if (!o || !was) return;
+    o.hosted = null;
+    o.track.push(was.snapshot(), now, 'here');
+  }
+
+  /** The newest snapshot of another driver's vehicle. */
+  latestOf(id: string): VehicleSnapshot | undefined {
+    return this.others.get(id)?.track.latest;
+  }
+
+  /** Another driver's vehicle as a cable sees it, or null when it is not on the road here. */
+  bodyOf(id: string): { translation(): { x: number; y: number; z: number }; rotation(): { x: number; y: number; z: number; w: number } } | null {
+    const o = this.others.get(id);
+    if (!o || o.away || !o.view?.group.visible || !o.vehicle) return null;
+    return o.solid ?? o.vehicle.body;
+  }
+
+  /** The others' vehicles within `radius` of (x, z) as winch anchors: each by its nearer tow point. */
+  vehicleAnchors(x: number, z: number, radius: number): Anchor[] {
+    const out: Anchor[] = [];
+    for (const [id, o] of this.others) {
+      const body = this.bodyOf(id);
+      const def = o.vehicle?.def;
+      if (!body || !def) continue;
+      const p = body.translation(), r = body.rotation();
+      const q = this.inverse.makeRotationFromQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w));
+      let best: Anchor | null = null, bestD = Infinity;
+      for (const name of ['front_tow', 'rear_tow']) {
+        const at = def.attachments.find((a) => a.name === name)?.position;
+        if (!at) continue;
+        const w = this.at.set(at[0]!, at[1]!, at[2]!).applyMatrix4(q).add(this.lo.set(p.x, p.y, p.z));
+        const d = Math.hypot(w.x - x, w.z - z);
+        if (d < bestD) {
+          bestD = d;
+          best = { key: `v:${id}`, kind: 'vehicle', x: w.x, y: w.y, z: w.z, radius: 0, diameter: 0, vehicle: id, local: [at[0]!, at[1]!, at[2]!] };
+        }
+      }
+      if (best && bestD <= radius) out.push(best);
+    }
+    return out;
   }
 
   /** Another driver has gone back to the start screen. */
@@ -376,7 +479,8 @@ export class Others {
       const s = o.track.latest;
       const def = s && this.defs.find((d) => d.name === s.vehicle);
       const pose = o.track.pose(now);
-      const solid = !o.away && !!def && !!pose && s.region === this.region;
+      // A vehicle run here is a body of its own in our physics already.
+      const solid = !o.hosted && !o.away && !!def && !!pose && s.region === this.region;
       if (!solid) {
         this.dropSolid(o);
         continue;
@@ -431,15 +535,16 @@ export class Others {
     /** Others with their lights on, and how far away, for the beams. */
     const lit: { o: Other; distance: number }[] = [];
     for (const [id, o] of this.others) {
-      if (now - o.track.heard > SILENT) {
+      if (!o.hosted && now - o.track.heard > SILENT) {
         this.remove(id, o);
         continue;
       }
       const s = o.track.latest;
       const def = s && this.defs.find((d) => d.name === s.vehicle);
-      const pose = o.track.pose(now);
+      const pose = o.hosted ? snapshotPose(o.hosted.snapshot()) : o.track.pose(now);
       const visible = show && !o.away && !!def && !!pose && s.region === this.region;
       if (!visible) {
+        this.drawCable(o, null, def, camera, around);
         if (o.view) o.view.group.visible = false;
         if (o.effects) o.effects.tracks.break();
         this.quiet(o);
@@ -464,6 +569,7 @@ export class Others {
       view.snap();
       view.render(1);
       view.setLights(pose.lights, pose.braking);
+      this.drawCable(o, pose, def, camera, around);
       const distance = view.group.position.distanceTo(camera.position);
       if (pose.lights) lit.push({ o, distance });
       this.effects(o, vehicle, view, s.jump, now, pose.paused ? 0 : dt, distance, camera, around);
@@ -493,6 +599,25 @@ export class Others {
       o.tag.style.transform = `translate(${((this.at.x + 1) / 2) * width}px, ${((1 - this.at.y) / 2) * height}px) translate(-50%, -100%)`;
     }
     this.lendBeams(lit);
+  }
+
+  /** Its winch cable, while it is out; `pose` null hides it. */
+  private drawCable(o: Other, pose: Pose | null, def: VehicleDef | undefined, camera: THREE.Camera, around: Surroundings): void {
+    const w = pose?.winch;
+    if (!w || !def || !o.view) {
+      if (o.cable) o.cable.view.group.visible = false;
+      return;
+    }
+    if (!o.cable || o.cable.state.def !== def) {
+      o.cable?.view.dispose();
+      o.cable = { view: new WinchView(), state: new RemoteCable(def) };
+      this.scene.add(o.cable.view.group);
+    }
+    o.cable.state.set(w);
+    o.cable.view.group.visible = true;
+    // Placed with the vehicle first, so the cable leaves from where it is drawn this frame.
+    o.view.group.updateMatrixWorld();
+    o.cable.view.update(0, o.cable.state, o.view.group, (x, z) => around.heightAt(x, z), camera.position);
   }
 
   /** Spray, smoke, tracks and mud, as for our own vehicle; nothing new thrown when far off. */
@@ -609,6 +734,7 @@ export class Others {
     }
     this.quiet(o);
     this.dropSolid(o);
+    o.cable?.view.dispose();
     o.tag.remove();
     this.others.delete(id);
   }

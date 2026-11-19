@@ -32,6 +32,18 @@
     },
     {
       "$ref": "#/definitions/BrokeIce"
+    },
+    {
+      "$ref": "#/definitions/Cable"
+    },
+    {
+      "$ref": "#/definitions/Free"
+    },
+    {
+      "$ref": "#/definitions/Drive"
+    },
+    {
+      "$ref": "#/definitions/Handover"
     }
   ],
   "definitions": {
@@ -287,12 +299,70 @@
           "description": "Deepest water around the vehicle, metres above the bottom of its tyres.",
           "type": "number",
           "minimum": 0
+        },
+        "winch": {
+          "$ref": "#/definitions/SnapshotWinch"
+        }
+      }
+    },
+    "SnapshotWinch": {
+      "title": "SnapshotWinch",
+      "description": "The winch's cable while it is out, so others can draw it. Left out while it is on the drum.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "end",
+        "length",
+        "tension",
+        "drum"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "carrying",
+            "hooked",
+            "reeling"
+          ]
+        },
+        "end": {
+          "description": "The cable's far end, world position, metres.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "length": {
+          "description": "Cable out, metres.",
+          "type": "number",
+          "minimum": 0
+        },
+        "tension": {
+          "description": "Newtons the cable pulls with.",
+          "type": "number",
+          "minimum": 0
+        },
+        "drum": {
+          "description": "Metres a second of cable, positive winding in.",
+          "type": "number"
+        },
+        "strap": {
+          "description": "Round a trunk or rock: its middle and the strap's radius.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
         }
       }
     },
     "State": {
       "title": "State",
-      "description": "This driver's vehicle now.",
+      "description": "A vehicle now: this driver's own, or with `of` one this browser runs for another driver while they are joined by a cable.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -303,6 +373,11 @@
         "type": {
           "type": "string",
           "const": "state"
+        },
+        "of": {
+          "description": "The player whose vehicle this is, when it is not the sender's own.",
+          "type": "string",
+          "maxLength": 64
         },
         "vehicle": {
           "$ref": "#/definitions/VehicleSnapshot"
@@ -518,6 +593,432 @@
         },
         "hole": {
           "$ref": "#/definitions/IceHole"
+        }
+      }
+    },
+    "Cable": {
+      "title": "Cable",
+      "description": "A winch this browser runs has hooked on to another driver's vehicle (`to`), or let go of it (no `to`). The server answers with `towing`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "from",
+        "seq"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "cable"
+        },
+        "from": {
+          "description": "The player whose vehicle's winch it is.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "to": {
+          "description": "The player whose vehicle it is hooked to.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "seq": {
+          "description": "Counts this browser's cable messages; `towing` says which it has seen.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Free": {
+      "title": "Free",
+      "description": "Our vehicle is being moved somewhere new: every cable on it, or from it, comes off.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "seq"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "free"
+        },
+        "seq": {
+          "description": "Counts with `cable`: `towing` says when it has been seen.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Anchor": {
+      "title": "Anchor",
+      "description": "Something a winch is hooked to: a tree, rock or building by its permanent key, or another driver's vehicle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "kind",
+        "x",
+        "y",
+        "z",
+        "radius",
+        "diameter"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "tree",
+            "rock",
+            "object",
+            "vehicle"
+          ]
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0
+        },
+        "diameter": {
+          "type": "number",
+          "minimum": 0
+        },
+        "box": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hx",
+            "hz",
+            "yaw"
+          ],
+          "properties": {
+            "hx": {
+              "type": "number"
+            },
+            "hz": {
+              "type": "number"
+            },
+            "yaw": {
+              "type": "number"
+            }
+          }
+        },
+        "vehicle": {
+          "description": "The player whose vehicle it is.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "local": {
+          "description": "Where on that vehicle, in its own frame, metres.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "DriveControls": {
+      "title": "DriveControls",
+      "description": "A driver's controls, for the browser that runs their vehicle while it is joined to another by a cable.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "throttle",
+        "brake",
+        "steer",
+        "handbrake",
+        "digital",
+        "pull",
+        "slack",
+        "lights"
+      ],
+      "properties": {
+        "throttle": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "brake": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "steer": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "handbrake": {
+          "type": "boolean"
+        },
+        "digital": {
+          "description": "The pedals are keys, only on or off.",
+          "type": "boolean"
+        },
+        "pull": {
+          "description": "Winching in.",
+          "type": "boolean"
+        },
+        "slack": {
+          "description": "Paying cable out.",
+          "type": "boolean"
+        },
+        "lights": {
+          "type": "boolean"
+        },
+        "range": {
+          "description": "Change between high and low range, once.",
+          "type": "boolean"
+        },
+        "lock": {
+          "description": "Lock or free this axle's differential, once.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "right": {
+          "description": "Put the vehicle back on its wheels.",
+          "type": "boolean"
+        },
+        "hook": {
+          "$ref": "#/definitions/Anchor"
+        },
+        "release": {
+          "description": "Unhook the winch.",
+          "type": "boolean"
+        }
+      }
+    },
+    "Drive": {
+      "title": "Drive",
+      "description": "Our controls, while another browser runs our vehicle; sent about 20 times a second and at once on a key press.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "controls"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "drive"
+        },
+        "controls": {
+          "$ref": "#/definitions/DriveControls"
+        }
+      }
+    },
+    "WinchHandover": {
+      "title": "WinchHandover",
+      "description": "Everything about a winch needed to carry on running it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "point",
+        "end",
+        "length",
+        "carried",
+        "reelFrom",
+        "reelStart"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "stowed",
+            "carrying",
+            "hooked",
+            "reeling"
+          ]
+        },
+        "anchor": {
+          "$ref": "#/definitions/Anchor"
+        },
+        "point": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "end": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "length": {
+          "type": "number"
+        },
+        "carried": {
+          "type": "number"
+        },
+        "reelFrom": {
+          "type": "number"
+        },
+        "reelStart": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "VehicleHandover": {
+      "title": "VehicleHandover",
+      "description": "Everything about a vehicle needed to carry on simulating it in another browser.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vehicle",
+        "jump",
+        "p",
+        "q",
+        "v",
+        "w",
+        "wheels",
+        "gear",
+        "low",
+        "rpm",
+        "locks",
+        "holding",
+        "drowned",
+        "steer"
+      ],
+      "properties": {
+        "vehicle": {
+          "description": "Name of the vehicle definition.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "jump": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "q": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "v": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "w": {
+          "description": "Spin, radians a second.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "wheels": {
+          "description": "Per wheel: sink, water, suspension length, roll (radians).",
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        },
+        "gear": {
+          "type": "integer"
+        },
+        "low": {
+          "type": "boolean"
+        },
+        "rpm": {
+          "type": "number"
+        },
+        "locks": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "boolean"
+          }
+        },
+        "holding": {
+          "type": "boolean"
+        },
+        "drowned": {
+          "type": "boolean"
+        },
+        "steer": {
+          "description": "Angle of the steered wheels, radians.",
+          "type": "number"
+        },
+        "winch": {
+          "$ref": "#/definitions/WinchHandover"
+        }
+      }
+    },
+    "Handover": {
+      "title": "Handover",
+      "description": "This browser no longer runs a vehicle: everything about it, for the browser that runs it from now on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "vehicle",
+        "to",
+        "state"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "handover"
+        },
+        "vehicle": {
+          "description": "The player whose vehicle it is.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "to": {
+          "description": "The player whose browser runs it now.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "state": {
+          "$ref": "#/definitions/VehicleHandover"
         }
       }
     }

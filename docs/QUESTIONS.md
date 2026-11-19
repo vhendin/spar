@@ -5,6 +5,18 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Multiplayer stage 4, winching each other
+
+- **Pausing while running someone's vehicle** (Esc, or switching tab) freezes it too, since
+  your physics stops. Should pausing hand the vehicles you run back to their drivers instead?
+- **A winched vehicle lets go of its parking hold** while it is being winched in, so the winch
+  can move it. The handbrake (Space) still holds it against the cable. Is that how you want it?
+- **Your own vehicle is drawn about 100 ms late while you are on someone's cable**, the same
+  delay as other players' vehicles, because their browser runs it. Steering and throttle reach
+  it about 50 ms late on top of that. Does it feel sluggish?
+- **The hook goes on the other vehicle's nearer tow point**, front or rear. Is that the right
+  end, or should you be able to choose?
+
 ### Multiplayer stage 3, one world (1a75282)
 
 - **Felled trees last for the session.** The server forgets them when it restarts, and playing

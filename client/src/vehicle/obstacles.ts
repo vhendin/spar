@@ -25,11 +25,11 @@ const MIN_ANCHOR_TRUNK = 0.1;
 /** Nor are rocks lower than this. */
 const MIN_ANCHOR_ROCK = 0.9;
 
-/** Something a winch cable can be hooked to. */
+/** Something a winch cable can be hooked to: a tree, rock or building, or another driver's vehicle. */
 export interface Anchor {
-  /** The permanent name it was placed with. */
+  /** The permanent name it was placed with (`v:<player>` for a vehicle). */
   key: string;
-  kind: SolidKind;
+  kind: SolidKind | 'vehicle';
   /** Its middle, at the height the cable goes round it. */
   x: number;
   y: number;
@@ -40,6 +40,9 @@ export interface Anchor {
   diameter: number;
   /** Buildings and the like: half the footprint, and its turn about the vertical. */
   box?: { hx: number; hz: number; yaw: number };
+  /** Another driver's vehicle: whose, and where on it the hook goes, in its own frame. */
+  vehicle?: string;
+  local?: [number, number, number];
 }
 
 interface Entry {
@@ -202,11 +205,25 @@ export class Obstacles {
     return this.colliders.size;
   }
 
-  /** Call every frame; does its work a few times a second. `now` in seconds. */
-  update(now: number, x: number, z: number): void {
+  /**
+   * Call every frame; does its work a few times a second. `now` in seconds. Colliders gather
+   * round (x, z) and round `more` (other vehicles this browser runs).
+   */
+  update(now: number, x: number, z: number, more: readonly { x: number; z: number }[] = []): void {
     if (now < this.next) return;
     this.next = now + 0.2;
     this.pass++;
+    for (const p of [{ x, z }, ...more]) this.gather(p.x, p.z);
+    let undrawn = 0;
+    for (const [key, entry] of this.colliders) {
+      if (entry.seen !== this.pass) this.drop(key, entry);
+      else if (!entry.drawn) undrawn++;
+    }
+    this.undrawn = undrawn;
+  }
+
+  /** Makes colliders for what stands round (x, z), and marks those already there as still wanted. */
+  private gather(x: number, z: number): void {
     const solid = this.R.ColliderDesc;
     this.features?.forEachSolid(x, z, RADIUS, (s) => {
       const known = this.colliders.get(s.key);
@@ -242,12 +259,6 @@ export class Obstacles {
         this.add(key, desc, UNIT_BALL, [radius, radius, radius], drawn, 'rock');
       }
     });
-    let undrawn = 0;
-    for (const [key, entry] of this.colliders) {
-      if (entry.seen !== this.pass) this.drop(key, entry);
-      else if (!entry.drawn) undrawn++;
-    }
-    this.undrawn = undrawn;
   }
 }
 

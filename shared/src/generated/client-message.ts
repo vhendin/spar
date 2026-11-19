@@ -3,7 +3,8 @@
 /**
  * Every message a client may send to the server.
  */
-export type ClientMessage = Hello | SetWorld | Profile | State | Away | Chat | Push | Room | Felled | BrokeIce;
+export type ClientMessage =
+  Hello | SetWorld | Profile | State | Away | Chat | Push | Room | Felled | BrokeIce | Cable | Free | Drive | Handover;
 
 /**
  * First message on a new connection, with the driver's name and colour.
@@ -61,10 +62,14 @@ export interface Profile {
   color?: string;
 }
 /**
- * This driver's vehicle now.
+ * A vehicle now: this driver's own, or with `of` one this browser runs for another driver while they are joined by a cable.
  */
 export interface State {
   type: 'state';
+  /**
+   * The player whose vehicle this is, when it is not the sender's own.
+   */
+  of?: string;
   vehicle: VehicleSnapshot;
 }
 /**
@@ -276,6 +281,39 @@ export interface VehicleSnapshot {
    * Deepest water around the vehicle, metres above the bottom of its tyres.
    */
   wading: number;
+  winch?: SnapshotWinch;
+}
+/**
+ * The winch's cable while it is out, so others can draw it. Left out while it is on the drum.
+ */
+export interface SnapshotWinch {
+  state: 'carrying' | 'hooked' | 'reeling';
+  /**
+   * The cable's far end, world position, metres.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  end: [number, number, number];
+  /**
+   * Cable out, metres.
+   */
+  length: number;
+  /**
+   * Newtons the cable pulls with.
+   */
+  tension: number;
+  /**
+   * Metres a second of cable, positive winding in.
+   */
+  drum: number;
+  /**
+   * Round a trunk or rock: its middle and the strap's radius.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  strap?: [number, number, number, number];
 }
 /**
  * This driver's vehicle has left the road (back at the start screen): others stop drawing it.
@@ -387,4 +425,299 @@ export interface IceHole {
    * Metres south.
    */
   z: number;
+}
+/**
+ * A winch this browser runs has hooked on to another driver's vehicle (`to`), or let go of it (no `to`). The server answers with `towing`.
+ */
+export interface Cable {
+  type: 'cable';
+  /**
+   * The player whose vehicle's winch it is.
+   */
+  from: string;
+  /**
+   * The player whose vehicle it is hooked to.
+   */
+  to?: string;
+  /**
+   * Counts this browser's cable messages; `towing` says which it has seen.
+   */
+  seq: number;
+}
+/**
+ * Our vehicle is being moved somewhere new: every cable on it, or from it, comes off.
+ */
+export interface Free {
+  type: 'free';
+  /**
+   * Counts with `cable`: `towing` says when it has been seen.
+   */
+  seq: number;
+}
+/**
+ * Our controls, while another browser runs our vehicle; sent about 20 times a second and at once on a key press.
+ */
+export interface Drive {
+  type: 'drive';
+  controls: DriveControls;
+}
+/**
+ * A driver's controls, for the browser that runs their vehicle while it is joined to another by a cable.
+ */
+export interface DriveControls {
+  throttle: number;
+  brake: number;
+  steer: number;
+  handbrake: boolean;
+  /**
+   * The pedals are keys, only on or off.
+   */
+  digital: boolean;
+  /**
+   * Winching in.
+   */
+  pull: boolean;
+  /**
+   * Paying cable out.
+   */
+  slack: boolean;
+  lights: boolean;
+  /**
+   * Change between high and low range, once.
+   */
+  range?: boolean;
+  /**
+   * Lock or free this axle's differential, once.
+   */
+  lock?: number;
+  /**
+   * Put the vehicle back on its wheels.
+   */
+  right?: boolean;
+  hook?: Anchor;
+  /**
+   * Unhook the winch.
+   */
+  release?: boolean;
+}
+/**
+ * Something a winch is hooked to: a tree, rock or building by its permanent key, or another driver's vehicle.
+ */
+export interface Anchor {
+  key: string;
+  kind: 'tree' | 'rock' | 'object' | 'vehicle';
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  diameter: number;
+  box?: {
+    hx: number;
+    hz: number;
+    yaw: number;
+  };
+  /**
+   * The player whose vehicle it is.
+   */
+  vehicle?: string;
+  /**
+   * Where on that vehicle, in its own frame, metres.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  local?: [number, number, number];
+}
+/**
+ * This browser no longer runs a vehicle: everything about it, for the browser that runs it from now on.
+ */
+export interface Handover {
+  type: 'handover';
+  /**
+   * The player whose vehicle it is.
+   */
+  vehicle: string;
+  /**
+   * The player whose browser runs it now.
+   */
+  to: string;
+  state: VehicleHandover;
+}
+/**
+ * Everything about a vehicle needed to carry on simulating it in another browser.
+ */
+export interface VehicleHandover {
+  /**
+   * Name of the vehicle definition.
+   */
+  vehicle: string;
+  jump: number;
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  p: [number, number, number];
+  /**
+   * @minItems 4
+   * @maxItems 4
+   */
+  q: [number, number, number, number];
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  v: [number, number, number];
+  /**
+   * Spin, radians a second.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  w: [number, number, number];
+  /**
+   * Per wheel: sink, water, suspension length, roll (radians).
+   *
+   * @maxItems 12
+   */
+  wheels:
+    | []
+    | [[number, number, number, number]]
+    | [[number, number, number, number], [number, number, number, number]]
+    | [[number, number, number, number], [number, number, number, number], [number, number, number, number]]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ]
+    | [
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number],
+        [number, number, number, number]
+      ];
+  gear: number;
+  low: boolean;
+  rpm: number;
+  /**
+   * @maxItems 6
+   */
+  locks:
+    | []
+    | [boolean]
+    | [boolean, boolean]
+    | [boolean, boolean, boolean]
+    | [boolean, boolean, boolean, boolean]
+    | [boolean, boolean, boolean, boolean, boolean]
+    | [boolean, boolean, boolean, boolean, boolean, boolean];
+  holding: boolean;
+  drowned: boolean;
+  /**
+   * Angle of the steered wheels, radians.
+   */
+  steer: number;
+  winch?: WinchHandover;
+}
+/**
+ * Everything about a winch needed to carry on running it.
+ */
+export interface WinchHandover {
+  state: 'stowed' | 'carrying' | 'hooked' | 'reeling';
+  anchor?: Anchor;
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  point: [number, number, number];
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  end: [number, number, number];
+  length: number;
+  carried: number;
+  reelFrom: number;
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  reelStart: [number, number, number];
 }

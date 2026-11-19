@@ -294,7 +294,7 @@ describe('websocket', () => {
 
     // A push goes only to the driver pushed, with who pushed.
     a.ws.send(JSON.stringify({ type: 'push', to: b.id, impulse: [500, 0, -20], at: [1, 2, 4] }));
-    expect(await b.next('push')).toEqual({ type: 'push', from: a.id, impulse: [500, 0, -20], at: [1, 2, 4] });
+    expect(await b.next('push')).toEqual({ type: 'push', from: a.id, to: b.id, impulse: [500, 0, -20], at: [1, 2, 4] });
 
     b.ws.send(JSON.stringify({ type: 'chat', text: ' hej! ' }));
     const line = await a.waitFor('chat', (m) => m.from === b.id);
@@ -363,6 +363,66 @@ describe('websocket', () => {
     expect(b.seen('felled')).toHaveLength(1);
     expect(a.seen('felled')).toHaveLength(0);
     for (const p of [a, b, c]) p.ws.close();
+  });
+
+  it('winching each other: the puller runs the vehicle it hooks on to, and gives it back', async () => {
+    const vehicle = (x: number) => ({
+      region: 'demo', vehicle: 'tgb11', jump: 0, t: 1, paused: false,
+      p: [x, 2, 3], q: [0, 0, 0, 1], v: [0, 0, 0], wheels: [], ground: [],
+      engine: { rpm: 800, gear: 1, low: false, shifting: false, pedal: 0, drowned: false },
+      wading: 0, lights: false, braking: false,
+    });
+    const a = await connect('Anna');
+    const b = await connect('Bo');
+    const c = await connect('Cecilia');
+    for (const k of [a, b, c]) {
+      k.ws.send(JSON.stringify({ type: 'room', region: 'demo' }));
+      await k.next('room');
+    }
+    a.ws.send(JSON.stringify({ type: 'state', vehicle: vehicle(0) }));
+    b.ws.send(JSON.stringify({ type: 'state', vehicle: vehicle(20) }));
+    await c.waitFor('state', (m) => m.id === b.id);
+
+    // Only the browser running a winch may hook it.
+    c.ws.send(JSON.stringify({ type: 'cable', from: a.id, to: b.id, seq: 1 }));
+    expect(await c.waitFor('towing', (m) => m.ack === 1)).toMatchObject({ cables: [], runs: [] });
+    // Nor on to a vehicle that is not on the road.
+    a.ws.send(JSON.stringify({ type: 'cable', from: a.id, to: c.id, seq: 1 }));
+    expect(await a.waitFor('towing', (m) => m.ack === 1)).toMatchObject({ cables: [] });
+
+    a.ws.send(JSON.stringify({ type: 'cable', from: a.id, to: b.id, seq: 2 }));
+    const hooked = await a.waitFor('towing', (m) => m.ack === 2);
+    expect(hooked).toMatchObject({ cables: [{ from: a.id, to: b.id }], runs: [{ vehicle: b.id, by: a.id }] });
+    // Everyone hears it, each with their own ack.
+    expect(await c.waitFor('towing', (m) => m.cables.length === 1)).toMatchObject({ ack: 1 });
+
+    // Bo's browser hands his vehicle over; his controls go to Anna's.
+    const state = {
+      vehicle: 'tgb11', jump: 0, p: [20, 2, 3], q: [0, 0, 0, 1], v: [0, 0, 0], w: [0, 0, 0],
+      wheels: [[0, 0, 0.3, 0]], gear: 1, low: false, rpm: 800, locks: [false], holding: true, drowned: false, steer: 0,
+    };
+    b.ws.send(JSON.stringify({ type: 'handover', vehicle: b.id, to: a.id, state }));
+    expect(await a.next('handover')).toEqual({ type: 'handover', from: b.id, vehicle: b.id, state });
+    const controls = { throttle: 0.5, brake: 0, steer: 0.1, handbrake: false, digital: true, pull: false, slack: false, lights: true, range: true };
+    b.ws.send(JSON.stringify({ type: 'drive', controls }));
+    expect(await a.next('drive')).toEqual({ type: 'drive', from: b.id, controls });
+
+    // From now on Anna's browser speaks for Bo's vehicle; Bo's own word is not passed on.
+    b.ws.send(JSON.stringify({ type: 'state', vehicle: vehicle(99) }));
+    a.ws.send(JSON.stringify({ type: 'state', of: b.id, vehicle: vehicle(21) }));
+    const relayed = await c.waitFor('state', (m) => m.id === b.id && m.by === a.id);
+    expect(relayed.vehicle.p[0]).toBe(21);
+    expect((await b.waitFor('state', (m) => m.id === b.id)).by).toBe(a.id);
+    expect(c.seen('state').some((m) => m.vehicle.p[0] === 99)).toBe(false);
+    // A push on Bo's vehicle goes to Anna's browser, which moves it.
+    c.ws.send(JSON.stringify({ type: 'push', to: b.id, impulse: [500, 0, 0], at: [20, 2, 3] }));
+    expect(await a.next('push')).toMatchObject({ from: c.id, to: b.id });
+
+    // Anna leaves: the cable comes off and Bo runs his own vehicle again.
+    a.ws.close();
+    expect(await b.waitFor('towing', (m) => m.runs.length === 0)).toMatchObject({ cables: [] });
+    b.ws.close();
+    c.ws.close();
   });
 
   it('passes on nothing before hello, and refuses a malformed vehicle', async () => {

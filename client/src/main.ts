@@ -42,8 +42,9 @@ import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu, storedProfile } from './ui/startMenu';
 import { Chat } from './ui/chat';
-import { applyPush, Others } from './multiplayer/others';
+import { Others } from './multiplayer/others';
 import { takeSnapshot } from './multiplayer/track';
+import { Towing } from './multiplayer/towing';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
 import { dateOfYear, formatDuration, seasonName, Trips } from './trips';
@@ -251,6 +252,20 @@ async function start(): Promise<void> {
   /** When our last snapshot went out, and whether the others are drawing our vehicle. */
   let sentAt = 0;
   let present = false;
+  // Winching each other: which browser runs which vehicle, and handing them over.
+  const towing = new Towing({
+    R: RAPIER,
+    defs: Object.values(VEHICLES),
+    others,
+    send: (msg) => connection?.send(msg),
+    world: () => {
+      const w = world;
+      return w && {
+        physics: w.physics, ground: w.ground, obstacles: w.obstacles, region: w.index.name, sim: w.sim, winch: w.winch, jump: jumps,
+        fell: (a, dx, dz) => w.obstacles?.fell(a, dx, dz),
+      };
+    },
+  });
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -386,6 +401,7 @@ async function start(): Promise<void> {
     const { x, z } = clear ? others.clearSpot(x0, z0, heading) : { x: x0, z: z0 };
     const y = w.ground.heightAt(x, z);
     if (y === null) return false;
+    towing.reclaim();
     w.tracks.break();
     w.winch.stow();
     jumps++;
@@ -499,7 +515,7 @@ async function start(): Promise<void> {
     // After a rebuild for new settings, the vehicle goes back where it was.
     const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
     // The winch hooks on to the same trees, rocks and buildings; thin trees pulled too hard go over.
-    const winch = new Winch(sim, obstacles);
+    const winch = new Winch(sim, towing.anchors(obstacles));
     winch.onGiveWay = (anchor, dx, dz) => obstacles?.fell(anchor, dx, dz);
     const winchView = new WinchView();
     scene.add(winchView.group);
@@ -620,6 +636,7 @@ async function start(): Promise<void> {
   };
   /** Rolled back onto its wheels where it lies, keeping its heading. */
   const resetVehicle = (w: World): void => {
+    if (towing.following) return towing.event({ right: true });
     if (w.unplaced || w.sim.beingRighted) return;
     const p = w.sim.body.translation();
     w.winch.stow();
@@ -639,6 +656,7 @@ async function start(): Promise<void> {
       // Not remembered for next time.
     }
     if (w.sim.def === def && w.color === color) return;
+    towing.reclaim();
     const p = w.sim.body.translation();
     const heading = headingOf(w);
     const visible = w.view.group.visible;
@@ -660,6 +678,7 @@ async function start(): Promise<void> {
   };
   /** The start screen, over the world turning slowly. */
   const showStart = (w: World): void => {
+    towing.reclaim();
     starting = true;
     w.unplaced = true;
     w.winch.stow();
@@ -673,6 +692,7 @@ async function start(): Promise<void> {
   };
   /** Off to another start point, which then becomes the one to go back to. */
   const travel = (w: World, s: World['spawn']): void => {
+    towing.reclaim();
     trips.jumped();
     jumps++;
     w.spawn = { name: s.name, x: s.x, z: s.z, heading: s.heading };
@@ -938,11 +958,11 @@ async function start(): Promise<void> {
         lamps = lamps === null ? true : lamps ? false : null;
         break;
       case 'KeyL':
-        if (!flying) w?.sim.toggleRange();
+        if (!flying && w) toggleRange(w);
         break;
       case 'KeyE':
         // The winch: choose an anchor, hook on, unhook.
-        if (w && !flying && !w.unplaced) w.winch.toggle();
+        if (w && !flying && !w.unplaced) winchKey(w);
         break;
       case 'Tab':
         // Choosing an anchor, Tab picks the next one; otherwise it holds the minimap open large.
@@ -960,10 +980,25 @@ async function start(): Promise<void> {
         }
         break;
       default:
-        if (!flying && /^Digit[1-9]$/.test(e.code)) w?.sim.toggleLock(Number(e.code.slice(5)) - 1);
+        if (!flying && w && /^Digit[1-9]$/.test(e.code)) toggleLock(w, Number(e.code.slice(5)) - 1);
     }
     drawHud();
   });
+
+  /** High and low range, diff locks and the winch key: sent on while another browser runs our vehicle. */
+  const toggleRange = (w: World): void => {
+    if (towing.following) towing.event({ range: true });
+    else w.sim.toggleRange();
+  };
+  const toggleLock = (w: World, axle: number): void => {
+    if (towing.following) {
+      if (w.sim.def.axles[axle]?.differential === 'lockable') towing.event({ lock: axle });
+    } else w.sim.toggleLock(axle);
+  };
+  const winchKey = (w: World): void => {
+    if (towing.following) towing.winchKey(w.winch);
+    else w.winch.toggle();
+  };
 
   const playersChanged = (): void => {
     world?.start.setPlayers(others.list());
@@ -977,6 +1012,8 @@ async function start(): Promise<void> {
       link = state;
       if (state.status === 'online') {
         others.me = state.welcome.playerId;
+        towing.me = state.welcome.playerId;
+        towing.reconnected();
         // After a reconnect the others need to see our vehicle again from scratch.
         present = false;
         enterRoom();
@@ -1002,20 +1039,23 @@ async function start(): Promise<void> {
       playersChanged();
     },
     state: (msg) => {
-      if (others.receive(msg.id, msg.vehicle, performance.now())) playersChanged();
+      if (others.receive(msg.id, msg.vehicle, performance.now(), msg.by ?? msg.id)) playersChanged();
     },
     away: (msg) => {
       others.away(msg.id);
       playersChanged();
     },
     push: (msg) => {
-      // Another vehicle pushed ours; only this browser moves it. Heard as a knock too.
+      // Another vehicle pushed one this browser runs; only this browser moves it. Ours is heard as a knock too.
       const w = world;
       if (!w || paused || starting || w.unplaced) return;
-      applyPush(w.sim.body, msg.impulse, msg.at);
+      if (!towing.push(msg.to, msg.impulse, msg.at)) return;
       const force = Math.hypot(...msg.impulse) / (SEND_EVERY / 1000);
       if (impacts.length < 32) impacts.push({ kind: 'object', force });
     },
+    towing: (msg) => towing.onTowing(msg, performance.now()),
+    drive: (msg) => towing.onDrive(msg, performance.now()),
+    handover: (msg) => towing.onHandover(msg, performance.now()),
     room: (msg) => {
       // Entering a region: the trees others knocked down there and the holes in its ice.
       const w = world;
@@ -1046,6 +1086,7 @@ async function start(): Promise<void> {
   const aim = new THREE.Vector3();
   /** What the winch keys do now, at the bottom of the screen while it is in use. */
   let winchShown = '';
+  const nameOf = (id: string): string => others.players.find((p) => p.id === id)?.name ?? 'another driver';
   const drawWinchHelp = (w: World): void => {
     const pad = gamepad.pad !== null;
     const key = (k: string, action: Parameters<typeof gamepad.tapped>[0]): string => `<kbd>${pad ? buttonName(gamepad.bindings[action]) : k}</kbd>`;
@@ -1056,7 +1097,12 @@ async function start(): Promise<void> {
           ? `Winch · ${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('K', 'winchOut')} cancel`
           : `Nothing to hook the winch to within reach ahead · ${key('K', 'winchOut')} cancel`;
       } else if (w.winch.state === 'hooked') {
-        html = `Winch · hold ${key('I', 'winchIn')} to winch in · ${key('K', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
+        const on = towing.hookedTo(towing.me);
+        html = `Winch${on ? ` on ${nameOf(on)}` : ''} · hold ${key('I', 'winchIn')} to winch in · ${key('K', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
+      } else {
+        // Another driver's cable on ours.
+        const by = towing.lines.find((c) => c.to === towing.me)?.from;
+        if (by) html = `On ${nameOf(by)}'s winch · drive to help it along`;
       }
     }
     if (html === winchShown) return;
@@ -1088,14 +1134,14 @@ async function start(): Promise<void> {
         if (gamepad.tapped('toStart')) toStart(w0);
         if (gamepad.tapped('camera')) chase.cycle();
         if (gamepad.tapped('lights')) lamps = lamps === null ? true : lamps ? false : null;
-        if (gamepad.tapped('range')) w0.sim.toggleRange();
-        if (gamepad.tapped('winch') && !w0.unplaced) w0.winch.toggle();
+        if (gamepad.tapped('range')) toggleRange(w0);
+        if (gamepad.tapped('winch') && !w0.unplaced) winchKey(w0);
         if (gamepad.tapped('winchOut') && w0.winch.state === 'choosing') w0.winch.cancel();
         if (gamepad.tapped('locks')) {
           // All lockable axles together: lock them all, or free them all if they already are.
           const lockable = w0.sim.def.axles.map((a, i) => (a.differential === 'lockable' ? i : -1)).filter((i) => i >= 0);
           const lock = lockable.some((i) => !w0.sim.locks[i]);
-          for (const i of lockable) if (w0.sim.locks[i] !== lock) w0.sim.toggleLock(i);
+          for (const i of lockable) if (w0.sim.locks[i] !== lock) toggleLock(w0, i);
         }
       }
     }
@@ -1113,8 +1159,8 @@ async function start(): Promise<void> {
         owed -= STEP;
         steps++;
         const p = w.sim.body.translation();
-        // Physics waits until the ground under the vehicle has arrived.
-        if (!w.ground.update(p.x, p.z)) continue;
+        // Physics waits until the ground under the vehicle, and under any run here for others, has arrived.
+        if (!w.ground.update(p.x, p.z, towing.places())) continue;
         if (w.unplaced) {
           w.unplaced = !setDown(w, w.arrival.x, w.arrival.z, w.arrival.heading, true);
           if (!w.unplaced) {
@@ -1125,13 +1171,21 @@ async function start(): Promise<void> {
             drawHud();
           }
         }
-        w.sim.step(controls, STEP);
-        w.winch.step(STEP, winching);
+        const stepAt = now - owed * 1000;
+        // Our vehicle, unless another browser runs it (joined to theirs by a cable): then it
+        // goes where that one says. Then any vehicles run here for others.
+        if (towing.following) towing.follow(stepAt, STEP);
+        else {
+          w.sim.step(controls, STEP);
+          w.winch.step(STEP, winching);
+        }
+        towing.step(STEP, now);
         w.felling.before();
         // The others' vehicles where they are at the end of this step.
-        others.step(now - owed * 1000);
+        others.step(stepAt);
         w.physics.step(w.felling.events);
-        others.gather(w.sim.chassis);
+        others.gather(towing.chassis());
+        towing.afterStep();
         // The event queue must be emptied every step, with or without obstacles around.
         if (w.obstacles) w.obstacles.afterStep(STEP);
         else w.felling.after(STEP);
@@ -1151,7 +1205,8 @@ async function start(): Promise<void> {
       // While flying with the collider view on, colliders gather round the camera instead,
       // so they can be inspected anywhere.
       const at = flying && w.obstacles?.debug.visible ? camera.position : w.view.group.position;
-      w.obstacles?.update(now / 1000, at.x, at.z);
+      w.obstacles?.update(now / 1000, at.x, at.z, towing.places());
+      towing.update(now);
 
       // The winch: what can be hooked to, picked by looking towards it; the cable.
       chase.freeLook = w.winch.state === 'choosing' && !paused && !w.map.open;
@@ -1188,7 +1243,15 @@ async function start(): Promise<void> {
       // any pushes it gave theirs.
       camera.updateMatrixWorld();
       const onRoad = !starting && !w.unplaced;
-      if (onRoad && now - sentAt >= SEND_EVERY) {
+      if (onRoad && towing.following) {
+        // Another browser runs our vehicle: our controls go there, and it sends the snapshots.
+        present = true;
+        const unit = (x: number): number => Math.min(1, Math.max(0, x));
+        towing.drive({
+          throttle: unit(controls.throttle), brake: unit(controls.brake), steer: Math.min(1, Math.max(-1, controls.steer)),
+          handbrake: controls.handbrake, digital: !!controls.digital, pull: winching.pull, slack: winching.slack, lights: lamps ?? w.environment.dark,
+        }, now);
+      } else if (onRoad && now - sentAt >= SEND_EVERY) {
         sentAt = now;
         present = true;
         for (const push of others.takePushes()) connection?.send({ type: 'push', ...push });
@@ -1201,12 +1264,15 @@ async function start(): Promise<void> {
             paused,
             lights: lamps ?? w.environment.dark,
             braking: w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05,
+            winch: w.winch.info(),
           }),
         });
       } else if (!onRoad && present) {
         present = false;
         connection?.send({ type: 'away' });
       }
+      // Snapshots of the vehicles run here for others, and their pushes.
+      if (onRoad) towing.send(now, paused);
       seeThrough.strength.value = flying || chase.mode === 'cab' ? 0 : 1;
       seeThrough.cab.value = !flying && !starting && chase.mode === 'cab' ? 1 : 0;
       // The vehicle's own space, from just above the ground to the roof: plants there are not drawn.
@@ -1341,7 +1407,7 @@ async function start(): Promise<void> {
 
       dash.visible = !flying && !w.unplaced;
       const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;
-      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || w.sim.holding }, gauge);
+      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || (!towing.following && w.sim.holding) }, gauge);
       hint.style.opacity = now < hintUntil && !paused && winchShown === '' ? '1' : '0';
     }
     // ?look=0 draws the plain picture, without the grade and glow.

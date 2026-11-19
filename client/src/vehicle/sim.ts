@@ -5,7 +5,7 @@
 import type RAPIER from '@dimforge/rapier3d-compat';
 import {
   newDrivetrainState, selectDirection, splitDrive, stepDrivetrain, tireOnGround,
-  type AxleDrive, type DrivetrainState, type VehicleDef,
+  type AxleDrive, type DrivetrainState, type VehicleDef, type VehicleHandover,
 } from '@spar/shared';
 
 type Rapier = typeof RAPIER;
@@ -162,6 +162,22 @@ export interface GroundProbe {
  */
 export const ICE_STRENGTH = 7;
 
+/**
+ * Where another browser says the vehicle is, while that browser runs it (when it is joined to
+ * another driver's vehicle by a cable): as in a snapshot (multiplayer/track.ts).
+ */
+export interface FollowPose {
+  p: readonly number[];
+  q: readonly number[];
+  /** Per wheel: steer, suspension, sink, spin, skid, slide, water. */
+  wheels: readonly (readonly number[])[];
+  /** Per wheel, the ground under it; '' off the ground. */
+  ground: readonly string[];
+  engine: { rpm: number; gear: number; low: boolean; shifting: boolean; pedal: number; drowned: boolean };
+  wading: number;
+  speed: number;
+}
+
 /** Seconds the vehicle takes to roll back onto its wheels. */
 const RIGHTING_TIME = 1.2;
 /** How high it is lifted on the way, metres. */
@@ -205,6 +221,8 @@ export class VehicleSim {
   holding = true;
   /** Set while a winch pulls the vehicle along, so it does not hold itself still against it. */
   pulled = false;
+  /** Set by another vehicle's winch pulling this one, for this step only: it lets go of its hold too. */
+  towed = false;
   /** True once water has got into the engine; it starts again after a while out of the water. */
   drowned = false;
   /** Deepest water around the vehicle, metres above the bottom of its tyres. */
@@ -228,6 +246,8 @@ export class VehicleSim {
   private steerAngle = 0;
   /** How far in an eased (key-pressed) driving pedal is, 0..1. */
   private eased = 0;
+  /** True while another browser runs it and this one only follows what it says (`follow`). */
+  private followed = false;
   /** While being put back on its wheels: where from, where to, and how far along (0..1). */
   private righting: { from: { p: { x: number; y: number; z: number }; q: Quat }; to: { p: { x: number; y: number; z: number }; q: Quat }; t: number } | null = null;
 
@@ -313,6 +333,7 @@ export class VehicleSim {
   place(x: number, y: number, z: number, heading: number): void {
     // Local +z is forward; turning by (180° - heading) about the vertical points it the right way.
     const half = ((180 - heading) * Math.PI) / 360;
+    this.unfollow();
     this.body.setTranslation({ x, y, z }, true);
     this.body.setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -455,7 +476,9 @@ export class VehicleSim {
 
     // With nobody on the pedals, once nearly stopped, hold still instead of creeping
     // downhill; a pedal lets go again.
-    if (drive >= 0.02 || brake >= 0.02 || this.pulled) this.holding = false;
+    const pulled = this.pulled || this.towed;
+    this.towed = false;
+    if (drive >= 0.02 || brake >= 0.02 || pulled) this.holding = false;
     else if (Math.abs(this.speed) < 0.6) this.holding = true;
     const weight = def.chassis.mass * GRAVITY;
     const handbraked = def.axles.filter((a) => a.handbrake).length * 2 || this.wheels.length;
@@ -676,6 +699,111 @@ export class VehicleSim {
         z: (fz * dragAhead + az * dragSide) * dt,
       }, { x, y, z }, true);
     }
+  }
+
+  /** Everything needed to carry on running this vehicle elsewhere (without its winch). */
+  save(jump: number): Omit<VehicleHandover, 'winch'> {
+    const p = this.body.translation(), q = this.body.rotation(), v = this.body.linvel(), w = this.body.angvel();
+    const d = this.drivetrain;
+    return {
+      vehicle: this.def.name,
+      jump,
+      p: [p.x, p.y, p.z],
+      q: [q.x, q.y, q.z, q.w],
+      v: [v.x, v.y, v.z],
+      w: [w.x, w.y, w.z],
+      wheels: this.wheels.map((wheel) => [wheel.sink, wheel.water, wheel.suspension, wheel.rotation]) as VehicleHandover['wheels'],
+      gear: d.gear,
+      low: d.range === 'low',
+      rpm: d.rpm,
+      locks: [...this.locks] as VehicleHandover['locks'],
+      holding: this.holding,
+      drowned: this.drowned,
+      steer: this.steerAngle,
+    };
+  }
+
+  /** Carries on from what another browser saved (`save`), running the vehicle here again. */
+  load(s: Omit<VehicleHandover, 'winch'>): void {
+    this.unfollow();
+    const [px = 0, py = 0, pz = 0] = s.p, [qx = 0, qy = 0, qz = 0, qw = 1] = s.q;
+    this.body.setTranslation({ x: px, y: py, z: pz }, true);
+    this.body.setRotation({ x: qx, y: qy, z: qz, w: qw }, true);
+    this.body.setLinvel({ x: s.v[0]!, y: s.v[1]!, z: s.v[2]! }, true);
+    this.body.setAngvel({ x: s.w[0]!, y: s.w[1]!, z: s.w[2]! }, true);
+    this.wheels.forEach((wheel, i) => {
+      const [sink = 0, water = 0, suspension = wheel.suspension, rotation = wheel.rotation] = s.wheels[i] ?? [];
+      Object.assign(wheel, { sink, water, suspension, rotation });
+    });
+    const d = this.drivetrain;
+    d.gear = s.gear || 1;
+    d.range = s.low && this.def.drivetrain.ranges.low !== undefined ? 'low' : 'high';
+    d.rpm = s.rpm;
+    d.shifting = 0;
+    if (s.locks.length === this.locks.length) s.locks.forEach((l, i) => (this.locks[i] = l));
+    this.holding = s.holding;
+    this.drowned = s.drowned;
+    this.drowning = 0;
+    this.steerAngle = s.steer;
+    this.eased = 0;
+    this.righting = null;
+  }
+
+  /** True while another browser runs this vehicle and this one follows it. */
+  get following(): boolean {
+    return this.followed;
+  }
+
+  /**
+   * Another browser runs the vehicle: moves it to where that browser says, as a body nothing
+   * here can push, and takes the wheels and engine from it too. `pose` null holds it where it is.
+   */
+  follow(pose: FollowPose | null, dt: number): void {
+    if (!this.followed) {
+      this.followed = true;
+      this.righting = null;
+      this.body.setBodyType(this.R.RigidBodyType.KinematicPositionBased, true);
+    }
+    if (!pose) {
+      this.body.setNextKinematicTranslation(this.body.translation());
+      this.body.setNextKinematicRotation(this.body.rotation());
+      return;
+    }
+    const [x = 0, y = 0, z = 0] = pose.p, [qx = 0, qy = 0, qz = 0, qw = 1] = pose.q;
+    const q = { x: qx, y: qy, z: qz, w: qw };
+    this.body.setNextKinematicTranslation({ x, y, z });
+    this.body.setNextKinematicRotation(q);
+    this.speed = pose.speed;
+    this.pedal = pose.engine.pedal;
+    this.drowned = pose.engine.drowned;
+    this.wading = pose.wading;
+    Object.assign(this.drivetrain, { gear: pose.engine.gear, range: pose.engine.low ? 'low' : 'high', rpm: pose.engine.rpm, shifting: pose.engine.shifting ? 0.1 : 0 });
+    const r = this.def.wheels.radius;
+    const load = (this.def.chassis.mass * GRAVITY) / this.wheels.length;
+    const [ux, uy, uz] = rotate(q, 0, 1, 0);
+    this.wheels.forEach((wheel, i) => {
+      const [steer = 0, suspension = wheel.suspension, sink = 0, spin = 0, skid = 0, slide = 0, water = 0] = pose.wheels[i] ?? [];
+      Object.assign(wheel, { steer, suspension, sink, spin, skid, slide, water });
+      wheel.rotation = (wheel.rotation + (pose.speed / r) * dt) % (Math.PI * 2);
+      const ground = pose.ground[i] ?? '';
+      wheel.contact = ground !== '';
+      if (wheel.contact) wheel.ground = ground;
+      wheel.load = wheel.contact ? load : 0;
+      wheel.bump = Math.min(1, Math.max(0, (this.restLength[i]! - suspension) / this.travel[i]!));
+      const at = this.wheelPosition(i);
+      const [ox, oy, oz] = rotate(q, at.x, at.y - r + sink + water, at.z);
+      Object.assign(wheel.point, { x: x + ox, y: y + oy, z: z + oz });
+      Object.assign(wheel.normal, { x: ux, y: uy, z: uz });
+    });
+  }
+
+  /** Runs the vehicle here again where it stands, still. */
+  unfollow(): void {
+    if (!this.followed) return;
+    this.followed = false;
+    this.body.setBodyType(this.R.RigidBodyType.Dynamic, true);
+    this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
   }
 
   dispose(): void {

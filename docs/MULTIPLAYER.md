@@ -1,14 +1,14 @@
 # Multiplayer plan
 
 Step 6 of `PLAN.md`, revisited. Started on 2026-11-19 with the recommendations below accepted
-(see "Answered" in `QUESTIONS.md`). Stages 1 to 3 are built; see "Stages" for what they do and
+(see "Answered" in `QUESTIONS.md`). Stages 1 to 4 are built; see "Stages" for what they do and
 do not do yet.
 
 ## What exists today
 
 - **The server** already owns what everyone must agree on: the clock and the weather
   (`server/src/world.ts`), sent to every client every 2 s. Any client can change them with
-  `set_world`. Messages have JSON Schemas and a protocol version (now 6), and the server
+  `set_world`. Messages have JSON Schemas and a protocol version (now 7), and the server
   validates what it receives.
 - **The vehicle** is simulated entirely in the browser (`VehicleSim`, Rapier). Its state record
   already has room for an `authority` field (planned since milestone 1).
@@ -29,10 +29,11 @@ do not do yet.
 | Clock, date, weather | Server | `world`, every 2 s and on change |
 | Felled trees, holes in the ice | The browser where it happened, kept by the server | an event, once; a list for anyone joining |
 | Tracks, spray, exhaust, sound of others' vehicles | Worked out by each browser from the state it receives | nothing extra |
-| A vehicle being winched by another player | The puller's browser, for as long as the cable is on | the `authority` field moves (see Winching) |
+| A vehicle joined to another by a cable | One browser for the whole group, chosen by the server | `towing`, from the server (see Winching) |
 | Logbook, settings | Your browser | nothing |
 
-The server stays a relay with a memory. It runs no physics. That suits up to 5 players on one
+The server stays a relay with a memory. It runs no physics; for cables it keeps the list and
+decides which browser runs which vehicle. That suits up to 5 players on one
 network, and keeps the server as small as it is now. Physics on the server would only be
 needed for strangers over the internet, where you cannot trust a browser's word, and that is
 not the aim.
@@ -48,8 +49,9 @@ sender's id. Roughly:
 - per wheel: steer, rotation, suspension travel, sink, spin and slide, snow and water depth
 - engine: rpm, throttle, gear, high or low range, which diffs are locked, drowned
 - lights; grime level (a few numbers, sent once a second is enough)
-- winch: its state, the anchor's key or the hooked vehicle's id, cable length
-- `authority`: who simulates it
+- winch, while its cable is out: its state, the cable's far end, length, pull and drum
+- who simulates it: the server's `towing` says, and a snapshot sent for another driver's
+  vehicle carries `by`
 
 JSON is fine: about 600 bytes, so 5 players at 20 a second is around 60 kB/s for each client.
 That's nothing on a home network. Numbers are rounded before sending, and the schema keeps the
@@ -193,15 +195,47 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    and menu) sets off just behind them; in another region the page loads it first and joins
    once their vehicle shows up (within 30 s). A message the server refuses is only logged now,
    instead of marking the connection as offline. Protocol 6.
-4. **Winching each other.** Authority moves to the puller while hooked; cabled vehicles form
-   a group run by one browser, so chains work.
+4. **Winching each other.** *Built.* Another driver's vehicle is an anchor like a tree: the hook
+   goes on its nearer tow point (`Others.vehicleAnchors`). The browser running a winch tells
+   the server when it hooks on to a vehicle or lets go (`cable { from, to?, seq }`). The server
+   keeps the cables and works out who runs each group (`server/src/towing.ts`, rules as under
+   "Chains" above), and sends everyone `towing { cables, runs, ack }`. `ack` is the last
+   `cable` or `free` from that browser it took into account, so a browser can tell a cable the
+   server refused from one it has not seen yet. In the browser, `multiplayer/towing.ts`
+   handles the rest:
+   - **Giving a vehicle away:** `handover { vehicle, to, state }` carries everything about the
+     vehicle and its winch (`VehicleSim.save`, `Winch.save`).
+   - **Taking one over:** the browser waits up to a second for the handover, then carries on
+     from the vehicle's last snapshot instead. It simulates the vehicle in its own physics
+     world with the driver's `drive` controls, which are sent 20 times a second and at once on
+     a key press (range, diff locks, getting back on the wheels, hooking on, unhooking). It
+     sends the vehicle's snapshots as `state { of }`, which the server passes on with `by`.
+   - **Your own vehicle run elsewhere:** it becomes a kinematic body following those snapshots
+     (`VehicleSim.follow`), and your winch shows theirs (`Winch.mirror`). Choosing what to hook
+     on to still happens on your screen.
+   - **Moving your vehicle somewhere new** (start point, start screen, another vehicle) sends
+     `free`: every cable on it comes off, and your browser runs it again at once.
+   - **Server checks:** only the browser running a vehicle may speak for it or hook its winch,
+     and a push goes to the browser running the pushed vehicle. A driver leaving, going to the
+     start screen or changing region frees their vehicle. When a browser that ran others
+     disconnects, the cables of the vehicles it ran come off too.
+   - **Drawing:** a snapshot carries the winch's cable while it is out, so everyone sees
+     everyone's cables. Ground and tree colliders are kept around every vehicle a browser runs.
+
+   Known limits:
+   - Pausing freezes the vehicles you run for others.
+   - A vehicle run for someone else breaks thin trees only by pushing on them, not by
+     hitting them at speed: tree breaking still measures our own vehicle's speed.
+   - The diff lock lights on a towed driver's dash do not change until they drive their own
+     vehicle again. Protocol 7.
 5. **Together.** Shared destinations, the host's address in the start menu, the
    performance pass with 5 vehicles (draw calls, sound sources, particles).
 
 ## Testing
 
 - **Unit tests:** interpolation and extrapolation, the state message both ways against the
-  schema, the authority handover.
+  schema, the authority handover (`multiplayer/towing.test.ts` runs three browsers, each with
+  its own physics, through the server's towing rules).
 - **Server tests** (like `server.test.ts`): several headless WebSocket clients join, send state,
   fell a tree, leave, rejoin; a late joiner gets the full list.
 - **Headless screenshots:** two pages in one browser, each driving a scripted route, each

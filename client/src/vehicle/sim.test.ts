@@ -409,3 +409,50 @@ describe('electric pickup', () => {
     expect(car.drivetrain.range).toBe('high');
   });
 });
+
+describe('handing a vehicle between browsers', () => {
+  it('carries on in another world from what it saved', () => {
+    const a = setup('tgb11');
+    a.run(1);
+    a.run(4, { throttle: 1, steer: 0.3 });
+    const saved = a.car.save(3);
+    const b = setup('tgb11');
+    b.car.load(saved);
+    expect(b.car.body.translation()).toEqual(a.car.body.translation());
+    expect(b.car.speed).toBe(0); // worked out on the next step
+    b.run(DT);
+    expect(b.car.speed).toBeCloseTo(a.car.speed, 0);
+    expect(b.car.drivetrain.gear).toBe(a.car.drivetrain.gear);
+    expect(saved.jump).toBe(3);
+    // Both go on the same way.
+    a.run(1, { throttle: 1, steer: 0.3 });
+    b.run(1 - DT, { throttle: 1, steer: 0.3 });
+    const pa = a.car.body.translation(), pb = b.car.body.translation();
+    expect(Math.hypot(pa.x - pb.x, pa.z - pb.z)).toBeLessThan(0.3);
+  });
+
+  it('follows what another browser says, then runs again as a body with its own weight', () => {
+    const { car, world, run } = setup('tgb11');
+    run(1);
+    const pose = {
+      p: [5, 0.2, -3], q: [0, 0, 0, 1], wheels: car.wheels.map(() => [0.1, 0.4, 0.05, 0.5, 0, 0, 0]), ground: car.wheels.map(() => 'mud'),
+      engine: { rpm: 1500, gear: 2, low: true, shifting: false, pedal: 0.6, drowned: false }, wading: 0, speed: 3,
+    };
+    for (let i = 0; i < 10; i++) {
+      car.follow(pose, DT);
+      world.step();
+    }
+    expect(car.following).toBe(true);
+    expect(car.body.translation().x).toBeCloseTo(5);
+    expect(car.drivetrain.gear).toBe(2);
+    expect(car.drivetrain.range).toBe('low');
+    expect(car.wheels[0]!.ground).toBe('mud');
+    expect(car.wheels[0]!.sink).toBeCloseTo(0.05);
+    car.load(car.save(0));
+    expect(car.following).toBe(false);
+    expect(car.body.mass()).toBeCloseTo(car.def.chassis.mass, 0);
+    run(2);
+    // Back on its wheels on the ground, held by its own weight.
+    expect(Math.abs(car.body.translation().y)).toBeLessThan(0.05);
+  });
+});

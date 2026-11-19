@@ -145,3 +145,106 @@ describe('winch', () => {
     expect(turned.x).toBeCloseTo(8);
   });
 });
+
+describe('winching another vehicle', () => {
+  /** Two vehicles facing north in one world: Anna's at z = 0, Bo's stuck in front of her. */
+  function pair(gap = 20) {
+    const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+    world.timestep = DT;
+    world.createCollider(RAPIER.ColliderDesc.cuboid(400, 1, 400).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, 0xffff)));
+    const probe = { groundAt: () => 'dirt', wetness: () => 0, softness: () => 0, waterDepth: () => 0 };
+    const anna = new VehicleSim(RAPIER, world, load('tgb11'), probe);
+    const bo = new VehicleSim(RAPIER, world, load('ltb4'), probe);
+    anna.place(0, 0.05, 0, 0);
+    bo.place(0, 0.05, -gap, 0);
+    /** Whether Bo's vehicle is run in this world (dynamic) or still in another browser. */
+    let runHere = true;
+    const winch = new Winch(anna, {
+      anchorsNear: () => [],
+      standing: () => true,
+      vehicle: (id) =>
+        id === 'bo'
+          ? { translation: () => bo.body.translation(), rotation: () => bo.body.rotation(), ...(runHere && { dynamic: bo.body, towed: () => (bo.towed = true) }) }
+          : null,
+    });
+    const rear = bo.def.attachments.find((a) => a.name === 'rear_tow')!.position as [number, number, number];
+    const anchor: Anchor = { key: 'v:bo', kind: 'vehicle', x: 0, y: 0.6, z: -gap, radius: 0, diameter: 0, vehicle: 'bo', local: rear };
+    const run = (seconds: number, controls: WinchControls = none) => {
+      for (let s = 0; s < Math.round(seconds / DT); s++) {
+        anna.step({ ...idle, handbrake: true }, DT);
+        winch.step(DT, controls);
+        bo.step(idle, DT);
+        world.step();
+      }
+    };
+    return { anna, bo, winch, anchor, run, setRunHere: (v: boolean) => (runHere = v) };
+  }
+
+  it('pulls the other vehicle towards ours, which lets go of its hold', () => {
+    const { anna, bo, winch, anchor, run } = pair();
+    run(1);
+    winch.hookTo(anchor);
+    expect(winch.towing).toBe('bo');
+    run(2);
+    expect(winch.state).toBe('hooked');
+    const before = bo.body.translation().z;
+    run(8, { pull: true, slack: false });
+    // Bo comes several metres closer; Anna, on her handbrake and heavier, hardly moves.
+    expect(bo.body.translation().z - before).toBeGreaterThan(2);
+    expect(Math.abs(anna.body.translation().z)).toBeLessThan(0.5);
+    expect(winch.tension).toBeGreaterThan(0);
+    // The hook stays on Bo's tow point as he moves.
+    expect(Math.abs(winch.end.z - bo.body.translation().z - (-anchor.local![2]))).toBeLessThan(0.2);
+  });
+
+  it('pays out freely while the other vehicle is still run elsewhere, then takes up the slack', () => {
+    const { bo, winch, anchor, run, setRunHere } = pair();
+    setRunHere(false);
+    run(1);
+    winch.hookTo(anchor);
+    run(2);
+    const before = bo.body.translation().z;
+    run(3, { pull: true, slack: false });
+    expect(winch.tension).toBe(0);
+    expect(Math.abs(bo.body.translation().z - before)).toBeLessThan(0.05);
+    setRunHere(true);
+    run(8, { pull: true, slack: false });
+    expect(bo.body.translation().z - before).toBeGreaterThan(1);
+  });
+
+  it('comes free when the other vehicle leaves the road', () => {
+    const { winch, anchor, run } = pair();
+    run(0.5);
+    winch.hookTo({ ...anchor, vehicle: 'gone' });
+    run(0.2);
+    expect(['reeling', 'stowed']).toContain(winch.state);
+    expect(winch.towing).toBeNull();
+  });
+
+  it('is handed over whole, and tells others what to draw', () => {
+    const { anna, winch, anchor, run } = pair();
+    run(1);
+    winch.hookTo(anchor);
+    run(2);
+    const saved = winch.save();
+    expect(saved).toMatchObject({ state: 'hooked', anchor: { kind: 'vehicle', vehicle: 'bo' } });
+    const again = new Winch(anna, null);
+    again.restore(saved);
+    expect(again.state).toBe('hooked');
+    expect(again.length).toBeCloseTo(winch.length);
+    expect(again.towing).toBe('bo');
+    // What others draw, and our own browser while another runs our vehicle.
+    const info = winch.info()!;
+    expect(info.state).toBe('hooked');
+    expect(info.strap).toBeUndefined();
+    const shown = new Winch(anna, null);
+    shown.mirror(info);
+    expect(shown.state).toBe('hooked');
+    expect(shown.events).toEqual(['hooked']);
+    // Choosing stays our own while the other browser has the cable on the drum.
+    shown.mirror(undefined);
+    shown.choose();
+    shown.mirror(undefined);
+    expect(shown.state).toBe('choosing');
+  });
+});

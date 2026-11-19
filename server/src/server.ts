@@ -9,6 +9,7 @@ import { AREA_SIZES, AreaMaker, checkRequest, cleanStarts, fromHost, readStarts,
 import { cleanName, describeWorldChange, playerList } from './players';
 import { listRegions } from './regions';
 import { Rooms } from './rooms';
+import { Towing } from './towing';
 import { serveFile } from './static';
 import { WorldState } from './world';
 
@@ -163,6 +164,12 @@ export function createGameServer(config: ServerConfig): GameServer {
   const world = new WorldState(config);
   /** Trees knocked down and holes in the ice, per region. */
   const rooms = new Rooms();
+  /** Cables between drivers' vehicles, and which browser runs which vehicle. */
+  const towing = new Towing();
+  /** The last `cable` message seen from each socket, told back in `towing`. */
+  const acks = new Map<WebSocket, number>();
+  /** Drivers whose vehicle is on the road (sending state, not away): only those can be hooked on to. */
+  const onRoad = new Set<string>();
   /** Everyone who has said hello, by their socket. */
   const joined = new Map<WebSocket, Player>();
   /**
@@ -195,6 +202,15 @@ export function createGameServer(config: ServerConfig): GameServer {
     for (const [ws, p] of joined) if (ws !== except && p.region === region && ws.readyState === ws.OPEN) ws.send(text);
   };
   const announcePlayers = (): void => broadcast({ type: 'players', players: playerList(joined.values()) });
+  /** The cables and who runs what, to one socket or everyone, each with their own `ack`. */
+  const towingTo = (ws: WebSocket): void => send(ws, { type: 'towing', ...towing.list(), ack: acks.get(ws) ?? 0 });
+  const announceTowing = (): void => {
+    for (const ws of joined.keys()) if (ws.readyState === ws.OPEN) towingTo(ws);
+  };
+  const socketOf = (id: string): WebSocket | undefined => {
+    for (const [ws, p] of joined) if (p.id === id && ws.readyState === ws.OPEN) return ws;
+    return undefined;
+  };
   const say = (text: string): void => broadcast({ type: 'chat', text });
   const gone = (player: Player): void => {
     broadcast({ type: 'away', id: player.id });
@@ -210,6 +226,10 @@ export function createGameServer(config: ServerConfig): GameServer {
       const player = joined.get(ws);
       if (!player) return;
       joined.delete(ws);
+      acks.delete(ws);
+      onRoad.delete(player.id);
+      // Its cables come off at once, and the vehicles its browser ran go back to their drivers.
+      if (towing.leave(player.id)) announceTowing();
       const token = tokens.get(ws);
       tokens.delete(ws);
       if (!token || rejoinMs <= 0) return gone(player);
@@ -262,6 +282,7 @@ export function createGameServer(config: ServerConfig): GameServer {
         joined.set(ws, player);
         if (msg.token && !taken) tokens.set(ws, msg.token);
         announcePlayers();
+        towingTo(ws);
         if (!back) say(`${player.name} joined`);
         return;
       }
@@ -278,11 +299,18 @@ export function createGameServer(config: ServerConfig): GameServer {
           announcePlayers();
           break;
         }
-        case 'state':
-          // Passed on as it came; each browser draws the others' vehicles from it.
-          broadcast({ type: 'state', id: player.id, vehicle: msg.vehicle }, ws);
+        case 'state': {
+          // Passed on as it came; each browser draws the others' vehicles from it. Only the
+          // browser that runs a vehicle speaks for it: a late word from the one before is dropped.
+          const of = msg.of ?? player.id;
+          if (towing.runnerOf(of) !== player.id) break;
+          onRoad.add(of);
+          broadcast(msg.of === undefined ? { type: 'state', id: player.id, vehicle: msg.vehicle } : { type: 'state', id: of, by: player.id, vehicle: msg.vehicle }, ws);
           break;
+        }
         case 'away':
+          onRoad.delete(player.id);
+          if (towing.free(player.id)) announceTowing();
           broadcast({ type: 'away', id: player.id }, ws);
           break;
         case 'room':
@@ -290,6 +318,7 @@ export function createGameServer(config: ServerConfig): GameServer {
           if (player.region !== msg.region) {
             player.region = msg.region;
             announcePlayers();
+            if (towing.free(player.id)) announceTowing();
           }
           send(ws, { type: 'room', region: msg.region, ...rooms.state(msg.region) });
           break;
@@ -299,13 +328,42 @@ export function createGameServer(config: ServerConfig): GameServer {
         case 'ice_hole':
           if (rooms.breakIce(msg.region, msg.hole)) toRoom(msg.region, { type: 'ice_hole', region: msg.region, hole: msg.hole }, ws);
           break;
-        case 'push':
-          // Only to the driver pushed: their browser moves their vehicle.
-          for (const [other, p] of joined) {
-            if (p.id !== msg.to || other === ws || other.readyState !== other.OPEN) continue;
-            other.send(JSON.stringify({ type: 'push', from: player.id, impulse: msg.impulse, at: msg.at } satisfies ServerMessage));
-          }
+        case 'push': {
+          // Only to the browser that runs the vehicle pushed: it alone moves it.
+          const to = socketOf(towing.runnerOf(msg.to));
+          if (to && to !== ws) send(to, { type: 'push', from: player.id, to: msg.to, impulse: msg.impulse, at: msg.at });
           break;
+        }
+        case 'cable': {
+          acks.set(ws, msg.seq);
+          // Only the browser that runs the winch's vehicle may hook it; only on to a vehicle
+          // on the road in the same region.
+          const from = [...joined.values()].find((p) => p.id === msg.from);
+          const to = msg.to === undefined ? undefined : [...joined.values()].find((p) => p.id === msg.to);
+          const allowed = towing.runnerOf(msg.from) === player.id && !!from
+            && (msg.to === undefined || (!!to && to.region === from.region && onRoad.has(to.id) && onRoad.has(from.id)));
+          const changed = allowed && (msg.to === undefined ? towing.unhook(msg.from) : towing.hook(msg.from, msg.to));
+          if (changed) announceTowing();
+          else towingTo(ws);
+          break;
+        }
+        case 'free':
+          acks.set(ws, msg.seq);
+          if (towing.free(player.id)) announceTowing();
+          else towingTo(ws);
+          break;
+        case 'drive': {
+          // To the browser running this driver's vehicle, if not their own.
+          const runner = towing.runnerOf(player.id);
+          const to = runner === player.id ? undefined : socketOf(runner);
+          if (to) send(to, { type: 'drive', from: player.id, controls: msg.controls });
+          break;
+        }
+        case 'handover': {
+          const to = socketOf(msg.to);
+          if (to && to !== ws) send(to, { type: 'handover', from: player.id, vehicle: msg.vehicle, state: msg.state });
+          break;
+        }
         case 'chat': {
           const text = msg.text.trim();
           if (text) broadcast({ type: 'chat', from: player.id, name: player.name, text });

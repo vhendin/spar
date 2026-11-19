@@ -2,8 +2,27 @@
 // pulled straight, and the strap round the anchor.
 
 import * as THREE from 'three/webgpu';
+import type { VehicleDef } from '@spar/shared';
 import type { Anchor } from './obstacles';
-import { hookPoint, type Winch } from './winch';
+import { hookPoint, type WinchState } from './winch';
+
+type V3 = { x: number; y: number; z: number };
+
+/** What drawing a cable needs: our own winch, or another driver's from their snapshots. */
+export interface CableView {
+  readonly def: VehicleDef;
+  readonly state: WinchState;
+  /** The cable's free end (world). */
+  readonly end: V3;
+  readonly length: number;
+  readonly tension: number;
+  /** What it is hooked round, for the strap. */
+  readonly anchor: Pick<Anchor, 'x' | 'y' | 'z' | 'radius' | 'box' | 'kind'> | null;
+  /** While choosing: what is in reach, and which is picked. */
+  readonly choices: readonly Anchor[];
+  readonly picked: number;
+  origin(): V3;
+}
 
 /** Pieces the cable is drawn in. */
 const SEGMENTS = 40;
@@ -18,7 +37,7 @@ const OTHER = new THREE.Color(0xd8e2e6);
 type HeightFn = (x: number, z: number) => number | null;
 
 /** A ring's radius round an anchor. */
-const ringRadius = (a: Anchor): number => (a.box ? 0.35 : Math.min(2, a.radius + 0.18));
+const ringRadius = (a: Anchor): number => (a.kind === 'vehicle' ? 0.6 : a.box ? 0.35 : Math.min(2, a.radius + 0.18));
 
 export class WinchView {
   readonly group = new THREE.Group();
@@ -73,9 +92,9 @@ export class WinchView {
    * Call every frame. `vehicle` is the drawn vehicle (so the cable stays on it between physics
    * steps), `at` where on it the cable leaves.
    */
-  update(dt: number, winch: Winch, vehicle: THREE.Object3D, heightAt: HeightFn, eye: THREE.Vector3): void {
+  update(dt: number, winch: CableView, vehicle: THREE.Object3D, heightAt: HeightFn, eye: THREE.Vector3): void {
     this.time += dt;
-    const at = winch.sim.def.attachments.find((a) => a.name === winch.sim.def.winch?.attachment)?.position;
+    const at = winch.def.attachments.find((a) => a.name === winch.def.winch?.attachment)?.position;
     this.drawChoices(winch, eye);
     if (!at || winch.state === 'stowed' || winch.state === 'choosing') {
       this.cable.count = 0;
@@ -116,7 +135,7 @@ export class WinchView {
     this.cable.instanceMatrix.needsUpdate = true;
 
     const anchor = winch.anchor;
-    this.strap.visible = winch.state === 'hooked' && anchor !== null && !anchor.box;
+    this.strap.visible = winch.state === 'hooked' && anchor !== null && !anchor.box && anchor.kind !== 'vehicle';
     if (anchor && this.strap.visible) {
       this.strap.position.set(anchor.x, anchor.y, anchor.z);
       this.strap.scale.setScalar(anchor.radius + 0.03);
@@ -125,7 +144,7 @@ export class WinchView {
     this.hook.position.copy(this.to);
   }
 
-  private drawChoices(winch: Winch, eye: THREE.Vector3): void {
+  private drawChoices(winch: CableView, eye: THREE.Vector3): void {
     const choices = winch.state === 'choosing' ? winch.choices : [];
     const n = Math.min(MAX_MARKERS, choices.length);
     const pulse = 1 + 0.12 * Math.sin(this.time * 6);
@@ -153,5 +172,10 @@ export class WinchView {
 
   dispose(): void {
     this.group.removeFromParent();
+    this.group.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      o.geometry.dispose();
+      (o.material as THREE.Material).dispose();
+    });
   }
 }
