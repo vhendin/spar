@@ -1,11 +1,23 @@
 // The other drivers: who is connected, and their vehicles drawn where their snapshots say,
-// with their name over each. Only those in the same region as us are drawn. They are only
-// pictures for now: nothing here touches the physics, so vehicles pass through each other.
+// with their name over each. Only those in the same region as us are drawn. Each has its
+// spray, exhaust, tracks, mud and sound, worked out here from what its snapshots tell, and a
+// solid body in our physics: our vehicle bounces off it, and the push goes to its driver,
+// whose browser moves it.
 
+import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
 import type { Player, VehicleDef, VehicleSnapshot } from '@spar/shared';
-import { aimBeam, HEADLIGHT, newBeam, VehicleView, type VehicleShape } from '../vehicle/view';
+import type { AudioOut } from '../audio/output';
+import { VehicleAudio } from '../audio/vehicleAudio';
+import { Exhaust } from '../vehicle/exhaust';
+import { GROUP_VEHICLE, groups, type WheelTelemetry } from '../vehicle/sim';
+import { Spray } from '../vehicle/spray';
+import type { VehicleState } from '../vehicle/state';
+import { Tracks } from '../vehicle/tracks';
+import { aimBeam, HEADLIGHT, newBeam, VehicleView } from '../vehicle/view';
 import { Track, type Pose } from './track';
+
+type Rapier = typeof RAPIER;
 
 /** A vehicle not heard from for this long (ms) is taken away. */
 const SILENT = 5000;
@@ -20,11 +32,30 @@ const FADE_TO = 600;
 const BEAM_CARS = 2;
 /** Metres between vehicles set down at the same start point. */
 const SPACING = 9;
+/** Within this distance (m) of the camera another vehicle throws spray and smoke and leaves tracks. */
+const EFFECTS = 400;
+/** Heard within HEAR metres; its sound is let go beyond FORGET. */
+const HEAR = 300;
+const FORGET = 380;
+/** A body further than this (m) from where it should be is put there at once instead of moved. */
+const TELEPORT = 5;
+/** The most a push may change the other vehicle's speed by in one message, m/s. */
+const MOST_PUSH = 3;
 
-/** Another driver's vehicle as the view needs it, moved along by their snapshots. */
-class RemoteVehicle implements VehicleShape {
-  readonly wheels: { steer: number; rotation: number; suspension: number }[];
+/** Another driver's vehicle as the view and the effects need it, moved along by their snapshots. */
+class RemoteVehicle implements VehicleState {
+  readonly wheels: WheelTelemetry[];
+  readonly drivetrain = { gear: 1, range: 'high' as 'high' | 'low', rpm: 0, shifting: 0 };
+  speed = 0;
+  pedal = 0;
+  drowned = false;
+  wading = 0;
   private pose: Pose | null = null;
+  /** Suspension length at rest and travel, per wheel, for how hard each is pushed up. */
+  private readonly rest: number[] = [];
+  private readonly travel: number[] = [];
+  private readonly q = new THREE.Quaternion();
+  private readonly v = new THREE.Vector3();
   readonly body = {
     translation: () => {
       const p = this.pose?.p ?? [0, -1e4, 0];
@@ -34,10 +65,24 @@ class RemoteVehicle implements VehicleShape {
       const q = this.pose?.q ?? [0, 0, 0, 1];
       return { x: q[0], y: q[1], z: q[2], w: q[3] };
     },
+    linvel: () => {
+      const v = this.pose?.v ?? [0, 0, 0];
+      return { x: v[0], y: v[1], z: v[2] };
+    },
+    mass: () => this.def.chassis.mass,
   };
 
   constructor(readonly def: VehicleDef) {
-    this.wheels = def.axles.flatMap(() => [0, 1]).map(() => ({ steer: 0, rotation: 0, suspension: 0 }));
+    const load = (def.chassis.mass * 9.81) / (def.axles.length * 2);
+    this.wheels = def.axles.flatMap((axle) =>
+      [0, 1].map(() => {
+        // As in the simulation: long enough to stretch its full travel below where it rests.
+        const rest = axle.suspension.travel + load / axle.suspension.stiffness;
+        this.rest.push(rest);
+        this.travel.push(axle.suspension.travel);
+        return { contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, sink: 0, softness: 0, snow: 0, water: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } };
+      }),
+    );
   }
 
   wheelPosition(i: number): { x: number; y: number; z: number } {
@@ -50,12 +95,32 @@ class RemoteVehicle implements VehicleShape {
   /** Takes the pose for this frame; the wheels roll on with the ground speed. */
   set(pose: Pose, dt: number): void {
     this.pose = pose;
+    this.speed = pose.speed;
+    const e = pose.engine;
+    Object.assign(this.drivetrain, { gear: e.gear, range: e.low ? 'low' : 'high', rpm: e.rpm, shifting: e.shifting ? 0.1 : 0 });
+    this.pedal = e.pedal;
+    this.drowned = e.drowned;
+    this.wading = pose.wading;
+    this.q.set(...pose.q);
     const roll = (pose.speed / this.def.wheels.radius) * dt;
+    const r = this.def.wheels.radius;
+    const load = (this.def.chassis.mass * 9.81) / this.wheels.length;
+    const up = this.v.set(0, 1, 0).applyQuaternion(this.q);
+    const normal = { x: up.x, y: up.y, z: up.z };
     this.wheels.forEach((w, i) => {
-      const [steer, suspension] = pose.wheels[i] ?? [0, w.suspension];
-      w.steer = steer;
-      w.suspension = suspension;
+      const [steer = 0, suspension = w.suspension, sink = 0, spin = 0, skid = 0, slide = 0, water = 0] = pose.wheels[i] ?? [];
+      const ground = pose.ground[i] ?? '';
+      Object.assign(w, { steer, suspension, sink, spin, skid, slide, water });
       w.rotation = (w.rotation + roll) % (Math.PI * 2);
+      w.contact = ground !== '';
+      if (w.contact) w.ground = ground;
+      w.load = w.contact ? load : 0;
+      w.bump = Math.min(1, Math.max(0, (this.rest[i]! - suspension) / this.travel[i]!));
+      // Where the tyre meets the surface: its bottom, lifted by what it has sunk into the mud or water.
+      const at = this.wheelPosition(i);
+      const p = new THREE.Vector3(at.x, at.y - r + sink + water, at.z).applyQuaternion(this.q);
+      Object.assign(w.point, { x: p.x + pose.p[0], y: p.y + pose.p[1], z: p.z + pose.p[2] });
+      Object.assign(w.normal, normal);
     });
   }
 }
@@ -70,8 +135,33 @@ export interface Marker {
   color: string;
 }
 
+/** A push from our vehicle on another's, to send to its driver. */
+export interface Push {
+  to: string;
+  impulse: [number, number, number];
+  at: [number, number, number];
+}
+
+/** What the effects need of the world around, each frame. */
+export interface Surroundings {
+  wetness: number;
+  rain: number;
+  /** m/s, x east, y south. */
+  wind: THREE.Vector2;
+  celsius: number;
+  heightAt(x: number, z: number): number | null;
+}
+
 /** Marker colour for a driver who keeps their vehicle's own paint. */
 const PLAIN = '#ecebe6';
+
+interface Effects {
+  spray: Spray;
+  exhaust: Exhaust;
+  tracks: Tracks;
+  /** The jump counter the tracks were laid under; a new one breaks them. */
+  jump: number;
+}
 
 interface Other {
   player: Player;
@@ -82,6 +172,15 @@ interface Other {
   built: string;
   tag: HTMLDivElement;
   away: boolean;
+  effects: Effects | null;
+  sound: VehicleAudio | null;
+  /** Its solid body in our physics, and what it was built for. */
+  solid: RAPIER.RigidBody | null;
+  solidFor: string;
+  /** Pushes from our vehicle gathered since the last send: impulse, and points weighted by it. */
+  push: THREE.Vector3;
+  pushAt: THREE.Vector3;
+  pushWeight: number;
 }
 
 export class Others {
@@ -91,11 +190,16 @@ export class Others {
   me = '';
   /** The region we drive in; others elsewhere are not drawn. */
   region = '';
+  /** Where the others' sounds go; none until set. */
+  audio: AudioOut | null = null;
   private readonly others = new Map<string, Other>();
   private readonly tags: HTMLDivElement;
   private readonly at = new THREE.Vector3();
   /** Pairs of beams lent to the nearest others; made with the first other vehicle. */
   private beams: [THREE.SpotLight, THREE.SpotLight][] = [];
+  private physics: { R: Rapier; world: RAPIER.World } | null = null;
+  /** Collider handles of the others' bodies, and whose they are. */
+  private readonly owners = new Map<number, Other>();
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -116,6 +220,18 @@ export class Others {
     for (const [id, o] of this.others) if (!players.some((p) => p.id === id)) this.remove(id, o);
   }
 
+  /** The physics world our vehicle drives in; the others' bodies are made in it. */
+  attach(R: Rapier, world: RAPIER.World): void {
+    if (this.physics?.world === world) return;
+    // The old world's bodies went with it.
+    for (const o of this.others.values()) {
+      o.solid = null;
+      o.solidFor = '';
+    }
+    this.owners.clear();
+    this.physics = { R, world };
+  }
+
   /** A snapshot of another driver's vehicle. */
   receive(id: string, s: VehicleSnapshot, now: number): void {
     if (id === this.me) return;
@@ -125,7 +241,10 @@ export class Others {
       const tag = document.createElement('div');
       tag.className = 'tag';
       this.tags.append(tag);
-      o = { player, track: new Track(), vehicle: null, view: null, built: '', tag, away: false };
+      o = {
+        player, track: new Track(), vehicle: null, view: null, built: '', tag, away: false, effects: null, sound: null,
+        solid: null, solidFor: '', push: new THREE.Vector3(), pushAt: new THREE.Vector3(), pushWeight: 0,
+      };
       this.others.set(id, o);
     }
     o.away = false;
@@ -182,8 +301,73 @@ export class Others {
     return out;
   }
 
-  /** Call every frame, after the camera has moved. `now` in ms. */
-  update(now: number, dt: number, camera: THREE.Camera, show: boolean): void {
+  /** Whether a collider is one of the others' vehicles. */
+  owns(handle: number): boolean {
+    return this.owners.has(handle);
+  }
+
+  /**
+   * Before each physics step: moves each other vehicle's body to where its snapshots put it at
+   * `now` (ms, our clock), making the body first if needed.
+   */
+  step(now: number): void {
+    if (!this.physics) return;
+    const { R, world } = this.physics;
+    for (const o of this.others.values()) {
+      const s = o.track.latest;
+      const def = s && this.defs.find((d) => d.name === s.vehicle);
+      const pose = o.track.pose(now);
+      const solid = !o.away && !!def && !!pose && s.region === this.region;
+      if (!solid) {
+        this.dropSolid(o);
+        continue;
+      }
+      if (o.solidFor !== def.name) {
+        this.dropSolid(o);
+        o.solid = this.makeSolid(R, world, def, o);
+        o.solidFor = def.name;
+      }
+      const body = o.solid!;
+      const [x, y, z] = pose.p;
+      const [qx, qy, qz, qw] = pose.q;
+      const was = body.translation();
+      if (Math.hypot(was.x - x, was.y - y, was.z - z) > TELEPORT) {
+        // Put somewhere new: there at once, not swept across everything in between.
+        body.setTranslation({ x, y, z }, true);
+        body.setRotation({ x: qx, y: qy, z: qz, w: qw }, true);
+      }
+      body.setNextKinematicTranslation({ x, y, z });
+      body.setNextKinematicRotation({ x: qx, y: qy, z: qz, w: qw });
+    }
+  }
+
+  /**
+   * After each physics step: what our vehicle's colliders (`ours`, by handle) pushed on the
+   * others, gathered until `takePushes`.
+   */
+  gather(ours: Set<number>): void {
+    if (!this.physics) return;
+    for (const o of this.others.values()) if (o.solid) pushOn(this.physics.world, o.solid, ours, o);
+  }
+
+  /** The pushes gathered since last time, one per vehicle pushed, and starts afresh. */
+  takePushes(): Push[] {
+    const out: Push[] = [];
+    for (const [id, o] of this.others) {
+      if (o.pushWeight > 0 && o.push.lengthSq() > 1) {
+        const at = o.pushAt.divideScalar(o.pushWeight);
+        const r = (x: number): number => Math.round(x * 100) / 100;
+        out.push({ to: id, impulse: [r(o.push.x), r(o.push.y), r(o.push.z)], at: [r(at.x), r(at.y), r(at.z)] });
+      }
+      o.push.set(0, 0, 0);
+      o.pushAt.set(0, 0, 0);
+      o.pushWeight = 0;
+    }
+    return out;
+  }
+
+  /** Call every frame, after the camera has moved. `now` in ms; `dt` 0 while paused. */
+  update(now: number, dt: number, camera: THREE.Camera, show: boolean, around: Surroundings): void {
     const width = window.innerWidth, height = window.innerHeight;
     /** Others with their lights on, and how far away, for the beams. */
     const lit: { o: Other; distance: number }[] = [];
@@ -198,6 +382,8 @@ export class Others {
       const visible = show && !o.away && !!def && !!pose && s.region === this.region;
       if (!visible) {
         if (o.view) o.view.group.visible = false;
+        if (o.effects) o.effects.tracks.break();
+        this.quiet(o);
         o.tag.style.display = 'none';
         continue;
       }
@@ -212,18 +398,23 @@ export class Others {
         o.built = built;
         this.scene.add(o.view.group);
       }
-      o.vehicle.set(pose, dt);
-      o.view.group.visible = true;
-      o.view.snap();
-      o.view.render(1);
-      o.view.setLights(pose.lights, pose.braking);
-      if (pose.lights) lit.push({ o, distance: o.view.group.position.distanceTo(camera.position) });
+      const vehicle = o.vehicle;
+      const view = o.view;
+      vehicle.set(pose, dt);
+      view.group.visible = true;
+      view.snap();
+      view.render(1);
+      view.setLights(pose.lights, pose.braking);
+      const distance = view.group.position.distanceTo(camera.position);
+      if (pose.lights) lit.push({ o, distance });
+      this.effects(o, vehicle, view, s.jump, now, pose.paused ? 0 : dt, distance, camera, around);
+      this.sound(o, vehicle, view, pose.paused ? 0 : dt, distance, around.wetness);
 
       // The name, over the roof.
-      this.at.set(0, def.body.height + 0.7, 0).applyMatrix4(o.view.group.matrixWorld);
-      const distance = this.at.distanceTo(camera.position);
+      this.at.set(0, def.body.height + 0.7, 0).applyMatrix4(view.group.matrixWorld);
+      const far = this.at.distanceTo(camera.position);
       this.at.project(camera);
-      const fade = 1 - (distance - FADE_FROM) / (FADE_TO - FADE_FROM);
+      const fade = 1 - (far - FADE_FROM) / (FADE_TO - FADE_FROM);
       if (this.at.z > 1 || fade <= 0) {
         o.tag.style.display = 'none';
         continue;
@@ -243,6 +434,74 @@ export class Others {
       o.tag.style.transform = `translate(${((this.at.x + 1) / 2) * width}px, ${((1 - this.at.y) / 2) * height}px) translate(-50%, -100%)`;
     }
     this.lendBeams(lit);
+  }
+
+  /** Spray, smoke, tracks and mud, as for our own vehicle; nothing new thrown when far off. */
+  private effects(o: Other, vehicle: RemoteVehicle, view: VehicleView, jump: number, now: number, dt: number, distance: number, camera: THREE.Camera, around: Surroundings): void {
+    if (!o.effects) {
+      if (distance > EFFECTS) return;
+      o.effects = { spray: new Spray(), exhaust: new Exhaust(), tracks: new Tracks(), jump };
+      this.scene.add(o.effects.spray.group, o.effects.exhaust.group, o.effects.tracks.mesh);
+    }
+    const e = o.effects;
+    if (e.jump !== jump) {
+      e.tracks.break();
+      e.jump = jump;
+    }
+    const near = distance <= EFFECTS;
+    if (near) e.tracks.update(vehicle, around.wetness, now);
+    else e.tracks.break();
+    view.grime.update(dt, vehicle, around.wetness, around.rain);
+    // Particles already in the air carry on falling; new ones only near.
+    e.spray.update(dt, near ? vehicle : still(vehicle), view.group, camera, around.wetness, (x, z) => around.heightAt(x, z));
+    e.exhaust.update(dt, vehicle, view.group, camera, near, 0, around.wind, around.celsius);
+  }
+
+  /** Its engine, tyres and knocks, heard through the world's sounds. */
+  private sound(o: Other, vehicle: RemoteVehicle, view: VehicleView, dt: number, distance: number, wetness: number): void {
+    if (!this.audio) return;
+    if (!o.sound) {
+      if (distance > HEAR) return;
+      o.sound = new VehicleAudio(this.audio, this.audio.world);
+    } else if (distance > FORGET) {
+      this.quiet(o);
+      return;
+    }
+    o.sound.update(dt, vehicle, view.group, vehicle.pedal, wetness, [], [], dt === 0);
+  }
+
+  private quiet(o: Other): void {
+    o.sound?.dispose();
+    o.sound = null;
+  }
+
+  private makeSolid(R: Rapier, world: RAPIER.World, def: VehicleDef, o: Other): RAPIER.RigidBody {
+    const body = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, -1e4, 0));
+    const [w, h, l] = def.chassis.box.size as [number, number, number];
+    const c = def.chassis.box.center;
+    // The same shapes as the simulation's body: the bodywork, and the frame under it.
+    const solid = (hx: number, hy: number, hz: number, x: number, y: number, z: number): void => {
+      const collider = world.createCollider(
+        R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, y, z).setFriction(0.5).setRestitution(0.05).setCollisionGroups(groups(GROUP_VEHICLE, GROUP_VEHICLE)),
+        body,
+      );
+      this.owners.set(collider.handle, o);
+    };
+    solid(w / 2, h / 2, l / 2, c[0]!, c[1]!, c[2]!);
+    const bottom = c[1]! - h / 2;
+    const clearance = def.chassis.groundClearance;
+    const front = Math.max(...def.axles.map((a) => a.z)) + 0.3;
+    const rear = Math.min(...def.axles.map((a) => a.z)) - 0.3;
+    if (bottom > clearance) solid(0.5, (bottom - clearance) / 2, (front - rear) / 2, 0, (bottom + clearance) / 2, (front + rear) / 2);
+    return body;
+  }
+
+  private dropSolid(o: Other): void {
+    if (!o.solid || !this.physics) return;
+    for (let c = 0; c < o.solid.numColliders(); c++) this.owners.delete(o.solid.collider(c).handle);
+    this.physics.world.removeRigidBody(o.solid);
+    o.solid = null;
+    o.solidFor = '';
   }
 
   /** The beams go to the nearest others with their lights on; the rest wait, dark. */
@@ -286,7 +545,69 @@ export class Others {
   private remove(id: string, o: Other): void {
     this.release(o);
     o.view?.dispose();
+    if (o.effects) {
+      for (const obj of [o.effects.spray.group, o.effects.exhaust.group, o.effects.tracks.mesh]) disposeObject(obj);
+    }
+    this.quiet(o);
+    this.dropSolid(o);
     o.tag.remove();
     this.others.delete(id);
   }
+}
+
+/** What gathers pushes: the summed impulse, and contact points weighted by impulse. */
+export interface Pushed {
+  push: THREE.Vector3;
+  pushAt: THREE.Vector3;
+  pushWeight: number;
+}
+
+/** Adds what colliders in `ours` (by handle) pushed on `body` during the last step to `into`. */
+export function pushOn(world: RAPIER.World, body: RAPIER.RigidBody, ours: Set<number>, into: Pushed): void {
+  const n = new THREE.Vector3();
+  const at = new THREE.Vector3();
+  for (let c = 0; c < body.numColliders(); c++) {
+    const theirs = body.collider(c);
+    world.contactPairsWith(theirs, (other) => {
+      if (!ours.has(other.handle)) return;
+      world.contactPair(other, theirs, (m, flipped) => {
+        let impulse = 0;
+        for (let i = 0; i < m.numContacts(); i++) impulse += m.contactImpulse(i);
+        if (impulse <= 0) return;
+        // The normal points from the first collider to the second: ours to theirs unless flipped.
+        const nv = m.normal();
+        n.set(nv.x, nv.y, nv.z).multiplyScalar(flipped ? -impulse : impulse);
+        into.push.add(n);
+        const points = m.numSolverContacts();
+        for (let i = 0; i < points; i++) {
+          const p = m.solverContactPoint(i);
+          if (p) into.pushAt.addScaledVector(at.set(p.x, p.y, p.z), impulse / points);
+        }
+        if (points > 0) into.pushWeight += impulse;
+      });
+    });
+  }
+}
+
+/** The vehicle as standing still with nothing spinning, so no new spray is thrown. */
+function still(v: RemoteVehicle): VehicleState {
+  return { ...v, def: v.def, body: v.body, wheelPosition: (i) => v.wheelPosition(i), speed: 0, wheels: v.wheels.map((w) => ({ ...w, contact: false })) };
+}
+
+/** Takes something out of the scene and frees its GPU memory. */
+function disposeObject(object: THREE.Object3D): void {
+  object.removeFromParent();
+  object.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.geometry.dispose();
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) (m as THREE.Material).dispose();
+  });
+}
+
+/** Applies a push another driver's vehicle made on ours, kept within what is believable. */
+export function applyPush(body: RAPIER.RigidBody, impulse: readonly number[], at: readonly number[]): void {
+  const most = body.mass() * MOST_PUSH;
+  const size = Math.hypot(impulse[0]!, impulse[1]!, impulse[2]!);
+  const k = size > most ? most / size : 1;
+  body.applyImpulseAtPoint({ x: impulse[0]! * k, y: impulse[1]! * k, z: impulse[2]! * k }, { x: at[0]!, y: at[1]!, z: at[2]! }, true);
 }

@@ -8,7 +8,7 @@
 // motors' whine instead of the engine (electricMotor.ts).
 
 import * as THREE from 'three/webgpu';
-import type { VehicleSim } from '../vehicle/sim';
+import type { VehicleState } from '../vehicle/state';
 import { ElectricMotorSound } from './electricMotor';
 import { AudioOut, ease, place } from './output';
 
@@ -116,10 +116,17 @@ export class VehicleAudio {
   private creakWait = 0;
   private winchLoad = 0;
 
-  constructor(private readonly out: AudioOut) {
+  /** The steady sources, stopped when this vehicle's sound goes. */
+  private readonly sources: AudioScheduledSourceNode[] = [];
+
+  /** `to` is where it is heard: our own vehicle's bus, or the world's for another driver's. */
+  constructor(
+    private readonly out: AudioOut,
+    to: AudioNode = out.vehicle,
+  ) {
     const ctx = out.ctx;
     this.at = out.panner(7, 1);
-    this.at.connect(out.vehicle);
+    this.at.connect(to);
     // The steady sounds (engine, gears, tyres) go through one level that dips for a moment
     // when something hits hard, so the blow is heard over them.
     this.bed = ctx.createGain();
@@ -143,7 +150,7 @@ export class VehicleAudio {
     this.intakeLevel.connect(this.bed);
     this.intakeTone = out.filter('bandpass', 900, 1.4);
     this.intakeTone.connect(this.intakeLevel);
-    out.loop(out.buffers.white).connect(this.intakeTone);
+    this.keep(out.loop(out.buffers.white)).connect(this.intakeTone);
 
     this.motor = new ElectricMotorSound(out, this.bed);
 
@@ -151,7 +158,7 @@ export class VehicleAudio {
     this.whineLevel = ctx.createGain();
     this.whineLevel.gain.value = 0;
     this.whineLevel.connect(this.bed);
-    this.whine = ctx.createOscillator();
+    this.whine = this.keep(ctx.createOscillator());
     this.whine.type = 'sine';
     this.whine.connect(this.whineLevel);
     this.whine.start();
@@ -162,7 +169,7 @@ export class VehicleAudio {
     this.squealLevel.connect(this.bed);
     const squeal = out.filter('bandpass', 1050, 14);
     squeal.connect(this.squealLevel);
-    out.loop(out.buffers.white).connect(squeal);
+    this.keep(out.loop(out.buffers.white)).connect(squeal);
 
     // Spray hissing off the tyres on wet ground.
     this.hissLevel = ctx.createGain();
@@ -170,18 +177,18 @@ export class VehicleAudio {
     this.hissLevel.connect(this.bed);
     this.hissTone = out.filter('highpass', 2500, 0.5);
     this.hissTone.connect(this.hissLevel);
-    out.loop(out.buffers.white).connect(this.hissTone);
+    this.keep(out.loop(out.buffers.white)).connect(this.hissTone);
 
     // The body sliding on the ground: grinding grit, and a metal screech on top.
     this.scrapeLevel = ctx.createGain();
     this.scrapeLevel.gain.value = 0;
     this.scrapeLevel.connect(this.at);
-    this.scrapeSource = out.loop(out.buffers.gravel);
+    this.scrapeSource = this.keep(out.loop(out.buffers.gravel));
     this.scrapeSource.connect(out.filter('bandpass', 1500, 1.1)).connect(this.scrapeLevel);
     this.scrapeMetal = ctx.createGain();
     this.scrapeMetal.gain.value = 0;
     this.scrapeMetal.connect(this.at);
-    out.loop(out.buffers.white).connect(out.filter('bandpass', 3300, 7)).connect(this.scrapeMetal);
+    this.keep(out.loop(out.buffers.white)).connect(out.filter('bandpass', 3300, 7)).connect(this.scrapeMetal);
 
     // The winch motor: a buzzing electric motor and its reduction gears.
     this.winchLevel = ctx.createGain();
@@ -189,11 +196,11 @@ export class VehicleAudio {
     this.winchLevel.connect(this.at);
     this.winchTone = out.lowpass(1400, 0.8);
     this.winchTone.connect(this.winchLevel);
-    this.winchMotor = ctx.createOscillator();
+    this.winchMotor = this.keep(ctx.createOscillator());
     this.winchMotor.type = 'sawtooth';
     this.winchMotor.connect(this.winchTone);
     this.winchMotor.start();
-    this.winchGear = ctx.createOscillator();
+    this.winchGear = this.keep(ctx.createOscillator());
     this.winchGear.type = 'triangle';
     const gear = ctx.createGain();
     gear.gain.value = 0.35;
@@ -201,7 +208,7 @@ export class VehicleAudio {
     this.winchGear.start();
 
     for (const [ground, voice] of Object.entries(VOICES)) {
-      const source = out.loop(out.buffers[voice.buffer]);
+      const source = this.keep(out.loop(out.buffers[voice.buffer]));
       const filter = out.filter(voice.filter, voice.frequency, voice.q);
       const level = ctx.createGain();
       level.gain.value = 0;
@@ -214,7 +221,7 @@ export class VehicleAudio {
    * Call every frame. `group` is the drawn vehicle; `quiet` when it is not on the ground yet,
    * so nothing plays. `pedal` is the throttle pedal in the direction of travel.
    */
-  update(dt: number, sim: VehicleSim, group: THREE.Object3D, pedal: number, wetness: number, cracks: Crack[], impacts: Impact[], quiet: boolean): void {
+  update(dt: number, sim: VehicleState, group: THREE.Object3D, pedal: number, wetness: number, cracks: Crack[], impacts: Impact[], quiet: boolean): void {
     const ctx = this.out.ctx;
     const t = ctx.currentTime;
     // A new engine voice when the vehicle changes to one with another number of cylinders;
@@ -361,6 +368,20 @@ export class VehicleAudio {
     ease(this.hissTone.frequency, 2000 + wetRoll * 120, t);
 
     for (const c of cracks) if (!quiet) this.crack(c);
+  }
+
+  /** Stops it for good: another driver's vehicle gone out of hearing. */
+  dispose(): void {
+    for (const s of this.sources) s.stop();
+    this.motor.dispose();
+    this.engine?.disconnect();
+    this.engine = null;
+    this.at.disconnect();
+  }
+
+  private keep<T extends AudioScheduledSourceNode>(node: T): T {
+    this.sources.push(node);
+    return node;
   }
 
   /** Call every frame with what the winch is doing. */

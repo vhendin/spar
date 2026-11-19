@@ -274,6 +274,13 @@ export function createGameServer(config: ServerConfig): GameServer {
         case 'away':
           broadcast({ type: 'away', id: player.id }, ws);
           break;
+        case 'push':
+          // Only to the driver pushed: their browser moves their vehicle.
+          for (const [other, p] of joined) {
+            if (p.id !== msg.to || other === ws || other.readyState !== other.OPEN) continue;
+            other.send(JSON.stringify({ type: 'push', from: player.id, impulse: msg.impulse, at: msg.at } satisfies ServerMessage));
+          }
+          break;
         case 'chat': {
           const text = msg.text.trim();
           if (text) broadcast({ type: 'chat', from: player.id, name: player.name, text });

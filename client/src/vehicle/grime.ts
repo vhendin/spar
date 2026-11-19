@@ -5,7 +5,7 @@
 
 import * as THREE from 'three/webgpu';
 import { float, mix, mx_noise_float, positionLocal, smoothstep, uniform, vec3, attribute } from 'three/tsl';
-import type { VehicleSim } from './sim';
+import type { VehicleState } from './state';
 
 /** How readily each ground muddies the vehicle, dry and soaked. */
 const MUDDY: Record<string, [number, number]> = {
@@ -63,7 +63,7 @@ export class Grime {
   }
 
   /** Call every frame with the time step; `wetness` of the ground and `rain` 0..1. */
-  update(dt: number, sim: VehicleSim, wetness: number, rain: number): void {
+  update(dt: number, sim: VehicleState, wetness: number, rain: number): void {
     if (dt <= 0) return;
     const speed = Math.abs(sim.speed);
     let gain = 0;

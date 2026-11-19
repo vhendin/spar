@@ -1,14 +1,14 @@
 # Multiplayer plan
 
 Step 6 of `PLAN.md`, revisited. Started on 2026-11-19 with the recommendations below accepted
-(see "Answered" in `QUESTIONS.md`). Stage 1 is built; see "Stages" for what it does and does
-not do yet.
+(see "Answered" in `QUESTIONS.md`). Stages 1 and 2 are built; see "Stages" for what they do and
+do not do yet.
 
 ## What exists today
 
 - **The server** already owns what everyone must agree on: the clock and the weather
   (`server/src/world.ts`), sent to every client every 2 s. Any client can change them with
-  `set_world`. Messages have JSON Schemas and a protocol version (now 3), and the server
+  `set_world`. Messages have JSON Schemas and a protocol version (now 5), and the server
   validates what it receives.
 - **The vehicle** is simulated entirely in the browser (`VehicleSim`, Rapier). Its state record
   already has room for an `authority` field (planned since milestone 1).
@@ -153,8 +153,18 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    "left" or "joined". Name tags fade by 600 m; markers on the map and minimap;
    player lists in the start screen and the menu; chat on Enter, with lines from the server
    for joining, leaving, renaming and changes to the time and weather. Protocol 4.
-2. **Touching.** Kinematic bodies, pushes sent to the owner; others' tracks, spray, exhaust,
-   grime and engine sound.
+2. **Touching.** *Built.* The effects read a `VehicleState` (`client/src/vehicle/state.ts`)
+   that the simulation and a remote vehicle both provide. The snapshot now carries per wheel
+   sink, spin, skid, slide and water and the ground under it, the engine (revs, gear, range,
+   shifting, pedal, drowned) and the wading depth, about 600 bytes; protocol 5. Each other
+   vehicle gets its own spray, exhaust and tracks within 400 m, mud on its body, and its engine
+   and tyres heard within 300 m (let go at 380 m). In our physics it is a kinematic body with
+   the same box shapes as the simulation's, moved to its snapshot pose before every step
+   (jumped there when more than 5 m off). After each step the contact impulses between our
+   body and theirs are summed (`pushOn`), and every 50 ms sent as `push { to, impulse, at }`,
+   which the server passes to that driver only; their browser applies it to their body, at
+   most 3 m/s of change per message, and hears it as a knock. A parked vehicle's hold brake
+   resists pushes (see `QUESTIONS.md`).
 3. **One world.** Felled trees and ice holes shared and sent to late joiners; regions as rooms;
    who changed the clock or weather shown in chat; "join a friend".
 4. **Winching each other.** Authority moves to the puller while hooked.

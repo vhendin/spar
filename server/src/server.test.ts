@@ -280,13 +280,21 @@ describe('websocket', () => {
 
     const vehicle = {
       region: 'demo', vehicle: 'tgb11', jump: 1, t: 1234.5, paused: false,
-      p: [1, 2, 3], q: [0, 0, 0, 1], v: [4, 0, 0], wheels: [[0.1, 0.3], [0.1, 0.3], [0, 0.3], [0, 0.3]],
+      p: [1, 2, 3], q: [0, 0, 0, 1], v: [4, 0, 0],
+      wheels: [[0.1, 0.3, 0, 0.2, 0, 0.1, 0], [0.1, 0.3, 0, 0.2, 0, 0, 0], [0, 0.3, 0.05, 0, 0, 0, 0], [0, 0.3, 0.05, 0, 0, 0, 0]],
+      ground: ['dirt', 'dirt', 'bog', ''],
+      engine: { rpm: 1800, gear: 2, low: false, shifting: false, pedal: 0.4, drowned: false },
+      wading: 0,
       lights: true, braking: false,
     };
     a.ws.send(JSON.stringify({ type: 'state', vehicle }));
     const relayed = await b.next('state');
     expect(relayed).toEqual({ type: 'state', id: a.id, vehicle });
     expect(isServerMessage(relayed)).toBe(true);
+
+    // A push goes only to the driver pushed, with who pushed.
+    a.ws.send(JSON.stringify({ type: 'push', to: b.id, impulse: [500, 0, -20], at: [1, 2, 4] }));
+    expect(await b.next('push')).toEqual({ type: 'push', from: a.id, impulse: [500, 0, -20], at: [1, 2, 4] });
 
     b.ws.send(JSON.stringify({ type: 'chat', text: ' hej! ' }));
     const line = await a.waitFor('chat', (m) => m.from === b.id);

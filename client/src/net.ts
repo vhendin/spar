@@ -15,6 +15,7 @@ export interface ConnectionHandlers {
   state?(msg: Of<'state'>): void;
   away?(msg: Of<'away'>): void;
   chat?(msg: Of<'chat'>): void;
+  push?(msg: Of<'push'>): void;
 }
 
 /** The driver as others see them, sent on joining and whenever it changes. */
@@ -100,6 +101,9 @@ export class Connection {
           break;
         case 'chat':
           this.on.chat?.(msg);
+          break;
+        case 'push':
+          this.on.push?.(msg);
           break;
         case 'error':
           // A version mismatch will not fix itself by retrying.

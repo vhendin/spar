@@ -5,7 +5,7 @@
 
 import * as THREE from 'three/webgpu';
 import { attribute, float, positionGeometry, uniform, uv, vec3 } from 'three/tsl';
-import type { VehicleSim } from './sim';
+import type { VehicleState } from './state';
 
 const CLODS = 2400;
 const PUFFS = 700;
@@ -165,7 +165,7 @@ export class Spray {
    * Call every frame after the vehicle view is placed. `wetness` 0 dry to 1 soaked;
    * `groundAt` gives the terrain height so clods land.
    */
-  update(dt: number, sim: VehicleSim, vehicle: THREE.Object3D, camera: THREE.Camera, wetness: number, groundAt: (x: number, z: number) => number | null): void {
+  update(dt: number, sim: VehicleState, vehicle: THREE.Object3D, camera: THREE.Camera, wetness: number, groundAt: (x: number, z: number) => number | null): void {
     camera.updateMatrixWorld();
     this.right.value.setFromMatrixColumn(camera.matrixWorld, 0);
     this.up.value.setFromMatrixColumn(camera.matrixWorld, 1);
@@ -177,7 +177,7 @@ export class Spray {
     this.puffs.upload((left) => [1 + (1 - left) * 2.5, 0.5 * left * left]);
   }
 
-  private emit(dt: number, sim: VehicleSim, vehicle: THREE.Object3D, wetness: number): void {
+  private emit(dt: number, sim: VehicleState, vehicle: THREE.Object3D, wetness: number): void {
     const v = sim.body.linvel();
     const radius = sim.def.wheels.radius;
     const width = sim.def.wheels.width ?? 0.3;

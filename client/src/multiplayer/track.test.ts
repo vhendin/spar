@@ -7,7 +7,11 @@ import { AHEAD, DELAY, forwardSpeed, takeSnapshot, Track } from './track';
 const at = (t: number, x: number, extra: Partial<VehicleSnapshot> = {}): VehicleSnapshot => ({
   region: 'demo', vehicle: 'tgb11', jump: 0, t, paused: false,
   p: [x, 10, 0], q: [0, Math.SQRT1_2, 0, Math.SQRT1_2], v: [20, 0, 0],
-  wheels: [[0, 0.3], [0, 0.3], [0, 0.3], [0, 0.3]], lights: false, braking: false,
+  wheels: [[0, 0.3, 0, 0, 0, 0, 0], [0, 0.3, 0, 0, 0, 0, 0], [0, 0.3, 0, 0, 0, 0, 0], [0, 0.3, 0, 0, 0, 0, 0]],
+  ground: ['dirt', 'dirt', 'dirt', 'dirt'],
+  engine: { rpm: 1500 + t, gear: 3, low: false, shifting: false, pedal: 0.5, drowned: false },
+  wading: 0,
+  lights: false, braking: false,
   ...extra,
 });
 
@@ -20,6 +24,7 @@ describe('Track', () => {
     const pose = track.pose(5010 + 175 + DELAY)!;
     expect(pose.p[0]).toBeCloseTo(3.5, 6);
     expect(pose.speed).toBeCloseTo(20, 6); // facing east, going east
+    expect(pose.engine.rpm).toBeCloseTo(1500 + 175, 6);
   });
 
   it('carries it on at its speed for a moment, then holds it', () => {
@@ -62,14 +67,22 @@ describe('takeSnapshot', () => {
         rotation: () => ({ x: 0, y: 0, z: 0, w: 1 }),
         linvel: () => ({ x: 0, y: 0, z: 5.555 }),
       },
-      wheels: Array.from({ length: 6 }, () => ({ steer: 0.12345, suspension: 0.3 })),
+      wheels: Array.from({ length: 6 }, (_, i) => ({
+        steer: 0.12345, suspension: 0.3, sink: 0.04, spin: 0.333, skid: 0, slide: -0.5, water: 0, contact: i < 5, ground: 'gravel',
+      })),
+      drivetrain: { rpm: 1834.6, gear: 2, range: 'low', shifting: 0 },
+      pedal: 0.756,
+      drowned: false,
+      wading: 0,
     };
     const vehicle = takeSnapshot(sim, { region: 'demo', jump: 3, t: 123.456, paused: false, lights: true, braking: false });
     expect(vehicle.p[0]).toBe(1.235);
     expect(vehicle.wheels).toHaveLength(6);
+    expect(vehicle.ground).toEqual(['gravel', 'gravel', 'gravel', 'gravel', 'gravel', '']);
+    expect(vehicle.engine).toEqual({ rpm: 1835, gear: 2, low: true, shifting: false, pedal: 0.76, drowned: false });
     expect(forwardSpeed(vehicle.q, vehicle.v)).toBeCloseTo(5.56, 6);
     expect(isClientMessage({ type: 'state', vehicle })).toBe(true);
     expect(isServerMessage({ type: 'state', id: 'p1', vehicle })).toBe(true);
-    expect(JSON.stringify({ type: 'state', vehicle }).length).toBeLessThan(400);
+    expect(JSON.stringify({ type: 'state', vehicle }).length).toBeLessThan(700);
   });
 });

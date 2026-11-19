@@ -22,8 +22,14 @@ const CREEP = 0.01;
 export interface Pose {
   p: [number, number, number];
   q: [number, number, number, number];
-  /** Per wheel: steering angle and suspension length. */
-  wheels: [number, number][];
+  /** Velocity, m/s. */
+  v: [number, number, number];
+  /** Per wheel, as in the snapshot: steer, suspension, sink, spin, skid, slide, water. */
+  wheels: number[][];
+  /** Per wheel, the ground under it; '' off the ground. */
+  ground: string[];
+  engine: VehicleSnapshot['engine'];
+  wading: number;
   /** Forward speed, m/s (negative backwards). */
   speed: number;
   lights: boolean;
@@ -92,10 +98,14 @@ export class Track {
     return {
       p: [lerp(a.p[0]!, b.p[0]!), lerp(a.p[1]!, b.p[1]!), lerp(a.p[2]!, b.p[2]!)],
       q: [q[0]! / len, q[1]! / len, q[2]! / len, q[3]! / len],
+      v: [lerp(a.v[0]!, b.v[0]!), lerp(a.v[1]!, b.v[1]!), lerp(a.v[2]!, b.v[2]!)],
       wheels: a.wheels.map((w, j) => {
         const o = b.wheels[j] ?? w;
-        return [lerp(w[0]!, o[0]!), lerp(w[1]!, o[1]!)];
+        return w.map((x, n) => lerp(x, o[n] ?? x));
       }),
+      ground: [...near.ground],
+      engine: { ...near.engine, rpm: lerp(a.engine.rpm, b.engine.rpm), pedal: lerp(a.engine.pedal, b.engine.pedal) },
+      wading: lerp(a.wading, b.wading),
       speed: lerp(forwardSpeed(a.q, a.v), forwardSpeed(b.q, b.v)),
       lights: near.lights,
       braking: near.braking,
@@ -108,7 +118,11 @@ function shape(s: VehicleSnapshot): Pose {
   return {
     p: [s.p[0]!, s.p[1]!, s.p[2]!],
     q: [s.q[0]!, s.q[1]!, s.q[2]!, s.q[3]!],
-    wheels: s.wheels.map((w) => [w[0]!, w[1]!]),
+    v: s.paused ? [0, 0, 0] : [s.v[0]!, s.v[1]!, s.v[2]!],
+    wheels: s.wheels.map((w) => [...w]),
+    ground: [...s.ground],
+    engine: { ...s.engine },
+    wading: s.wading,
     speed: s.paused ? 0 : forwardSpeed(s.q, s.v),
     lights: s.lights,
     braking: s.braking,
@@ -129,7 +143,11 @@ export interface SnapshotSource {
     rotation(): { x: number; y: number; z: number; w: number };
     linvel(): { x: number; y: number; z: number };
   };
-  wheels: readonly { steer: number; suspension: number }[];
+  wheels: readonly { steer: number; suspension: number; sink: number; spin: number; skid: number; slide: number; water: number; contact: boolean; ground: string }[];
+  drivetrain: { rpm: number; gear: number; range: string; shifting: number };
+  pedal: number;
+  drowned: boolean;
+  wading: number;
 }
 
 /** The snapshot to send of our own vehicle. */
@@ -147,7 +165,25 @@ export function takeSnapshot(
     p: [round(p.x, 3), round(p.y, 3), round(p.z, 3)],
     q: [round(q.x, 5), round(q.y, 5), round(q.z, 5), round(q.w, 5)],
     v: extra.paused ? [0, 0, 0] : [round(v.x, 2), round(v.y, 2), round(v.z, 2)],
-    wheels: sim.wheels.map((w) => [round(w.steer, 3), round(w.suspension, 3)]) as VehicleSnapshot['wheels'],
+    wheels: sim.wheels.map((w) => [
+      round(w.steer, 3),
+      round(w.suspension, 3),
+      round(w.sink, 3),
+      round(w.spin, 2),
+      round(w.skid, 2),
+      round(w.slide, 2),
+      round(w.water, 2),
+    ]) as VehicleSnapshot['wheels'],
+    ground: sim.wheels.map((w) => (w.contact ? w.ground : '')) as VehicleSnapshot['ground'],
+    engine: {
+      rpm: Math.round(Math.max(0, sim.drivetrain.rpm)),
+      gear: sim.drivetrain.gear,
+      low: sim.drivetrain.range === 'low',
+      shifting: sim.drivetrain.shifting > 0,
+      pedal: round(Math.min(1, Math.max(0, sim.pedal)), 2),
+      drowned: sim.drowned,
+    },
+    wading: round(Math.max(0, sim.wading), 2),
     lights: extra.lights,
     braking: extra.braking,
   };

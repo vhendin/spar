@@ -3,7 +3,8 @@
 /**
  * Every message the server may send to a client.
  */
-export type ServerMessage = Welcome | WorldUpdate | ServerError | Players | PlayerState | PlayerAway | ChatLine;
+export type ServerMessage =
+  Welcome | WorldUpdate | ServerError | Players | PlayerState | PlayerAway | ChatLine | PlayerPush;
 
 /**
  * Reply to hello: who you are and which world to load.
@@ -131,86 +132,111 @@ export interface VehicleSnapshot {
    */
   v: [number, number, number];
   /**
-   * Per wheel, in the definition's order: steering angle (radians) and suspension length (metres).
+   * Per wheel, in the definition's order: steering angle (radians), suspension length (metres), sink into soft ground (metres), drive spin (0..1), brake skid (0..1), sideways slide (m/s) and water over the ground under it (metres).
    *
    * @maxItems 12
    */
   wheels:
     | []
-    | [[number, number]]
-    | [[number, number], [number, number]]
-    | [[number, number], [number, number], [number, number]]
-    | [[number, number], [number, number], [number, number], [number, number]]
-    | [[number, number], [number, number], [number, number], [number, number], [number, number]]
-    | [[number, number], [number, number], [number, number], [number, number], [number, number], [number, number]]
+    | [[number, number, number, number, number, number, number]]
     | [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number]
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
       ]
     | [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number]
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
       ]
     | [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number]
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
       ]
     | [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number]
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
       ]
     | [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number]
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
       ]
     | [
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number],
-        [number, number]
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
+      ]
+    | [
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
+      ]
+    | [
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
+      ]
+    | [
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
+      ]
+    | [
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
+      ]
+    | [
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number],
+        [number, number, number, number, number, number, number]
       ];
   /**
    * Headlights on.
@@ -220,6 +246,55 @@ export interface VehicleSnapshot {
    * Brake lights on.
    */
   braking: boolean;
+  /**
+   * Per wheel, the kind of ground under the tyre, empty while it is off the ground.
+   *
+   * @maxItems 12
+   */
+  ground:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string];
+  /**
+   * What the engine is doing, for its sound and exhaust.
+   */
+  engine: {
+    rpm: number;
+    /**
+     * -1 reverse, 1.. forward gears.
+     */
+    gear: number;
+    /**
+     * Low range engaged.
+     */
+    low: boolean;
+    /**
+     * A gear change in progress: no drive.
+     */
+    shifting: boolean;
+    /**
+     * The pedal driving the engine, 0..1.
+     */
+    pedal: number;
+    /**
+     * Water has got into the engine and stopped it.
+     */
+    drowned: boolean;
+  };
+  /**
+   * Deepest water around the vehicle, metres above the bottom of its tyres.
+   */
+  wading: number;
 }
 /**
  * Another driver's vehicle has left the road.
@@ -242,4 +317,25 @@ export interface ChatLine {
    */
   name?: string;
   text: string;
+}
+/**
+ * Another driver's vehicle pushed against ours; apply it to our body.
+ */
+export interface PlayerPush {
+  type: 'push';
+  from: string;
+  /**
+   * Impulse on our vehicle, newton-seconds, world frame.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  impulse: [number, number, number];
+  /**
+   * Where it pushed, world position, metres.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  at: [number, number, number];
 }

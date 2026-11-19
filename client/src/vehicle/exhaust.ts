@@ -7,7 +7,7 @@ import * as THREE from 'three/webgpu';
 import { attribute, float, positionGeometry, uniform, uv, vec3 } from 'three/tsl';
 import { exhaustOutlet } from './body';
 import { Batch } from './spray';
-import type { VehicleSim } from './sim';
+import type { VehicleState } from './state';
 
 const PUFFS = 500;
 /** How fast a puff takes on the air's own motion, per second. */
@@ -71,7 +71,7 @@ export class Exhaust {
    * going (not yet placed); `winch` 0..1 how hard the winch pulls; `wind` in m/s (x east,
    * z south); `celsius` the air temperature.
    */
-  update(dt: number, sim: VehicleSim, vehicle: THREE.Object3D, camera: THREE.Camera, running: boolean, winch: number, wind: THREE.Vector2, celsius: number): void {
+  update(dt: number, sim: VehicleState, vehicle: THREE.Object3D, camera: THREE.Camera, running: boolean, winch: number, wind: THREE.Vector2, celsius: number): void {
     camera.updateMatrixWorld();
     this.right.value.setFromMatrixColumn(camera.matrixWorld, 0);
     this.up.value.setFromMatrixColumn(camera.matrixWorld, 1);
@@ -94,7 +94,7 @@ export class Exhaust {
     this.puffs.upload((left) => [1 + (1 - left) * 9, Math.min(1, left * 1.4) * Math.sqrt(left)]);
   }
 
-  private emit(dt: number, sim: VehicleSim, vehicle: THREE.Object3D, cold: number): void {
+  private emit(dt: number, sim: VehicleState, vehicle: THREE.Object3D, cold: number): void {
     const def = sim.def.drivetrain;
     const rev = Math.max(def.idle, sim.drivetrain.rpm || def.idle) / def.redline;
     const load = this.load, soot = Math.min(1, this.surge + load * 0.35);

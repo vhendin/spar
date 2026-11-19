@@ -23,6 +23,9 @@
     },
     {
       "$ref": "#/definitions/ChatLine"
+    },
+    {
+      "$ref": "#/definitions/PlayerPush"
     }
   ],
   "definitions": {
@@ -296,6 +299,45 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 300
+        }
+      }
+    },
+    "PlayerPush": {
+      "title": "PlayerPush",
+      "description": "Another driver's vehicle pushed against ours; apply it to our body.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "from",
+        "impulse",
+        "at"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "push"
+        },
+        "from": {
+          "type": "string"
+        },
+        "impulse": {
+          "description": "Impulse on our vehicle, newton-seconds, world frame.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "at": {
+          "description": "Where it pushed, world position, metres.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
         }
       }
     }

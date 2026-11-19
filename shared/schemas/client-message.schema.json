@@ -20,6 +20,9 @@
     },
     {
       "$ref": "#/definitions/Chat"
+    },
+    {
+      "$ref": "#/definitions/Push"
     }
   ],
   "definitions": {
@@ -143,7 +146,10 @@
         "v",
         "wheels",
         "lights",
-        "braking"
+        "braking",
+        "ground",
+        "engine",
+        "wading"
       ],
       "properties": {
         "region": {
@@ -197,7 +203,7 @@
           "maxItems": 3
         },
         "wheels": {
-          "description": "Per wheel, in the definition's order: steering angle (radians) and suspension length (metres).",
+          "description": "Per wheel, in the definition's order: steering angle (radians), suspension length (metres), sink into soft ground (metres), drive spin (0..1), brake skid (0..1), sideways slide (m/s) and water over the ground under it (metres).",
           "type": "array",
           "maxItems": 12,
           "items": {
@@ -205,8 +211,8 @@
             "items": {
               "type": "number"
             },
-            "minItems": 2,
-            "maxItems": 2
+            "minItems": 7,
+            "maxItems": 7
           }
         },
         "lights": {
@@ -216,6 +222,62 @@
         "braking": {
           "description": "Brake lights on.",
           "type": "boolean"
+        },
+        "ground": {
+          "description": "Per wheel, the kind of ground under the tyre, empty while it is off the ground.",
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]*$",
+            "maxLength": 16
+          }
+        },
+        "engine": {
+          "description": "What the engine is doing, for its sound and exhaust.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rpm",
+            "gear",
+            "low",
+            "shifting",
+            "pedal",
+            "drowned"
+          ],
+          "properties": {
+            "rpm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "gear": {
+              "description": "-1 reverse, 1.. forward gears.",
+              "type": "integer"
+            },
+            "low": {
+              "description": "Low range engaged.",
+              "type": "boolean"
+            },
+            "shifting": {
+              "description": "A gear change in progress: no drive.",
+              "type": "boolean"
+            },
+            "pedal": {
+              "description": "The pedal driving the engine, 0..1.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "drowned": {
+              "description": "Water has got into the engine and stopped it.",
+              "type": "boolean"
+            }
+          }
+        },
+        "wading": {
+          "description": "Deepest water around the vehicle, metres above the bottom of its tyres.",
+          "type": "number",
+          "minimum": 0
         }
       }
     },
@@ -271,6 +333,47 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 200
+        }
+      }
+    },
+    "Push": {
+      "title": "Push",
+      "description": "Our vehicle pushed against another driver's vehicle: the push for their browser to apply, since only it moves that vehicle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "to",
+        "impulse",
+        "at"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "push"
+        },
+        "to": {
+          "description": "The player whose vehicle was pushed.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "impulse": {
+          "description": "Impulse on their vehicle, newton-seconds, world frame.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "at": {
+          "description": "Where it pushed, world position, metres.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
         }
       }
     }

@@ -85,6 +85,14 @@ export class ElectricMotorSound {
     }
   }
 
+  /** Stops its oscillators for good. */
+  dispose(): void {
+    for (const t of this.tones) t.osc.stop();
+    this.inverter.stop();
+    for (const o of this.warn) o.stop();
+    this.level.disconnect();
+  }
+
   /** Call every frame; `on` false for silence (another kind of engine, or not on the ground yet). */
   update(t: number, on: boolean, m: MotorSound): void {
     ease(this.level.gain, on ? 1 : 0, t, 0.08);

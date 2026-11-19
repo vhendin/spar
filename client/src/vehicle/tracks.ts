@@ -7,7 +7,7 @@
 
 import * as THREE from 'three/webgpu';
 import { attribute, float, fract, mix, smoothstep, uniform } from 'three/tsl';
-import type { VehicleSim } from './sim';
+import type { VehicleState } from './state';
 
 /** Quads in the store; at one per 40 cm per wheel that is several kilometres of driving. */
 const CAPACITY = 12000;
@@ -99,7 +99,7 @@ export class Tracks {
   }
 
   /** Call every frame after the physics; `wetness` 0 dry to 1 soaked. */
-  update(sim: VehicleSim, wetness: number, now: number): void {
+  update(sim: VehicleState, wetness: number, now: number): void {
     const time = now / 1000;
     this.now.value = time;
     const width = (sim.def.wheels.width ?? 0.3) * 0.95;

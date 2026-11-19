@@ -42,7 +42,7 @@ import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu, storedProfile } from './ui/startMenu';
 import { Chat } from './ui/chat';
-import { Others } from './multiplayer/others';
+import { applyPush, Others } from './multiplayer/others';
 import { takeSnapshot } from './multiplayer/track';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
@@ -239,6 +239,9 @@ async function start(): Promise<void> {
   const minimap = new Minimap(document.body);
   // The other drivers, and the chat with them.
   const others = new Others(scene, Object.values(VEHICLES));
+  others.audio = audio;
+  /** Pushes against the vehicle body gathered over the physics steps of a frame, for its sound. */
+  const impacts: Impact[] = [];
   const chat = new Chat(document.body, (text) => connection?.send({ type: 'chat', text }));
   /** Goes up whenever our vehicle is put somewhere new, so the others jump it there. */
   let jumps = 0;
@@ -457,6 +460,7 @@ async function start(): Promise<void> {
     physics.timestep = STEP;
     const ground = new GroundStore(RAPIER, physics, index);
     const sim = new VehicleSim(RAPIER, physics, def, ground);
+    others.attach(RAPIER, physics);
     const color = storedProfile().color ?? '';
     const view = new VehicleView(sim, { color });
     chase.eye.set(...driverEye(def));
@@ -945,6 +949,14 @@ async function start(): Promise<void> {
     },
     state: (msg) => others.receive(msg.id, msg.vehicle, performance.now()),
     away: (msg) => others.away(msg.id),
+    push: (msg) => {
+      // Another vehicle pushed ours; only this browser moves it. Heard as a knock too.
+      const w = world;
+      if (!w || paused || starting || w.unplaced) return;
+      applyPush(w.sim.body, msg.impulse, msg.at);
+      const force = Math.hypot(...msg.impulse) / (SEND_EVERY / 1000);
+      if (impacts.length < 32) impacts.push({ kind: 'object', force });
+    },
     chat: (msg) => {
       const from = msg.from === undefined ? undefined : others.players.find((p) => p.id === msg.from);
       chat.add(msg.text, msg.from === undefined ? undefined : (msg.name ?? from?.name ?? '?'), from?.color);
@@ -956,8 +968,6 @@ async function start(): Promise<void> {
   let frames = 0;
   let fpsSince = last;
   let owed = 0;
-  /** Pushes against the vehicle body gathered over the physics steps of a frame, for its sound. */
-  const impacts: Impact[] = [];
   const aim = new THREE.Vector3();
   /** What the winch keys do now, at the bottom of the screen while it is in use. */
   let winchShown = '';
@@ -1043,7 +1053,10 @@ async function start(): Promise<void> {
         w.sim.step(controls, STEP);
         w.winch.step(STEP, winching);
         w.felling.before();
+        // The others' vehicles where they are at the end of this step.
+        others.step(now - owed * 1000);
         w.physics.step(w.felling.events);
+        others.gather(w.sim.chassis);
         // The event queue must be emptied every step, with or without obstacles around.
         if (w.obstacles) w.obstacles.afterStep(STEP);
         else w.felling.after(STEP);
@@ -1051,7 +1064,8 @@ async function start(): Promise<void> {
         for (const c of w.felling.contacts.splice(0)) {
           const mine = w.sim.chassis.has(c.a), theirs = w.sim.chassis.has(c.b);
           if (mine === theirs || impacts.length >= 32) continue;
-          impacts.push({ kind: w.obstacles?.kindOf(mine ? c.b : c.a) ?? 'ground', force: c.force });
+          const hit = mine ? c.b : c.a;
+          impacts.push({ kind: others.owns(hit) ? 'object' : (w.obstacles?.kindOf(hit) ?? 'ground'), force: c.force });
         }
         w.view.capture();
         // Off the edge of the world or under it: start over.
@@ -1086,13 +1100,14 @@ async function start(): Promise<void> {
         w.start.setPicture(w.map.picture);
       } else if (flying) fly.update(dt);
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
-      // The other drivers, drawn where their snapshots say; ours sent to them.
+      // Our vehicle sent to the others (drawn further down, once the weather is known), with
+      // any pushes it gave theirs.
       camera.updateMatrixWorld();
-      others.update(now, dt, camera, !w.map.open);
       const onRoad = !starting && !w.unplaced;
       if (onRoad && now - sentAt >= SEND_EVERY) {
         sentAt = now;
         present = true;
+        for (const push of others.takePushes()) connection?.send({ type: 'push', ...push });
         connection?.send({
           type: 'state',
           vehicle: takeSnapshot(w.sim, {
@@ -1179,6 +1194,14 @@ async function start(): Promise<void> {
       w.exhaust.update(paused ? 0 : dt, w.sim, w.view.group, camera, !w.unplaced, Math.min(1, w.winch.tension / 80_000), exhaustWind, airTemperature(day, env.sunElevation));
       const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
+      // The other drivers, drawn where their snapshots say, with their spray, smoke and sound.
+      others.update(now, paused ? 0 : dt, camera, !w.map.open, {
+        wetness: env.weather.wetness,
+        rain: env.weather.rain,
+        wind: exhaustWind,
+        celsius: airTemperature(day, env.sunElevation),
+        heightAt: (x, z) => w.terrain.heightAt(x, z),
+      });
 
       // Sound: the vehicle where it is, the world where the camera is.
       const inside = !flying && !starting && chase.mode === 'cab';
