@@ -40,12 +40,18 @@ import { Guide } from './ui/guide';
 import { formatDistance, MapScreen, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
-import { saveLastPosition, StartMenu } from './ui/startMenu';
+import { saveLastPosition, StartMenu, storedProfile } from './ui/startMenu';
+import { Chat } from './ui/chat';
+import { Others } from './multiplayer/others';
+import { takeSnapshot } from './multiplayer/track';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
 import { dateOfYear, formatDuration, seasonName, Trips } from './trips';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
+
+/** Milliseconds between snapshots of our vehicle sent to the others. */
+const SEND_EVERY = 50;
 
 /** Physics runs in fixed steps of this many seconds, however fast frames are drawn. */
 const STEP = 1 / 60;
@@ -134,6 +140,8 @@ interface World {
   obstacles: Obstacles | null;
   sim: VehicleSim;
   view: VehicleView;
+  /** The paint the view was built with, '' for the vehicle's own colours. */
+  color: string;
   spray: Spray;
   exhaust: Exhaust;
   tracks: Tracks;
@@ -229,6 +237,14 @@ async function start(): Promise<void> {
   };
   scene.add(guide.beacon);
   const minimap = new Minimap(document.body);
+  // The other drivers, and the chat with them.
+  const others = new Others(scene, Object.values(VEHICLES));
+  const chat = new Chat(document.body, (text) => connection?.send({ type: 'chat', text }));
+  /** Goes up whenever our vehicle is put somewhere new, so the others jump it there. */
+  let jumps = 0;
+  /** When our last snapshot went out, and whether the others are drawing our vehicle. */
+  let sentAt = 0;
+  let present = false;
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -350,6 +366,7 @@ async function start(): Promise<void> {
     if (y === null) return false;
     w.tracks.break();
     w.winch.stow();
+    jumps++;
     w.sim.place(x, y + 0.25, z, heading);
     w.view.snap();
     chase.reset();
@@ -363,6 +380,7 @@ async function start(): Promise<void> {
     const chosenRegion = params.get('region') ?? stored(REGION_KEY);
     const regionName = listed.regions.some((r) => r.name === chosenRegion) ? chosenRegion! : welcome.region;
     loadingRegion = regionName;
+    others.region = regionName;
     drawHud();
     const index = await loadRegionIndex(regionName);
     ambience.treeline = index.masks.treeline;
@@ -437,7 +455,8 @@ async function start(): Promise<void> {
     physics.timestep = STEP;
     const ground = new GroundStore(RAPIER, physics, index);
     const sim = new VehicleSim(RAPIER, physics, def, ground);
-    const view = new VehicleView(sim);
+    const color = storedProfile().color ?? '';
+    const view = new VehicleView(sim, { color });
     chase.eye.set(...driverEye(def));
     const spray = new Spray();
     const exhaust = new Exhaust();
@@ -516,7 +535,8 @@ async function start(): Promise<void> {
         const w = world;
         if (!w) return;
         const chosen = defs.find((d) => d.name === choice.vehicle);
-        if (chosen) setVehicle(w, chosen);
+        if (chosen) setVehicle(w, chosen, choice.color);
+        connection?.setProfile(choice.color ? { name: choice.name, color: choice.color } : { name: choice.name });
         travel(w, { name: choice.start.name, x: choice.start.x, z: choice.start.z, heading: choice.start.heading });
         starting = false;
         start.hide();
@@ -539,7 +559,8 @@ async function start(): Promise<void> {
       starts.editable = info?.enabled ?? false;
       start.setMaker(info?.enabled ?? false);
     });
-    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    start.setPlayers(others.list());
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
     if (!direct) showStart(world);
@@ -580,21 +601,23 @@ async function start(): Promise<void> {
     const p = w.sim.body.translation();
     setDown(w, p.x, p.z, headingOf(w));
   };
-  /** Swaps the vehicle for another kind, where the old one stood. */
-  const setVehicle = (w: World, def: VehicleDef): void => {
+  /** Swaps the vehicle for another kind or another paint, where the old one stood. */
+  const setVehicle = (w: World, def: VehicleDef, color = w.color): void => {
     try {
       localStorage.setItem(VEHICLE_KEY, def.name);
     } catch {
       // Not remembered for next time.
     }
-    if (w.sim.def === def) return;
+    if (w.sim.def === def && w.color === color) return;
     const p = w.sim.body.translation();
     const heading = headingOf(w);
     const visible = w.view.group.visible;
     w.view.dispose();
     w.sim.dispose();
     w.sim = new VehicleSim(RAPIER, w.physics, def, w.ground);
-    w.view = new VehicleView(w.sim);
+    w.view = new VehicleView(w.sim, { color });
+    w.color = color;
+    jumps++;
     w.view.group.visible = visible;
     scene.add(w.view.group);
     w.felling.body = w.sim.body;
@@ -621,6 +644,7 @@ async function start(): Promise<void> {
   /** Off to another start point, which then becomes the one to go back to. */
   const travel = (w: World, s: World['spawn']): void => {
     trips.jumped();
+    jumps++;
     w.spawn = { name: s.name, x: s.x, z: s.z, heading: s.heading };
     w.arrival = w.spawn;
     // Moved there first, so the ground around it loads; set down properly once it has.
@@ -634,10 +658,10 @@ async function start(): Promise<void> {
   const mapState = (w: World): MapState => {
     if (flying) {
       const f = camera.getWorldDirection(new THREE.Vector3());
-      return { x: camera.position.x, z: camera.position.z, heading: THREE.MathUtils.radToDeg(Math.atan2(f.x, -f.z)), destination: guide.destination };
+      return { x: camera.position.x, z: camera.position.z, heading: THREE.MathUtils.radToDeg(Math.atan2(f.x, -f.z)), destination: guide.destination, others: others.markers() };
     }
     const p = w.sim.body.translation();
-    return { x: p.x, z: p.z, heading: headingOf(w), destination: guide.destination };
+    return { x: p.x, z: p.z, heading: headingOf(w), destination: guide.destination, others: others.markers() };
   };
   const toggleMap = (): void => {
     if (!world) return;
@@ -723,6 +747,7 @@ async function start(): Promise<void> {
         entries: trips.entries.filter((e) => e.region === world?.index.name),
         places: placesToReach,
       }),
+      players: () => ({ list: others.list(), region: world?.index.title ?? '' }),
       vehicles: Object.values(VEHICLES).map((d) => ({ name: d.name, title: d.title })).sort((a, b) => a.title.localeCompare(b.title)),
       vehicle: () => world?.sim.def.name ?? '',
       chooseVehicle: (name) => {
@@ -802,6 +827,13 @@ async function start(): Promise<void> {
       return;
     }
     if (paused || starting) return;
+    if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+      // A line to the others.
+      e.preventDefault();
+      if (document.pointerLockElement) document.exitPointerLock();
+      chat.open();
+      return;
+    }
     // The developer's keys work only while the developer read-out shows (F3).
     if (!debug && ['KeyB', 'KeyF', 'KeyU', 'KeyG'].includes(e.code)) return;
     switch (e.code) {
@@ -878,23 +910,45 @@ async function start(): Promise<void> {
     drawHud();
   });
 
-  connection = new Connection((state) => {
-    link = state;
-    if (state.status === 'online' && loadingRegion === null) {
-      enterRegion(state.welcome).catch((err: unknown) => {
-        console.error(err);
-        showFatal(
-          err instanceof RegionMissingError
-            ? `${err.message}\nOn the host, run:  docker compose run --rm importer build ${err.region}`
-            : `Spår could not load the world: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-    }
-    drawHud();
-  }, (update) => {
-    latestWorld = update;
-    world?.environment.setWorld(update, performance.now());
-  });
+  const playersChanged = (): void => {
+    world?.start.setPlayers(others.list());
+  };
+  connection = new Connection({
+    change: (state) => {
+      link = state;
+      if (state.status === 'online') {
+        others.me = state.welcome.playerId;
+        // After a reconnect the others need to see our vehicle again from scratch.
+        present = false;
+      }
+      if (state.status === 'online' && loadingRegion === null) {
+        enterRegion(state.welcome).catch((err: unknown) => {
+          console.error(err);
+          showFatal(
+            err instanceof RegionMissingError
+              ? `${err.message}\nOn the host, run:  docker compose run --rm importer build ${err.region}`
+              : `Spår could not load the world: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        });
+      }
+      drawHud();
+    },
+    world: (update) => {
+      latestWorld = update;
+      world?.environment.setWorld(update, performance.now());
+    },
+    players: (msg) => {
+      others.setPlayers(msg.players);
+      playersChanged();
+    },
+    state: (msg) => others.receive(msg.id, msg.vehicle, performance.now()),
+    away: (msg) => others.away(msg.id),
+    chat: (msg) => {
+      const from = msg.from === undefined ? undefined : others.players.find((p) => p.id === msg.from);
+      chat.add(msg.text, msg.from === undefined ? undefined : (msg.name ?? from?.name ?? '?'), from?.color);
+      playersChanged();
+    },
+  }, storedProfile());
 
   let last = performance.now();
   let frames = 0;
@@ -1030,6 +1084,28 @@ async function start(): Promise<void> {
         w.start.setPicture(w.map.picture);
       } else if (flying) fly.update(dt);
       else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
+      // The other drivers, drawn where their snapshots say; ours sent to them.
+      camera.updateMatrixWorld();
+      others.update(now, dt, camera, !w.map.open);
+      const onRoad = !starting && !w.unplaced;
+      if (onRoad && now - sentAt >= SEND_EVERY) {
+        sentAt = now;
+        present = true;
+        connection?.send({
+          type: 'state',
+          vehicle: takeSnapshot(w.sim, {
+            region: w.index.name,
+            jump: jumps,
+            t: now,
+            paused,
+            lights: lamps ?? w.environment.dark,
+            braking: w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05,
+          }),
+        });
+      } else if (!onRoad && present) {
+        present = false;
+        connection?.send({ type: 'away' });
+      }
       seeThrough.strength.value = flying || chase.mode === 'cab' ? 0 : 1;
       seeThrough.cab.value = !flying && !starting && chase.mode === 'cab' ? 1 : 0;
       // The vehicle's own space, from just above the ground to the roof: plants there are not drawn.

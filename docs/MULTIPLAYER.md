@@ -1,9 +1,8 @@
 # Multiplayer plan
 
-Step 6 of `PLAN.md`, revisited. Nothing here is built until single player is called complete;
-this is the design, so that single-player work from now on does not make it harder. Choices
-that are yours to make are in `QUESTIONS.md` under "Multiplayer"; the recommendations below
-assume the answers suggested there.
+Step 6 of `PLAN.md`, revisited. Started on 2026-11-19 with the recommendations below accepted
+(see "Answered" in `QUESTIONS.md`). Stage 1 is built; see "Stages" for what it does and does
+not do yet.
 
 ## What exists today
 
@@ -139,9 +138,17 @@ shared logbook on the server can come later.
 
 Each stage ends playable, with tests, and I stop after each for you to try it.
 
-1. **Seeing each other.** The `VehicleState` interface; the state message, interpolation, remote
-   vehicles drawn with lights, name tags and map markers; names, player list, chat. Vehicles
-   pass through each other.
+1. **Seeing each other.** *Built.* `hello` carries the name and paint, `profile` changes them,
+   and the server sends `players` to everyone on every change. Each browser sends a `state`
+   snapshot 20 times a second (`client/src/multiplayer/track.ts`, about 350 bytes) and `away`
+   when it goes back to the start screen; the server passes them on with the sender's id.
+   Others are drawn 100 ms behind, carried on 250 ms, removed after 5 s
+   (`multiplayer/others.ts`), only in the same region. The view takes a small `VehicleShape`
+   (definition, body pose, wheels) that both the simulation and a remote vehicle provide; the
+   rest (`VehicleState` for spray, tracks, grime, exhaust and sound) comes with stage 2. Remote
+   lamps glow but cast no beams. Name tags fade by 600 m; markers on the map and minimap;
+   player lists in the start screen and the menu; chat on Enter, with lines from the server
+   for joining, leaving, renaming and changes to the time and weather. Protocol 4.
 2. **Touching.** Kinematic bodies, pushes sent to the owner; others' tracks, spray, exhaust,
    grime and engine sound.
 3. **One world.** Felled trees and ice holes shared and sent to late joiners; regions as rooms;

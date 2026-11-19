@@ -44,6 +44,32 @@ export interface MapState {
   z: number;
   heading: number;
   destination: Destination | null;
+  /** Other drivers' vehicles in this region. */
+  others?: OtherMarker[];
+}
+
+/** Another driver's vehicle on the map. */
+export interface OtherMarker {
+  x: number;
+  z: number;
+  heading: number;
+  name: string;
+  color: string;
+}
+
+/** A vehicle's arrow, pointing up, centred on the origin; `size` 1 is the map's own arrow. */
+function arrow(c: CanvasRenderingContext2D, fill: string, size = 1): void {
+  c.fillStyle = fill;
+  c.strokeStyle = '#2f3b33';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(0, -11 * size);
+  c.lineTo(7 * size, 8 * size);
+  c.lineTo(0, 4 * size);
+  c.lineTo(-7 * size, 8 * size);
+  c.closePath();
+  c.fill();
+  c.stroke();
 }
 
 /** Most pixels per metre when zoomed right in. */
@@ -344,6 +370,23 @@ export class MapScreen {
         c.stroke();
         c.restore();
       }
+    }
+
+    // The other drivers within the window, turned like the map, with their names.
+    for (const o of state.others ?? []) {
+      const [ox, oy] = at(o.x, o.z);
+      if (Math.hypot(ox - half, oy - half) > half - 8) continue;
+      c.save();
+      c.translate(ox, oy);
+      c.rotate(((o.heading - state.heading) * Math.PI) / 180);
+      arrow(c, o.color, 0.7);
+      c.restore();
+      c.font = '15px "Instrument Serif", Georgia, serif';
+      c.lineWidth = 3;
+      c.strokeStyle = 'rgba(255,255,255,0.85)';
+      c.strokeText(o.name, ox, oy - 15);
+      c.fillStyle = '#222';
+      c.fillText(o.name, ox, oy - 15);
     }
 
     // The vehicle in the middle, always facing up.
@@ -816,21 +859,22 @@ export class MapScreen {
       if (d.name !== 'Marked spot') label(d.name, dx, dy - 32, '600 13px Inter, system-ui, sans-serif');
     }
 
+    // The other drivers, in their paint, with their names.
+    for (const o of st.others ?? []) {
+      const [ox, oy] = this.toScreen(o.x, o.z);
+      c.save();
+      c.translate(ox, oy);
+      c.rotate((o.heading * Math.PI) / 180);
+      arrow(c, o.color, 0.85);
+      c.restore();
+      label(o.name, ox, oy - 20, '17px "Instrument Serif", Georgia, serif');
+    }
+
     // The vehicle: an arrow the way it faces.
     c.save();
     c.translate(vx, vy);
     c.rotate((st.heading * Math.PI) / 180);
-    c.fillStyle = '#c9a44a';
-    c.strokeStyle = '#2f3b33';
-    c.lineWidth = 2;
-    c.beginPath();
-    c.moveTo(0, -11);
-    c.lineTo(7, 8);
-    c.lineTo(0, 4);
-    c.lineTo(-7, 8);
-    c.closePath();
-    c.fill();
-    c.stroke();
+    arrow(c, '#c9a44a');
     c.restore();
 
     this.scaleBar(h);

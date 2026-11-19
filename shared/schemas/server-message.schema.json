@@ -11,6 +11,18 @@
     },
     {
       "$ref": "#/definitions/ServerError"
+    },
+    {
+      "$ref": "#/definitions/Players"
+    },
+    {
+      "$ref": "#/definitions/PlayerState"
+    },
+    {
+      "$ref": "#/definitions/PlayerAway"
+    },
+    {
+      "$ref": "#/definitions/ChatLine"
     }
   ],
   "definitions": {
@@ -168,6 +180,122 @@
               "maximum": 1
             }
           }
+        }
+      }
+    },
+    "Players": {
+      "title": "Players",
+      "description": "Everyone connected, sent whenever someone joins, leaves or changes name or colour.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "players"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "players"
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "title": "Player",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 24
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "PlayerState": {
+      "title": "PlayerState",
+      "description": "Another driver's vehicle now, passed on as they sent it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "vehicle"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "state"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vehicle": {
+          "$ref": "client-message.schema.json#/definitions/VehicleSnapshot"
+        }
+      }
+    },
+    "PlayerAway": {
+      "title": "PlayerAway",
+      "description": "Another driver's vehicle has left the road.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "away"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ChatLine": {
+      "title": "ChatLine",
+      "description": "A line of chat; without `from` it is the server telling everyone something (a player joined, the weather was changed).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "chat"
+        },
+        "from": {
+          "description": "Player id of the sender.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The sender's name when it was said.",
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
         }
       }
     }

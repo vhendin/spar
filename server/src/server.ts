@@ -1,10 +1,11 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
+import { PROTOCOL_VERSION, type Player, type ServerMessage } from '@spar/shared';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
 import { AREA_SIZES, AreaMaker, checkRequest, cleanStarts, fromHost, readStarts, writeStarts, type AreaRequest } from './areas';
+import { cleanName, describeWorldChange, playerList } from './players';
 import { listRegions } from './regions';
 import { serveFile } from './static';
 import { WorldState } from './world';
@@ -158,21 +159,37 @@ export function createGameServer(config: ServerConfig): GameServer {
   wss.on('error', () => {});
   let nextPlayer = 1;
   const world = new WorldState(config);
-  const joined = new Set<WebSocket>();
+  /** Everyone who has said hello, by their socket. */
+  const joined = new Map<WebSocket, Player>();
   let ticks = 0;
   const timer = setInterval(() => {
     world.step();
     if (++ticks % WORLD_INTERVAL !== 0 || joined.size === 0) return;
     const update = JSON.stringify(world.message());
-    for (const ws of joined) ws.send(update);
+    for (const ws of joined.keys()) ws.send(update);
   }, 1000);
 
   const send = (ws: WebSocket, msg: ServerMessage): void => ws.send(JSON.stringify(msg));
+  /** To everyone who has joined, or everyone but `except`. */
+  const broadcast = (msg: ServerMessage, except?: WebSocket): void => {
+    const text = JSON.stringify(msg);
+    for (const ws of joined.keys()) if (ws !== except && ws.readyState === ws.OPEN) ws.send(text);
+  };
+  const announcePlayers = (): void => broadcast({ type: 'players', players: playerList(joined.values()) });
+  const say = (text: string): void => broadcast({ type: 'chat', text });
 
   wss.on('connection', (ws) => {
-    const playerId = `p${nextPlayer++}`;
+    const number = nextPlayer++;
+    const playerId = `p${number}`;
     ws.on('error', (err) => console.error(`socket error ${playerId}`, err));
-    ws.on('close', () => joined.delete(ws));
+    ws.on('close', () => {
+      const player = joined.get(ws);
+      if (!player) return;
+      joined.delete(ws);
+      broadcast({ type: 'away', id: player.id });
+      announcePlayers();
+      say(`${player.name} left`);
+    });
     ws.on('message', (data, isBinary) => {
       let msg: unknown;
       try {
@@ -186,27 +203,57 @@ export function createGameServer(config: ServerConfig): GameServer {
         send(ws, { type: 'error', code: 'bad_message', message: 'Message does not match the protocol schema.' });
         return;
       }
+      if (msg.type === 'hello') {
+        if (msg.protocol !== PROTOCOL_VERSION) {
+          send(ws, {
+            type: 'error',
+            code: 'protocol_mismatch',
+            message: `Server speaks protocol ${PROTOCOL_VERSION}, client sent ${msg.protocol}. Reload the page.`,
+          });
+          ws.close(1002, 'protocol mismatch');
+          return;
+        }
+        if (joined.has(ws)) return;
+        send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId, region: config.region, seed: config.seed });
+        send(ws, world.message());
+        const player: Player = { id: playerId, name: cleanName(msg.name, `Driver ${number}`) };
+        if (msg.color) player.color = msg.color;
+        joined.set(ws, player);
+        announcePlayers();
+        say(`${player.name} joined`);
+        return;
+      }
+      // Everything else needs a hello first.
+      const player = joined.get(ws);
+      if (!player) return;
       switch (msg.type) {
-        case 'hello':
-          if (msg.protocol !== PROTOCOL_VERSION) {
-            send(ws, {
-              type: 'error',
-              code: 'protocol_mismatch',
-              message: `Server speaks protocol ${PROTOCOL_VERSION}, client sent ${msg.protocol}. Reload the page.`,
-            });
-            ws.close(1002, 'protocol mismatch');
-            return;
-          }
-          send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId, region: config.region, seed: config.seed });
-          send(ws, world.message());
-          joined.add(ws);
+        case 'profile': {
+          const name = cleanName(msg.name, player.name);
+          if (name !== player.name) say(`${player.name} is now called ${name}`);
+          player.name = name;
+          if (msg.color) player.color = msg.color;
+          else delete player.color;
+          announcePlayers();
           break;
+        }
+        case 'state':
+          // Passed on as it came; each browser draws the others' vehicles from it.
+          broadcast({ type: 'state', id: player.id, vehicle: msg.vehicle }, ws);
+          break;
+        case 'away':
+          broadcast({ type: 'away', id: player.id }, ws);
+          break;
+        case 'chat': {
+          const text = msg.text.trim();
+          if (text) broadcast({ type: 'chat', from: player.id, name: player.name, text });
+          break;
+        }
         case 'set_world': {
           // Anyone who has joined may change the clock and weather; everyone sees it at once.
-          if (!joined.has(ws)) return;
           world.set(msg);
-          const update = JSON.stringify(world.message());
-          for (const other of joined) other.send(update);
+          broadcast(world.message());
+          const change = describeWorldChange(msg);
+          if (change) say(`${player.name} ${change}`);
           break;
         }
       }
@@ -227,6 +274,7 @@ export function createGameServer(config: ServerConfig): GameServer {
       new Promise((resolve, reject) => {
         clearInterval(timer);
         for (const ws of wss.clients) ws.terminate();
+        joined.clear();
         wss.close();
         http.close((err) => (err ? reject(err) : resolve()));
       }),

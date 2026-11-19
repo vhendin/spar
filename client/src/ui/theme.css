@@ -313,3 +313,44 @@ kbd {
 #map p.hint { margin: 12px 0 0; font-size: 12px; }
 #map button { padding: 4px 10px; font-size: 12px; }
 #map input.start-name { flex: 1; min-width: 0; padding: 3px 7px; font-size: 13px; }
+
+/* Other drivers: name tags over their vehicles, and the chat. */
+#tags { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+#tags .tag {
+  position: absolute; left: 0; top: 0; display: none; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 2px 10px 3px 7px; font: 17px/1.2 var(--serif); color: var(--on-glass);
+  background: var(--glass); border: 1px solid var(--glass-rule); border-radius: 999px;
+}
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(236, 235, 230, 0.6); flex: none; }
+#chat {
+  position: fixed; left: 16px; bottom: calc(min(190px, 30vw) + 30px); width: min(420px, calc(100vw - 32px)); z-index: 6;
+  display: flex; flex-direction: column; gap: 4px; pointer-events: none; font: 13px/1.4 var(--sans); color: var(--on-glass);
+}
+#chat .log { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+#chat .line {
+  max-width: 100%; padding: 3px 10px; background: var(--glass); border-radius: 12px; overflow-wrap: anywhere;
+  transition: opacity 1.5s;
+}
+#chat .line.notice { color: var(--on-glass-soft); font-style: italic; }
+#chat .line.old { opacity: 0; }
+#chat.typing .line.old { opacity: 0.85; }
+#chat .who { font: 16px/1 var(--serif); color: var(--player, var(--mustard)); }
+#chat input {
+  display: none; pointer-events: auto; padding: 7px 12px; font: 14px var(--sans); color: var(--birch);
+  background: var(--glass-deep); border: 1px solid var(--mustard); border-radius: 999px; outline: none;
+}
+#chat input::placeholder { color: var(--on-glass-soft); }
+#chat.typing input { display: block; }
+
+/* Paint swatches and the players' list, in the start screen and the menu. */
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#start .swatches button, #menu .swatches button {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--rule);
+}
+#start .swatches button.on, #menu .swatches button.on { border-color: var(--mustard); outline: 2px solid var(--mustard); outline-offset: 1px; }
+#start .swatches button.own, #menu .swatches button.own { background: var(--wash); font-size: 11px; color: var(--ink-soft); width: auto; padding: 0 9px; border-radius: 999px; }
+.players { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.players .player { display: flex; align-items: center; gap: 8px; }
+.players .dot { border-color: var(--rule); }
+.players .name { font: 18px/1.2 var(--serif); }
+.players .where { color: var(--ink-soft); font-size: 12px; }

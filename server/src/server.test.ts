@@ -7,8 +7,6 @@ import { PROTOCOL_VERSION, type ServerMessage } from '@spar/shared';
 import { isServerMessage } from '@spar/shared/validate';
 import { createGameServer, type GameServer } from './server';
 
-type WorldUpdate = Extract<ServerMessage, { type: 'world' }>;
-
 let dir: string;
 let server: GameServer;
 let port: number;
@@ -56,6 +54,68 @@ afterAll(async () => {
   await server.close();
   await rm(dir, { recursive: true, force: true });
 });
+
+type Of<T extends ServerMessage['type']> = Extract<ServerMessage, { type: T }>;
+
+interface Client {
+  ws: WebSocket;
+  id: string;
+  /** The next message of this type not yet taken. */
+  next<T extends ServerMessage['type']>(type: T): Promise<Of<T>>;
+  /** The first message of this type, already received or still to come, that passes `test`. */
+  waitFor<T extends ServerMessage['type']>(type: T, test: (m: Of<T>) => boolean): Promise<Of<T>>;
+  /** Every message of this type received so far. */
+  seen<T extends ServerMessage['type']>(type: T): Of<T>[];
+  /** Forgets what has been received. */
+  clear(): void;
+}
+
+/** Joins as a player and collects what the server sends, checking each against the schema. */
+function connect(name?: string, color?: string): Promise<Client> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const all: ServerMessage[] = [];
+    let taken = new Set<ServerMessage>();
+    const waiters: (() => void)[] = [];
+    const find = <T extends ServerMessage['type']>(type: T, test: (m: Of<T>) => boolean, take: boolean): Of<T> | undefined => {
+      const m = all.find((x) => x.type === type && !(take && taken.has(x)) && test(x as Of<T>)) as Of<T> | undefined;
+      if (m && take) taken.add(m);
+      return m;
+    };
+    const wait = <T extends ServerMessage['type']>(type: T, test: (m: Of<T>) => boolean, take: boolean): Promise<Of<T>> =>
+      new Promise((done) => {
+        const check = (): void => {
+          const m = find(type, test, take);
+          if (m) done(m);
+          else waiters.push(check);
+        };
+        check();
+      });
+    const client: Client = {
+      ws,
+      id: '',
+      next: (type) => wait(type, () => true, true),
+      waitFor: (type, test) => wait(type, test, false),
+      seen: (type) => all.filter((m) => m.type === type) as never,
+      clear: () => {
+        all.length = 0;
+        taken = new Set();
+      },
+    };
+    ws.on('message', (data) => {
+      const msg = JSON.parse(data.toString()) as ServerMessage;
+      if (!isServerMessage(msg)) reject(new Error(`not a server message: ${data.toString()}`));
+      all.push(msg);
+      if (msg.type === 'welcome') {
+        client.id = msg.playerId;
+        resolve(client);
+      }
+      for (const w of waiters.splice(0)) w();
+    });
+    ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION, ...(name !== undefined && { name }), ...(color && { color }) })));
+    ws.on('error', reject);
+  });
+}
 
 /** Opens a socket, sends one raw frame and resolves with the first reply. */
 function exchange(payload: string): Promise<unknown> {
@@ -180,56 +240,87 @@ describe('websocket', () => {
   });
 
   it('follows the welcome with the time and the weather, and keeps sending them', async () => {
-    const messages = await new Promise<unknown[]>((resolve, reject) => {
-      const got: unknown[] = [];
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-      ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION })));
-      ws.on('message', (data) => {
-        got.push(JSON.parse(data.toString()));
-        if (got.length === 3) {
-          ws.close();
-          resolve(got);
-        }
-      });
-      ws.on('error', reject);
-    });
-    expect(messages.every((m) => isServerMessage(m))).toBe(true);
-    const [welcome, first, later] = messages as [{ type: string }, WorldUpdate, WorldUpdate];
-    expect(welcome.type).toBe('welcome');
-    expect(first.type).toBe('world');
+    const a = await connect();
+    const first = await a.next('world');
+    const later = await a.next('world');
     expect(first.time.utcOffset).toBe(1);
     expect(first.time.rate).toBe(48); // a day in 30 minutes
     expect(first.time.utc).toBeGreaterThanOrEqual(Date.UTC(2026, 11, 21, 13, 0));
     expect(first.weather.state).toBe('rain'); // pinned by the configuration
     expect(later.time.utc).toBeGreaterThan(first.time.utc + 30000); // well over a real second has passed
+    a.ws.close();
   }, 10000);
 
-  it('passes a change to the clock and weather on to every player at once', async () => {
-    const join = (): Promise<{ ws: WebSocket; next: () => Promise<WorldUpdate> }> =>
-      new Promise((resolve, reject) => {
-        const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-        const queue: WorldUpdate[] = [];
-        let waiting: ((m: WorldUpdate) => void) | null = null;
-        ws.on('message', (data) => {
-          const msg = JSON.parse(data.toString()) as ServerMessage;
-          if (msg.type === 'welcome') resolve({ ws, next });
-          if (msg.type !== 'world') return;
-          if (waiting) { waiting(msg); waiting = null; } else queue.push(msg);
-        });
-        const next = (): Promise<WorldUpdate> => new Promise((r) => (queue.length ? r(queue.shift()!) : (waiting = r)));
-        ws.on('open', () => ws.send(JSON.stringify({ type: 'hello', protocol: PROTOCOL_VERSION })));
-        ws.on('error', reject);
-      });
-    const [a, b] = await Promise.all([join(), join()]);
-    await Promise.all([a.next(), b.next()]); // the update that follows each welcome
+  it('passes a change to the clock and weather on to every player at once, and says who did it', async () => {
+    const a = await connect('Anna');
+    const b = await connect('Bo');
+    await a.next('world');
+    await b.next('world');
+    b.clear();
     a.ws.send(JSON.stringify({ type: 'set_world', hour: 6, dayMinutes: 0, weather: 'clear' }));
-    const seen = await b.next();
-    expect(isServerMessage(seen)).toBe(true);
+    const seen = await b.next('world');
     expect(seen.weather.state).toBe('clear');
     expect(seen.time.rate).toBe(0);
     expect(seen.time.utc).toBe(Date.UTC(2026, 11, 21, 5, 0)); // 06:00 local, same day
+    expect((await b.next('chat')).text).toBe('Anna set the clock to 06:00, stopped the clock and set the weather to clear');
     a.ws.close();
     b.ws.close();
+  });
+
+  it('lists the players, passes vehicles and chat on, and tells when someone leaves', async () => {
+    const a = await connect('  Anna  ');
+    const b = await connect('', '#8e3b2d');
+    const list = await a.waitFor('players', (m) => m.players.length >= 2 && m.players.some((p) => p.id === b.id));
+    const named = list.players.find((p) => p.id === b.id)!;
+    expect(named.name).toMatch(/^Driver \d+$/);
+    expect(named.color).toBe('#8e3b2d');
+    expect(list.players.find((p) => p.id === a.id)!.name).toBe('Anna');
+    expect((await a.waitFor('chat', (m) => m.text.endsWith('joined') && m.text.startsWith('Driver'))).from).toBeUndefined();
+
+    const vehicle = {
+      region: 'demo', vehicle: 'tgb11', jump: 1, t: 1234.5, paused: false,
+      p: [1, 2, 3], q: [0, 0, 0, 1], v: [4, 0, 0], wheels: [[0.1, 0.3], [0.1, 0.3], [0, 0.3], [0, 0.3]],
+      lights: true, braking: false,
+    };
+    a.ws.send(JSON.stringify({ type: 'state', vehicle }));
+    const relayed = await b.next('state');
+    expect(relayed).toEqual({ type: 'state', id: a.id, vehicle });
+    expect(isServerMessage(relayed)).toBe(true);
+
+    b.ws.send(JSON.stringify({ type: 'chat', text: ' hej! ' }));
+    const line = await a.waitFor('chat', (m) => m.from === b.id);
+    expect(line).toMatchObject({ name: named.name, text: 'hej!' });
+    // The sender hears it too, as a sign it went out.
+    expect((await b.waitFor('chat', (m) => m.from === b.id)).text).toBe('hej!');
+
+    a.ws.send(JSON.stringify({ type: 'profile', name: 'Anna V', color: '#c9a44a' }));
+    const renamed = await b.waitFor('players', (m) => m.players.some((p) => p.name === 'Anna V'));
+    expect(renamed.players.find((p) => p.id === a.id)!.color).toBe('#c9a44a');
+    expect((await b.waitFor('chat', (m) => m.text.includes('is now called'))).text).toBe('Anna is now called Anna V');
+
+    a.ws.send(JSON.stringify({ type: 'away' }));
+    expect((await b.next('away')).id).toBe(a.id);
+    a.ws.close();
+    expect((await b.waitFor('chat', (m) => m.text.endsWith('left'))).text).toBe('Anna V left');
+    const left = await b.waitFor('players', (m) => !m.players.some((p) => p.id === a.id));
+    expect(left.players.some((p) => p.id === b.id)).toBe(true);
+    b.ws.close();
+  });
+
+  it('passes on nothing before hello, and refuses a malformed vehicle', async () => {
+    const a = await connect('Anna');
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise((r) => ws.on('open', r));
+    ws.send(JSON.stringify({ type: 'chat', text: 'sneaky' }));
+    const reply = await new Promise<unknown>((resolve) => {
+      ws.on('message', (d) => resolve(JSON.parse(d.toString())));
+      ws.send(JSON.stringify({ type: 'state', vehicle: { region: 'demo' } }));
+    });
+    expect(reply).toMatchObject({ type: 'error', code: 'bad_message' });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(a.seen('chat').some((m) => m.text === 'sneaky')).toBe(false);
+    ws.close();
+    a.ws.close();
   });
 
   it('gives each connection its own player id', async () => {

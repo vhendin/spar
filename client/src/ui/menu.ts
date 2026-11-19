@@ -4,6 +4,7 @@
 import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../vehicle/gamepad';
 import { formatDuration, type LogEntry } from '../trips';
 import { formatDistance } from './map';
+import { fillPlayers, type PlayerLine } from './players';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
 
 export interface MenuActions {
@@ -25,6 +26,8 @@ export interface MenuActions {
   restart(): void;
   /** The logbook for this area: its title, the arrivals there, and how many places there are to reach. */
   logbook(): { title: string; entries: LogEntry[]; places: number };
+  /** Everyone connected, and the title of the region we drive in. */
+  players(): { list: PlayerLine[]; region: string };
 }
 
 const CONTROLS: [string, string][] = [
@@ -45,6 +48,7 @@ const CONTROLS: [string, string][] = [
   ['N', 'Minimap: near, far, hidden'],
   ['Tab (hold)', 'Big minimap'],
   ['T', 'Time and weather'],
+  ['Enter', 'Chat with the others'],
   ['C', 'Credits'],
   ['Esc', 'Menu and pause'],
 ];
@@ -179,6 +183,11 @@ export class Menu {
         for (const v of this.actions.vehicles) {
           button(v.title, () => this.actions.chooseVehicle(v.name), row, v.name === this.actions.vehicle() ? 'on' : '');
         }
+      }
+      const { list: players, region } = this.actions.players();
+      if (players.length > 1) {
+        add('div', 'On the road', box, 'label');
+        fillPlayers(add('div', '', box), players, region);
       }
       add('div', 'Stuck?', box, 'label');
       const row = add('div', '', box, 'row');

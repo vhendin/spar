@@ -4,6 +4,7 @@
 import { isElectric, peakPower, type RegionIndex, type RegionVectors, type VehicleDef } from '@spar/shared';
 import type { RegionListing } from '../terrain/region';
 import type { StartStore } from './starts';
+import { fillPlayers, PAINTS, paintSwatches, type PlayerLine } from './players';
 
 export interface StartPoint {
   name: string;
@@ -16,6 +17,8 @@ export interface StartChoice {
   start: StartPoint;
   vehicle: string;
   name: string;
+  /** Paint for the vehicle, #rrggbb, or '' for its own colours. */
+  color: string;
 }
 
 export interface StartActions {
@@ -34,6 +37,7 @@ export interface StartActions {
 }
 
 const NAME_KEY = 'spar.name';
+const COLOR_KEY = 'spar.color';
 const START_KEY = 'spar.start';
 const LAST_KEY = 'spar.last';
 
@@ -59,6 +63,12 @@ function write(key: string, value: string): void {
   } catch {
     // Not remembered; fine.
   }
+}
+
+/** The driver's name and paint remembered on this computer, for joining before the start screen shows. */
+export function storedProfile(): { name: string; color?: string } {
+  const color = read(COLOR_KEY) ?? '';
+  return PAINTS.some((p) => p.color === color) && color ? { name: read(NAME_KEY) ?? '', color } : { name: read(NAME_KEY) ?? '' };
 }
 
 export function saveLastPosition(p: LastPosition): void {
@@ -92,6 +102,10 @@ export class StartMenu {
   private start = 0;
   private vehicle: string;
   private name: string;
+  private color: string;
+  /** Who else is connected, kept up to date in place so typing a name is not interrupted. */
+  private readonly players = document.createElement('div');
+  private playersLabel = document.createElement('div');
   private picture: HTMLCanvasElement | null = null;
   /** Whether this computer may make and remove areas (it runs the server). */
   private maker = false;
@@ -108,6 +122,10 @@ export class StartMenu {
   ) {
     this.vehicle = vehicle;
     this.name = read(NAME_KEY) ?? '';
+    const color = read(COLOR_KEY) ?? '';
+    this.color = PAINTS.some((p) => p.color === color) ? color : '';
+    this.playersLabel.className = 'label';
+    this.playersLabel.textContent = 'On the road';
     this.box = document.createElement('div');
     this.box.className = 'box';
     this.preview = document.createElement('canvas');
@@ -278,6 +296,12 @@ export class StartMenu {
       e.stopPropagation();
       if (e.key === 'Enter') this.drive();
     });
+    paintSwatches(right, this.color, (c) => {
+      this.color = c;
+      write(COLOR_KEY, c);
+      this.render();
+    });
+    right.append(this.playersLabel, this.players);
 
     const foot = add('div', '', box, 'foot');
     button('Drive', () => this.drive(), foot, 'primary');
@@ -289,14 +313,26 @@ export class StartMenu {
 
   /** Drives off from a point picked elsewhere (the big map), with the vehicle chosen here. */
   driveFrom(start: StartPoint): void {
-    this.actions.drive({ start: { name: start.name, x: start.x, z: start.z, heading: start.heading }, vehicle: this.vehicle, name: this.name });
+    this.actions.drive({ start: { name: start.name, x: start.x, z: start.z, heading: start.heading }, vehicle: this.vehicle, name: this.name, color: this.color });
+  }
+
+  /** The driver's name and paint as chosen so far, for joining the server before driving off. */
+  get profile(): { name: string; color: string } {
+    return { name: this.name, color: this.color };
+  }
+
+  /** Who is connected; the list shows only when someone else is. */
+  setPlayers(players: PlayerLine[]): void {
+    fillPlayers(this.players, players, this.index.title);
+    const show = players.length > 1;
+    this.players.style.display = this.playersLabel.style.display = show ? '' : 'none';
   }
 
   /** Drives off with what is chosen (the Drive button, Enter, or Start on a gamepad). */
   drive(): void {
     const start = this.starts[this.start]!;
     write(START_KEY, start.name);
-    this.actions.drive({ start, vehicle: this.vehicle, name: this.name });
+    this.actions.drive({ start, vehicle: this.vehicle, name: this.name, color: this.color });
   }
 
   /** The region's map, with the start points marked and the chosen one highlighted. */

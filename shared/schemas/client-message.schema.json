@@ -8,12 +8,24 @@
     },
     {
       "$ref": "#/definitions/SetWorld"
+    },
+    {
+      "$ref": "#/definitions/Profile"
+    },
+    {
+      "$ref": "#/definitions/State"
+    },
+    {
+      "$ref": "#/definitions/Away"
+    },
+    {
+      "$ref": "#/definitions/Chat"
     }
   ],
   "definitions": {
     "Hello": {
       "title": "Hello",
-      "description": "First message on a new connection.",
+      "description": "First message on a new connection, with the driver's name and colour.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -28,6 +40,16 @@
         "protocol": {
           "type": "integer",
           "minimum": 1
+        },
+        "name": {
+          "description": "The driver's name as others see it; empty lets the server name them.",
+          "type": "string",
+          "maxLength": 24
+        },
+        "color": {
+          "description": "The vehicle's paint as #rrggbb; left out, the vehicle keeps its own colours.",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
         }
       }
     },
@@ -71,6 +93,179 @@
             "overcast",
             "rain"
           ]
+        }
+      }
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "A new name or colour for this driver.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "name"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "profile"
+        },
+        "name": {
+          "description": "The driver's name as others see it; empty lets the server name them.",
+          "type": "string",
+          "maxLength": 24
+        },
+        "color": {
+          "description": "The vehicle's paint as #rrggbb; left out, the vehicle keeps its own colours.",
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+      }
+    },
+    "VehicleSnapshot": {
+      "title": "VehicleSnapshot",
+      "description": "How a driver's vehicle stands at one moment, sent about 20 times a second so others can draw it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region",
+        "vehicle",
+        "jump",
+        "t",
+        "paused",
+        "p",
+        "q",
+        "v",
+        "wheels",
+        "lights",
+        "braking"
+      ],
+      "properties": {
+        "region": {
+          "description": "The region being driven; others draw the vehicle only in the same one.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "vehicle": {
+          "description": "Name of the vehicle definition.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "jump": {
+          "description": "Goes up whenever the vehicle is put somewhere new, so others jump it there instead of sliding it.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "t": {
+          "description": "The sender's clock, milliseconds; only differences between its own snapshots matter.",
+          "type": "number"
+        },
+        "paused": {
+          "description": "The driver has paused: the vehicle stands still.",
+          "type": "boolean"
+        },
+        "p": {
+          "description": "Position of the body, metres.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "q": {
+          "description": "Rotation of the body, quaternion x, y, z, w.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "v": {
+          "description": "Velocity of the body, metres a second.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "wheels": {
+          "description": "Per wheel, in the definition's order: steering angle (radians) and suspension length (metres).",
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "lights": {
+          "description": "Headlights on.",
+          "type": "boolean"
+        },
+        "braking": {
+          "description": "Brake lights on.",
+          "type": "boolean"
+        }
+      }
+    },
+    "State": {
+      "title": "State",
+      "description": "This driver's vehicle now.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "vehicle"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "state"
+        },
+        "vehicle": {
+          "$ref": "#/definitions/VehicleSnapshot"
+        }
+      }
+    },
+    "Away": {
+      "title": "Away",
+      "description": "This driver's vehicle has left the road (back at the start screen): others stop drawing it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "away"
+        }
+      }
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "A line of chat to everyone.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "chat"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
         }
       }
     }

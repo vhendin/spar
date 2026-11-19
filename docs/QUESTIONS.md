@@ -200,22 +200,16 @@ same as the Terrängkombi.
 
 ### Multiplayer (docs/MULTIPLAYER.md)
 
-Not to be built until single player is called complete; answers shape the plan.
+Stage 1 (seeing each other) is built; these came up on the way.
 
-- **Regions.** Recommended: each region is a room, and you only see players in the same one.
-  Or should the whole server drive in one region, chosen by the host?
-- **Who may change the time and weather.** Recommended: anyone, with a chat line saying who did
-  it. Or the host only?
-- **Bumping.** Recommended: vehicles are solid to each other. Or pass through (ghosts), or a
-  setting?
-- **Winching each other** is the hardest part (the puller's browser takes over the towed
-  vehicle). Wanted in the first round, or after the rest works?
-- **Players.** Up to 5, as in `PLAN.md`?
-- **Telling players apart.** Recommended: each player picks a vehicle colour, together with the
-  light 4×4 colour question above. Name tags too.
-- **Chat.** Text only? Voice would need a browser-to-browser connection setup and more work.
-- **Trips together.** A shared destination on everyone's map, each arrival logged in your own
-  logbook with who else arrived. Enough to start with?
+- **Headlight beams of other vehicles.** Their lamps glow, but they light nothing: every extra
+  light makes all materials on screen more expensive, and adding one rebuilds them all (a
+  stutter as someone joins). Fine, or should the nearest one or two others get real beams?
+- **Keeping your place after a dropped connection.** Reconnecting now makes you a new player
+  ("left", then "joined"). Worth keeping the slot for a minute, as planned for stage 5?
+- **Chat key.** Enter opens the chat line. Does it clash with anything you are used to?
+- **Paints.** Nine to choose from (the vehicle's own, Falu red, mustard, lake blue, moss, birch
+  white, night, rowan orange, lingon). Enough, or a free colour picker?
 
 ## Answered
 
@@ -248,6 +242,11 @@ Not to be built until single player is called complete; answers shape the plan.
   driving and ice after.
 - Light 4×4 body: a hard top, not open, so there is no empty driver's seat to see.
 
-- Multiplayer (step 6) waits until single player is complete.
+- Multiplayer: started on 2026-11-19 with nothing blocking it; single-player tuning carries
+  on alongside. Each region is a room (others are drawn only in the same region); anyone may
+  change the time and weather, and a chat line says who did; vehicles will be solid to each
+  other (stage 2); winching each other comes last; up to 5 players; each picks a paint for
+  their vehicle, with name tags; text chat only; a shared destination on everyone's map, each
+  arrival in your own logbook.
 - Animals are on hold.
 - Mountain areas are the focus; cities and flat test areas were dropped.

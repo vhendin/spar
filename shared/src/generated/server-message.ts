@@ -3,7 +3,7 @@
 /**
  * Every message the server may send to a client.
  */
-export type ServerMessage = Welcome | WorldUpdate | ServerError;
+export type ServerMessage = Welcome | WorldUpdate | ServerError | Players | PlayerState | PlayerAway | ChatLine;
 
 /**
  * Reply to hello: who you are and which world to load.
@@ -64,4 +64,182 @@ export interface ServerError {
   type: 'error';
   code: 'bad_message' | 'protocol_mismatch';
   message: string;
+}
+/**
+ * Everyone connected, sent whenever someone joins, leaves or changes name or colour.
+ */
+export interface Players {
+  type: 'players';
+  players: Player[];
+}
+export interface Player {
+  id: string;
+  name: string;
+  color?: string;
+}
+/**
+ * Another driver's vehicle now, passed on as they sent it.
+ */
+export interface PlayerState {
+  type: 'state';
+  id: string;
+  vehicle: VehicleSnapshot;
+}
+/**
+ * How a driver's vehicle stands at one moment, sent about 20 times a second so others can draw it.
+ */
+export interface VehicleSnapshot {
+  /**
+   * The region being driven; others draw the vehicle only in the same one.
+   */
+  region: string;
+  /**
+   * Name of the vehicle definition.
+   */
+  vehicle: string;
+  /**
+   * Goes up whenever the vehicle is put somewhere new, so others jump it there instead of sliding it.
+   */
+  jump: number;
+  /**
+   * The sender's clock, milliseconds; only differences between its own snapshots matter.
+   */
+  t: number;
+  /**
+   * The driver has paused: the vehicle stands still.
+   */
+  paused: boolean;
+  /**
+   * Position of the body, metres.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  p: [number, number, number];
+  /**
+   * Rotation of the body, quaternion x, y, z, w.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  q: [number, number, number, number];
+  /**
+   * Velocity of the body, metres a second.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  v: [number, number, number];
+  /**
+   * Per wheel, in the definition's order: steering angle (radians) and suspension length (metres).
+   *
+   * @maxItems 12
+   */
+  wheels:
+    | []
+    | [[number, number]]
+    | [[number, number], [number, number]]
+    | [[number, number], [number, number], [number, number]]
+    | [[number, number], [number, number], [number, number], [number, number]]
+    | [[number, number], [number, number], [number, number], [number, number], [number, number]]
+    | [[number, number], [number, number], [number, number], [number, number], [number, number], [number, number]]
+    | [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number]
+      ]
+    | [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number]
+      ]
+    | [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number]
+      ]
+    | [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number]
+      ]
+    | [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number]
+      ]
+    | [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number]
+      ];
+  /**
+   * Headlights on.
+   */
+  lights: boolean;
+  /**
+   * Brake lights on.
+   */
+  braking: boolean;
+}
+/**
+ * Another driver's vehicle has left the road.
+ */
+export interface PlayerAway {
+  type: 'away';
+  id: string;
+}
+/**
+ * A line of chat; without `from` it is the server telling everyone something (a player joined, the weather was changed).
+ */
+export interface ChatLine {
+  type: 'chat';
+  /**
+   * Player id of the sender.
+   */
+  from?: string;
+  /**
+   * The sender's name when it was said.
+   */
+  name?: string;
+  text: string;
 }

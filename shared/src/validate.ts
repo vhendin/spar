@@ -24,6 +24,8 @@ import type { ClientMessage, ServerMessage } from './protocol';
 const ajv = new Ajv({ allErrors: false });
 
 export const isClientMessage = ajv.compile(clientSchema) as ValidateFunction<ClientMessage>;
+// The server's messages refer to the client's for the vehicle snapshot they pass on.
+ajv.addSchema(clientSchema, 'client-message.schema.json');
 export const isServerMessage = ajv.compile(serverSchema) as ValidateFunction<ServerMessage>;
 export const isRegionDef = ajv.compile(regionDefSchema) as ValidateFunction<RegionDef>;
 export const isRegionIndex = ajv.compile(regionIndexSchema) as ValidateFunction<RegionIndex>;

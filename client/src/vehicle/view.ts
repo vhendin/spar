@@ -1,7 +1,36 @@
 import * as THREE from 'three/webgpu';
 import { buildVehicleMeshes } from './body';
 import { Grime } from './grime';
-import type { VehicleSim } from './sim';
+import type { VehicleDef } from '@spar/shared';
+
+/**
+ * What the view needs of a vehicle: its definition, its body's pose and its wheels. The
+ * simulation provides it for our own vehicle, a remote vehicle for another driver's.
+ */
+export interface VehicleShape {
+  readonly def: VehicleDef;
+  readonly body: {
+    translation(): { x: number; y: number; z: number };
+    rotation(): { x: number; y: number; z: number; w: number };
+  };
+  readonly wheels: readonly { steer: number; rotation: number }[];
+  /** Where wheel `i`'s centre is in the body's frame. */
+  wheelPosition(i: number): { x: number; y: number; z: number };
+}
+
+export interface ViewOptions {
+  /** Paint for the body, #rrggbb; the definition's own colours otherwise. */
+  color?: string;
+  /** Headlight beams that light the ground; without them only the lamps glow. */
+  beams?: boolean;
+}
+
+/** The definition with its body painted `color`, and the roof a shade darker as on the real ones. */
+export function painted(def: VehicleDef, color: string | undefined): VehicleDef {
+  if (!color) return def;
+  const roof = `#${new THREE.Color(color).multiplyScalar(0.9).getHexString()}`;
+  return { ...def, body: { ...def.body, colors: { ...def.body.colors, body: color, roof } } };
+}
 
 /** Strength of one headlight beam. */
 const HEADLIGHT = 34;
@@ -19,8 +48,8 @@ export class VehicleView {
   private readonly from = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
   private readonly to = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
 
-  constructor(private readonly sim: VehicleSim) {
-    const meshes = buildVehicleMeshes(sim.def);
+  constructor(private readonly sim: VehicleShape, options: ViewOptions = {}) {
+    const meshes = buildVehicleMeshes(painted(sim.def, options.color));
     this.headlights = meshes.headlights;
     this.taillights = meshes.taillights;
     this.glass = meshes.glass;
@@ -31,7 +60,7 @@ export class VehicleView {
     meshes.wheel.material = this.grime.wheel;
     meshes.body.castShadow = meshes.body.receiveShadow = true;
     meshes.interior.receiveShadow = true;
-    for (const at of sim.def.body.headlights) {
+    for (const at of options.beams === false ? [] : sim.def.body.headlights) {
       // Present from the start, at zero strength: adding lights later makes every material rebuild.
       const beam = new THREE.SpotLight(0xfff0d2, 0, 160, 0.62, 0.7, 1);
       beam.position.set(at[0]!, at[1]!, at[2]! + 0.05);
