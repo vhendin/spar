@@ -85,7 +85,8 @@ export class Exhaust {
       // The pipe under water: the gas bubbles away unseen.
       const submerged = sim.wading > oy - 0.02;
       const near = camera.position.distanceTo(this.outlet) < NEAR;
-      if (running && !sim.drowned && !submerged && near) this.emit(dt, sim, vehicle, condensation(celsius));
+      const electric = sim.def.drivetrain.motor === 'electric';
+      if (running && !electric && !sim.drowned && !submerged && near) this.emit(dt, sim, vehicle, condensation(celsius));
       else this.owed = 0;
       this.move(dt, wind);
     }

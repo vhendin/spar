@@ -1,9 +1,10 @@
-// The driver's instruments: rev counter with the gear in the middle, speedometer, a row of
+// The driver's instruments: rev counter (a power meter for electric motors) with the gear or
+// the direction in the middle, speedometer, a row of
 // lamps for the range, the differential locks, the headlights and the parking brake, and while
 // the winch is hooked on, its pull and the cable out.
 // Drawn once as SVG; each frame only turns the needles and switches lamps.
 
-import type { VehicleDef } from '@spar/shared';
+import { engineTorque, isElectric, peakPower, type VehicleDef } from '@spar/shared';
 import type { VehicleSim } from '../vehicle/sim';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -58,7 +59,7 @@ function dialTop(def: VehicleDef): number {
   const d = def.drivetrain;
   const ratio = d.gears[d.gears.length - 1]! * d.finalDrive * Math.min(...Object.values(d.ranges));
   const kmh = (d.redline / ratio) * 2 * Math.PI * def.wheels.radius * 0.06;
-  return Math.min(120, Math.max(60, Math.ceil(kmh / 20) * 20));
+  return Math.min(240, Math.max(60, Math.ceil(kmh / 20) * 20));
 }
 
 export interface Lamps {
@@ -90,6 +91,8 @@ export class Dashboard {
   private lamps: { range: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement } | null = null;
   private def: VehicleDef | null = null;
   private tachMax = 5000;
+  /** Electric: the left dial shows the power drawn, kW, up to this. */
+  private powerMax = 0;
   private speedMax = 100;
   /** Eased needle positions, as fractions of the sweep. */
   private rpmShown = 0;
@@ -119,8 +122,14 @@ export class Dashboard {
     this.tachMax = Math.ceil((d.redline + 200) / 1000) * 1000;
     this.speedMax = dialTop(def);
 
-    this.tach = dial(this.svg, 90, this.tachMax, 1000, 250, (v) => String(v / 1000), d.redline);
-    el('text', { x: 90, y: 136, class: 'unit' }, this.svg).textContent = '×1000 rpm';
+    this.powerMax = isElectric(def) ? Math.ceil(peakPower(d.torqueCurve) / 100_000) * 100 : 0;
+    if (this.powerMax > 0) {
+      this.tach = dial(this.svg, 90, this.powerMax, 100, 50, (v) => String(v));
+      el('text', { x: 90, y: 136, class: 'unit' }, this.svg).textContent = 'kW';
+    } else {
+      this.tach = dial(this.svg, 90, this.tachMax, 1000, 250, (v) => String(v / 1000), d.redline);
+      el('text', { x: 90, y: 136, class: 'unit' }, this.svg).textContent = '×1000 rpm';
+    }
     this.gear = el('text', { x: 90, y: 104, class: 'gear' }, this.svg);
     this.range = el('text', { x: 90, y: 62, class: 'range' }, this.svg);
 
@@ -141,6 +150,7 @@ export class Dashboard {
       return s;
     };
     const range = lamp('LOW', 'Low range (L)');
+    if (d.ranges.low === undefined) range.style.display = 'none';
     const locks = def.axles.map((axle, a) => (axle.differential === 'lockable' ? lamp(`DIFF ${a + 1}`, `Differential lock, axle ${a + 1} (${a + 1})`) : null)).filter((s): s is HTMLSpanElement => s !== null);
     const lights = lamp('LIGHTS', 'Headlights (H)');
     const parked = lamp('P', 'Parking brake');
@@ -155,12 +165,15 @@ export class Dashboard {
     const kmh = Math.abs(sim.speed) * 3.6;
     // A light ease, so the needles move like needles rather than jitter with every bump.
     const k = 1 - Math.exp(-dt * 14);
-    this.rpmShown += (Math.min(1, d.rpm / this.tachMax) - this.rpmShown) * k;
+    // Power drawn: full-throttle torque at this speed, times the pedal.
+    const kw = this.powerMax > 0 && d.shifting <= 0 && !sim.drowned ? (engineTorque(sim.def.drivetrain.torqueCurve, d.rpm) * sim.pedal * d.rpm) / 9549 : 0;
+    const needle = this.powerMax > 0 ? kw / this.powerMax : d.rpm / this.tachMax;
+    this.rpmShown += (Math.min(1, needle) - this.rpmShown) * k;
     this.speedShown += (Math.min(1, kmh / this.speedMax) - this.speedShown) * k;
     this.tach.setAttribute('transform', `rotate(${(START + 90 + this.rpmShown * SWEEP).toFixed(2)})`);
     this.speedo.setAttribute('transform', `rotate(${(START + 90 + this.speedShown * SWEEP).toFixed(2)})`);
 
-    const gear = d.gear < 0 ? 'R' : String(d.gear);
+    const gear = d.gear < 0 ? 'R' : this.powerMax > 0 ? 'D' : String(d.gear);
     if (this.gear.textContent !== gear) this.gear.textContent = gear;
     this.gear.classList.toggle('shifting', d.shifting > 0);
     this.range.textContent = d.range === 'low' ? 'LOW' : '';

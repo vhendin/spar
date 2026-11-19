@@ -73,7 +73,7 @@ export interface Axle {
   track: number;
   driven: boolean;
   /**
-   * Largest steering angle in degrees; 0 for an axle that does not steer.
+   * Largest steering angle in degrees; 0 for an axle that does not steer, negative for one that turns the other way from the front (rear-wheel steering).
    */
   steer: number;
   /**
@@ -106,6 +106,10 @@ export interface Suspension {
 }
 export interface Drivetrain {
   /**
+   * What drives the wheels: a combustion engine (the default) or electric motors. An electric drivetrain has full torque from standstill with no clutch, a single gear, regenerative braking in place of engine braking, no exhaust, and sounds like an electric motor; torqueCurve, idle and redline are then the motor's.
+   */
+  motor?: 'combustion' | 'electric';
+  /**
    * Number of cylinders, for the engine's sound. 6 if left out.
    */
   cylinders?: number;
@@ -115,6 +119,9 @@ export interface Drivetrain {
    * @minItems 2
    */
   torqueCurve: [[number, number], [number, number], ...[number, number][]];
+  /**
+   * Engine speed at idle; 0 for an electric motor, which stands still with the vehicle.
+   */
   idle: number;
   redline: number;
   /**
@@ -134,17 +141,17 @@ export interface Drivetrain {
    */
   efficiency: number;
   /**
-   * Braking torque with the throttle closed at the redline, as a share of peak torque.
+   * Braking torque with the throttle closed at the redline, as a share of peak torque. For an electric motor, regenerative braking: the same share at any speed above a crawl.
    */
   engineBraking: number;
   shift: ShiftPoints;
 }
 /**
- * Transfer case ratios.
+ * Transfer case ratios; without 'low' there is no low range.
  */
 export interface Ranges {
   high: number;
-  low: number;
+  low?: number;
 }
 /**
  * Engine speeds at which the automatic gear change shifts.
@@ -204,6 +211,12 @@ export interface Body {
   windscreenRake: number;
   bonnet?: Bonnet;
   /**
+   * The body's side outline as [z, y] points (z forward, y up), convex, in order round the outline. Replaces the bonnet, cab and rear shapes with one wedge or slab; the windscreen lies on the outline where it crosses the beltline at the front, and the side windows follow the outline above the beltline.
+   *
+   * @minItems 3
+   */
+  profile?: [[number, number], [number, number], [number, number], ...[number, number][]];
+  /**
    * What sits behind the cab. 'open' has no roof at all: a tub with low sides, a windscreen frame and a roll bar.
    */
   rear: 'hardtop' | 'canvas' | 'pickup' | 'open';
@@ -215,6 +228,10 @@ export interface Body {
   colors: BodyColors;
   headlights: Vec3[];
   taillights: Vec3[];
+  /**
+   * Head and tail lamps drawn as one thin strip across, between the outermost lamps, instead of round lamps.
+   */
+  lightBars?: boolean;
 }
 /**
  * An engine bonnet ahead of the windscreen; without it the front is flat. cabLength then counts from the front of the bonnet.

@@ -1,7 +1,7 @@
 // The start screen: which world (chosen by the host), where to start, which vehicle, and the
 // driver's name for when others join. The world loads and slowly turns behind it.
 
-import type { RegionIndex, RegionVectors, VehicleDef } from '@spar/shared';
+import { isElectric, peakPower, type RegionIndex, type RegionVectors, type VehicleDef } from '@spar/shared';
 import type { RegionListing } from '../terrain/region';
 import type { StartStore } from './starts';
 
@@ -78,9 +78,11 @@ function lastPosition(region: string): LastPosition | null {
 export function describeVehicle(def: VehicleDef): string {
   const wheels = def.axles.length * 2;
   const driven = def.axles.filter((a) => a.driven).length * 2;
+  const weight = `${wheels}×${driven} · ${(def.chassis.mass / 1000).toFixed(1)} t`;
+  if (isElectric(def)) return `${weight} · ${Math.round(peakPower(def.drivetrain.torqueCurve) / 1000)} kW · electric`;
   const torque = Math.max(...def.drivetrain.torqueCurve.map((p) => p[1]!));
-  const low = Object.keys(def.drivetrain.ranges).length > 1 ? ' + low range' : '';
-  return `${wheels}×${driven} · ${(def.chassis.mass / 1000).toFixed(1)} t · ${torque} Nm · ${def.drivetrain.gears.length} gears${low}`;
+  const low = def.drivetrain.ranges.low !== undefined ? ' + low range' : '';
+  return `${weight} · ${torque} Nm · ${def.drivetrain.gears.length} gears${low}`;
 }
 
 export class StartMenu {

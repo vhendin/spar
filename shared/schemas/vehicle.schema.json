@@ -128,9 +128,9 @@
             "type": "boolean"
           },
           "steer": {
-            "description": "Largest steering angle in degrees; 0 for an axle that does not steer.",
+            "description": "Largest steering angle in degrees; 0 for an axle that does not steer, negative for one that turns the other way from the front (rear-wheel steering).",
             "type": "number",
-            "minimum": 0,
+            "minimum": -45,
             "maximum": 60
           },
           "brakeShare": {
@@ -200,6 +200,14 @@
         "shift"
       ],
       "properties": {
+        "motor": {
+          "description": "What drives the wheels: a combustion engine (the default) or electric motors. An electric drivetrain has full torque from standstill with no clutch, a single gear, regenerative braking in place of engine braking, no exhaust, and sounds like an electric motor; torqueCurve, idle and redline are then the motor's.",
+          "type": "string",
+          "enum": [
+            "combustion",
+            "electric"
+          ]
+        },
         "cylinders": {
           "description": "Number of cylinders, for the engine's sound. 6 if left out.",
           "type": "integer",
@@ -220,8 +228,9 @@
           }
         },
         "idle": {
+          "description": "Engine speed at idle; 0 for an electric motor, which stands still with the vehicle.",
           "type": "number",
-          "exclusiveMinimum": 0
+          "minimum": 0
         },
         "redline": {
           "type": "number",
@@ -242,12 +251,11 @@
         },
         "ranges": {
           "title": "Ranges",
-          "description": "Transfer case ratios.",
+          "description": "Transfer case ratios; without 'low' there is no low range.",
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "high",
-            "low"
+            "high"
           ],
           "properties": {
             "high": {
@@ -272,7 +280,7 @@
           "maximum": 1
         },
         "engineBraking": {
-          "description": "Braking torque with the throttle closed at the redline, as a share of peak torque.",
+          "description": "Braking torque with the throttle closed at the redline, as a share of peak torque. For an electric motor, regenerative braking: the same share at any speed above a crawl.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
@@ -422,6 +430,19 @@
             }
           }
         },
+        "profile": {
+          "description": "The body's side outline as [z, y] points (z forward, y up), convex, in order round the outline. Replaces the bonnet, cab and rear shapes with one wedge or slab; the windscreen lies on the outline where it crosses the beltline at the front, and the side windows follow the outline above the beltline.",
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
         "rear": {
           "description": "What sits behind the cab. 'open' has no roof at all: a tub with low sides, a windscreen frame and a roll bar.",
           "type": "string",
@@ -487,6 +508,10 @@
           "items": {
             "$ref": "#/definitions/Vec3"
           }
+        },
+        "lightBars": {
+          "description": "Head and tail lamps drawn as one thin strip across, between the outermost lamps, instead of round lamps.",
+          "type": "boolean"
         }
       }
     },

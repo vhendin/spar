@@ -367,3 +367,45 @@ describe('throttle on a key', () => {
     expect(key.speed).toBeGreaterThan(3);
   });
 });
+
+describe('electric pickup', () => {
+  it('pulls hard from standstill with no gear changes', () => {
+    const { car, run } = setup('elpickup', { ground: () => 'asphalt' });
+    run(1);
+    expect(car.drivetrain.rpm).toBeLessThan(50); // no idle: the motor stands with the wheels
+    let t = 0;
+    while (car.speed < 100 / 3.6 && t < 10) {
+      run(0.1, { throttle: 1 });
+      t += 0.1;
+    }
+    expect(t).toBeGreaterThan(3.5);
+    expect(t).toBeLessThan(5.5);
+    expect(car.drivetrain.gear).toBe(1);
+    // On towards its governed 180 km/h (reaching it would run off the end of the slab).
+    run(10 - t, { throttle: 1 });
+    expect(car.speed * 3.6).toBeGreaterThan(140);
+    expect(car.speed * 3.6).toBeLessThan(181);
+  });
+
+  it('regenerates when the pedal comes up, down to a crawl', () => {
+    const { car, run } = setup('elpickup', { ground: () => 'asphalt' });
+    run(1);
+    run(3, { throttle: 1 });
+    const before = car.speed;
+    run(1);
+    // About 0.15 g of regeneration, far more than an engine's braking.
+    expect(before - car.speed).toBeGreaterThan(1);
+    expect(before - car.speed).toBeLessThan(2.5);
+  });
+
+  it('turns the rear wheels against the front at low speed, and has no low range', () => {
+    const { car, run } = setup('elpickup');
+    run(1);
+    run(1, { steer: 1, throttle: 0.2 });
+    expect(car.wheels[0]!.steer).toBeGreaterThan(0.2);
+    expect(car.wheels[2]!.steer).toBeLessThan(0);
+    expect(car.wheels[2]!.steer / car.wheels[0]!.steer).toBeCloseTo(-10 / 30, 1);
+    car.toggleRange();
+    expect(car.drivetrain.range).toBe('high');
+  });
+});

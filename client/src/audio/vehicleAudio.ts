@@ -4,10 +4,12 @@
 // the suspension over bumps, bangs when it bottoms out or the vehicle lands from a jump, the
 // crash of hitting a tree, rock, building or the ground, the scrape of the body sliding on
 // the ground, the crack of a tree giving way, and the winch: its motor labouring under load,
-// the cable creaking and snapping taut, the clink of the hook.
+// the cable creaking and snapping taut, the clink of the hook. An electric vehicle has its
+// motors' whine instead of the engine (electricMotor.ts).
 
 import * as THREE from 'three/webgpu';
 import type { VehicleSim } from '../vehicle/sim';
+import { ElectricMotorSound } from './electricMotor';
 import { AudioOut, ease, place } from './output';
 
 interface Voice {
@@ -80,6 +82,7 @@ export class VehicleAudio {
   private readonly engineLevel: GainNode;
   private readonly intakeLevel: GainNode;
   private readonly intakeTone: BiquadFilterNode;
+  private readonly motor: ElectricMotorSound;
   private readonly whine: OscillatorNode;
   private readonly whineLevel: GainNode;
   private readonly squealLevel: GainNode;
@@ -141,6 +144,8 @@ export class VehicleAudio {
     this.intakeTone = out.filter('bandpass', 900, 1.4);
     this.intakeTone.connect(this.intakeLevel);
     out.loop(out.buffers.white).connect(this.intakeTone);
+
+    this.motor = new ElectricMotorSound(out, this.bed);
 
     // Gears: a thin whine that rises with the speed of the shafts.
     this.whineLevel = ctx.createGain();
@@ -212,13 +217,15 @@ export class VehicleAudio {
   update(dt: number, sim: VehicleSim, group: THREE.Object3D, pedal: number, wetness: number, cracks: Crack[], impacts: Impact[], quiet: boolean): void {
     const ctx = this.out.ctx;
     const t = ctx.currentTime;
-    // A new engine voice when the vehicle changes to one with another number of cylinders.
-    const cylinders = sim.def.drivetrain.cylinders ?? 6;
+    // A new engine voice when the vehicle changes to one with another number of cylinders;
+    // none for electric motors.
+    const electric = sim.def.drivetrain.motor === 'electric';
+    const cylinders = electric ? 0 : (sim.def.drivetrain.cylinders ?? 6);
     if (this.engine && this.cylinders !== cylinders) {
       this.engine.disconnect();
       this.engine = null;
     }
-    if (!this.engine && this.out.ready) {
+    if (!this.engine && this.out.ready && !electric) {
       this.cylinders = cylinders;
       this.engine = new AudioWorkletNode(ctx, 'spar-engine', { processorOptions: { cylinders }, outputChannelCount: [1] });
       const grit = ctx.createWaveShaper();
@@ -233,12 +240,16 @@ export class VehicleAudio {
     const d = sim.drivetrain;
     const def = sim.def.drivetrain;
     // A drowned engine is silent like one not yet started.
-    const dead = quiet || sim.drowned;
+    const dead = quiet || sim.drowned || electric;
     const rpm = dead ? 0 : Math.max(def.idle, d.rpm || def.idle);
     const rev = rpm / def.redline;
     // Off the throttle while the clutch is out for a gear change.
     this.load += ((d.shifting > 0 ? 0 : pedal) - this.load) * Math.min(1, dt * 12);
     const load = this.load;
+    const speed = Math.abs(sim.speed);
+    // Regenerating with the pedal up, as it does down to a crawl (see stepDrivetrain).
+    const regen = Math.max(0, 1 - load * 4) * Math.min(1, speed / 1.5) * (def.engineBraking > 0 ? 1 : 0);
+    this.motor.update(t, electric && !quiet && !sim.drowned, { rpm: d.rpm, drive: load, regen, speed });
     if (this.engine) {
       ease(this.engine.parameters.get('rpm')!, rpm, t, 0.02);
       ease(this.engine.parameters.get('load')!, load, t, 0.03);
@@ -249,15 +260,15 @@ export class VehicleAudio {
     ease(this.intakeLevel.gain, dead ? 0 : (0.004 + 0.02 * load) * (0.3 + rev), t);
 
     // Gears: the transfer case turns with the wheels, faster in low range; reverse is straight-cut and sings.
-    const speed = Math.abs(sim.speed);
-    const shaft = (speed / (2 * Math.PI * sim.def.wheels.radius)) * def.finalDrive * def.ranges[d.range]!;
+    const shaft = (speed / (2 * Math.PI * sim.def.wheels.radius)) * def.finalDrive * (def.ranges[d.range] ?? def.ranges.high);
     const reverse = d.gear < 0;
     ease(this.whine.frequency, Math.max(30, shaft * (reverse ? 19 : 13)), t);
     const whine = quiet ? 0 : Math.min(1, speed / 3) * (0.002 + 0.004 * load) * (d.range === 'low' ? 2 : 1) * (reverse ? 2 : 1);
     ease(this.whineLevel.gain, whine, t);
 
     if (d.gear !== this.gear) {
-      if (!quiet) this.clunk();
+      // Gears engaging; an electric motor just turns the other way.
+      if (!quiet && !electric) this.clunk();
       this.gear = d.gear;
     }
 

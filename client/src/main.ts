@@ -260,6 +260,7 @@ async function start(): Promise<void> {
   const PROMPTS = {
     overturned: 'Overturned · press <kbd>R</kbd> to get back on the wheels',
     drowned: 'Water in the engine · winch out with <kbd>E</kbd>; it starts again a few seconds after leaving the water',
+    shorted: 'Water in the electrics · winch out with <kbd>E</kbd>; the motors come back a few seconds after leaving the water',
   };
   let prompted = '';
   document.body.append(prompt);
@@ -1135,7 +1136,7 @@ async function start(): Promise<void> {
       // On its side or roof and not going anywhere: say how to get back on the wheels.
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;
       overturned = lying && !paused ? overturned + dt : lying ? overturned : 0;
-      const say = paused || w.map.open || w.unplaced || flying ? '' : overturned > 1.5 ? 'overturned' : w.sim.drowned ? 'drowned' : '';
+      const say = paused || w.map.open || w.unplaced || flying ? '' : overturned > 1.5 ? 'overturned' : w.sim.drowned ? (w.sim.def.drivetrain.motor === 'electric' ? 'shorted' : 'drowned') : '';
       if (say && say !== prompted) prompt.innerHTML = PROMPTS[say];
       if (say) prompted = say;
       prompt.style.opacity = say ? '1' : '0';

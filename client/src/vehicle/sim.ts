@@ -19,6 +19,8 @@ export const groups = (member: number, filter: number): number => ((member << 16
 const GRAVITY = 9.81;
 /** Steering lock halves at this speed (m/s), so the vehicle stays steady on the road. */
 const STEER_HALF_SPEED = 13;
+/** Speed (m/s) by which rear-wheel steering has faded out. */
+const REAR_STEER_FADE = 17;
 /** How fast the steered wheels turn, radians per second. */
 const STEER_RATE = 1.4;
 
@@ -376,7 +378,9 @@ export class VehicleSim {
     return true;
   }
 
+  /** Changes between high and low range, on a vehicle that has a low range. */
   toggleRange(): void {
+    if (this.def.drivetrain.ranges.low === undefined) return;
     this.drivetrain.range = this.drivetrain.range === 'high' ? 'low' : 'high';
   }
 
@@ -462,6 +466,9 @@ export class VehicleSim {
     const current = lock > 0 ? this.steerAngle / lock : 0;
     this.steerAngle = lock * (current + Math.max(-STEER_RATE * dt / Math.max(lock, 0.01), Math.min(STEER_RATE * dt / Math.max(lock, 0.01), target - current)));
 
+    // Rear-wheel steering turns the other way from the front to tighten the turn at low speed,
+    // and lets go towards motorway speeds, where it would only make the vehicle twitchy.
+    const rearSteer = Math.max(0, 1 - Math.abs(this.speed) / REAR_STEER_FADE);
     let d = 0;
     def.axles.forEach((axle, a) => {
       for (let side = 0; side < 2; side++) {
@@ -495,7 +502,7 @@ export class VehicleSim {
         wheel.spin = axle.driven ? split.spin[d]! : 0;
         if (axle.driven) d++;
         c.setWheelFrictionSlip(i, Math.max(0.05, wheel.grip));
-        wheel.steer = axle.steer > 0 ? this.steerAngle * (axle.steer / (lock * (180 / Math.PI) || 1)) : 0;
+        wheel.steer = axle.steer !== 0 && lock > 0 ? this.steerAngle * (axle.steer / (lock * (180 / Math.PI))) * (axle.steer < 0 ? rearSteer : 1) : 0;
         c.setWheelSteering(i, wheel.steer);
       }
     });

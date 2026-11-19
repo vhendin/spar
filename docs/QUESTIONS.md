@@ -56,6 +56,38 @@ winch. 0–100 km/h in about 9 s, about 200 km/h flat out.
 - **Colour.** Dark grey. Another?
 - **Crawl control** (off-road cruise control at walking pace): wanted?
 
+### Elpickup (elpickup, this commit)
+
+An electric pickup on the Cybertruck's AWD dual-motor figures, without Tesla names or badges:
+3020 kg (3100 with a driver), 447 kW, 10,081 Nm at the wheels, governed at 180 km/h, 5.68 m
+long, 3.64 m wheelbase, 0.44 m (35") tyres, 30 cm clearance, 0.79 m wading, rear wheels
+steering up to 10°, an electronically locking front differential (Digit1) and traction
+control at the back. Measured: 0–100 km/h in 4.5 s (the real one about 4.3), 181 km/h flat
+out; on dry grass 27.5° from standstill, grip-limited, with or without the lock; bog 10°, the
+same as the Terrängkombi.
+
+- **The sound.** No engine: a whine from the motors in a few orders of their speed (louder
+  pulling or regenerating than coasting), a thin inverter whistle at low speed under load,
+  the reduction gears, and below 20 km/h the soft two-note warning hum electric vehicles play
+  for people on foot. Only checked headless (it plays, with no errors); how does it sound?
+  Too quiet next to the tyres, too sci-fi, the warning hum annoying?
+- **Regeneration.** Lifting off brakes at about 0.15 g down to a crawl, much harder than an
+  engine. One-pedal driving feels like that in the real one; too strong in a game?
+- **Rear-wheel steering** turns the rear wheels up to 10° against the front at walking pace,
+  fading out by 60 km/h. The real one also steers them with the front at speed; wanted?
+- **Air suspension.** The real one raises itself to 44 cm in an "extract" mode and lowers on
+  the road. Fixed at 30 cm now. A key to raise and lower it?
+- **Locks.** Wikipedia names a front locker on the dual-motor; the rear is shown as traction
+  control. Lockable rear too?
+- **Look.** The wedge comes from a new `body.profile` (a side outline) and light bars across
+  front and back. Close enough? Stainless steel is shown as flat light grey; a metallic sheen
+  would need a separate material.
+- **Water.** Past 0.79 m the motors cut out ("water in the electrics") and come back a few
+  seconds after leaving the water, like the engines. Should an electric vehicle wade deeper,
+  or not stop at all?
+- **The power dial** shows kW drawn instead of revs, and the gear lamp shows D or R. Should it
+  show regeneration (a needle below zero) too?
+
 ### Seasons: colours (a0d0cec)
 
 - **Bare trees.** Out of leaf, birch, aspen, rowan and alder crowns turn a grey-brown haze of

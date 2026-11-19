@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { VehicleDef } from '../generated/vehicle';
-import { engineTorque, newDrivetrainState, selectDirection, splitDrive, stepDrivetrain, totalRatio } from './drivetrain';
+import { engineTorque, newDrivetrainState, peakPower, selectDirection, splitDrive, stepDrivetrain, totalRatio } from './drivetrain';
 import { tireOnGround } from './tires';
 
 const def = JSON.parse(readFileSync(join(import.meta.dirname, '../../../defs/vehicles/tgb11.json'), 'utf8')) as VehicleDef;
@@ -158,5 +158,30 @@ describe('tireOnGround', () => {
     expect(tireOnGround(def, 'asphalt', 0.5).grip).toBeCloseTo(0.95 * 0.9, 6);
     expect(tireOnGround(def, 'bog').rollingResistance).toBeGreaterThan(tireOnGround(def, 'asphalt').rollingResistance * 5);
     expect(tireOnGround(def, 'moon dust')).toEqual({ grip: 0.6, rollingResistance: 0.05 });
+  });
+});
+
+describe('electric drivetrain', () => {
+  const ev = JSON.parse(readFileSync(join(import.meta.dirname, '../../../defs/vehicles/elpickup.json'), 'utf8')) as VehicleDef;
+
+  it('gives full torque from standstill with no clutch and turns with the wheels', () => {
+    const s = newDrivetrainState();
+    const out = stepDrivetrain(ev, s, 1, 0, DT);
+    expect(s.rpm).toBe(0);
+    expect(out.driveForce).toBeCloseTo((840 * 12 * 0.92) / 0.44, 3);
+    stepDrivetrain(ev, s, 1, 10, DT);
+    expect(s.rpm).toBeCloseTo(((10 / 0.44) * 12 * 60) / (2 * Math.PI), 3);
+    expect(peakPower(ev.drivetrain.torqueCurve) / 1000).toBeCloseTo(447, -1);
+  });
+
+  it('reverses at once and regenerates evenly down to a crawl', () => {
+    const s = newDrivetrainState();
+    selectDirection(s, true);
+    expect(stepDrivetrain(ev, s, 1, 0, DT).driveForce).toBeLessThan(-20000);
+    const f = newDrivetrainState();
+    const slow = stepDrivetrain(ev, f, 0, 3, DT).engineBrakeForce;
+    const fast = stepDrivetrain(ev, f, 0, 30, DT).engineBrakeForce;
+    expect(slow).toBeCloseTo(fast, 6);
+    expect(stepDrivetrain(ev, f, 0, 0.02, DT).engineBrakeForce).toBeLessThan(slow / 10);
   });
 });

@@ -31,6 +31,13 @@ export function peakTorqueRpm(curve: number[][]): number {
   return best[0]!;
 }
 
+/** The most power on the torque curve, watts. */
+export function peakPower(curve: number[][]): number {
+  let best = 0;
+  for (const point of curve) best = Math.max(best, (point[1]! * point[0]!) / RPM_PER_RAD_S);
+  return best;
+}
+
 /** Full-throttle torque at an engine speed, interpolated along the curve. */
 export function engineTorque(curve: number[][], rpm: number): number {
   const first = curve[0]!;
@@ -47,8 +54,11 @@ export function engineTorque(curve: number[][], rpm: number): number {
 export function totalRatio(def: VehicleDef, state: DrivetrainState): number {
   const d = def.drivetrain;
   const gear = state.gear < 0 ? d.reverse : d.gears[Math.min(d.gears.length, Math.max(1, state.gear)) - 1]!;
-  return gear * d.ranges[state.range] * d.finalDrive;
+  return gear * (d.ranges[state.range] ?? d.ranges.high) * d.finalDrive;
 }
+
+/** True for electric motors: no clutch, no idle, regeneration instead of engine braking. */
+export const isElectric = (def: VehicleDef): boolean => def.drivetrain.motor === 'electric';
 
 export interface DriveOutput {
   /** Force pushing the vehicle along its heading, summed over the driven wheels; negative in reverse. */
@@ -63,7 +73,10 @@ export interface DriveOutput {
  */
 export function stepDrivetrain(def: VehicleDef, state: DrivetrainState, throttle: number, wheelSpeed: number, dt: number): DriveOutput {
   const d = def.drivetrain;
+  const electric = isElectric(def);
   const radius = def.wheels.radius;
+  // An electric motor changes direction at once: there is no gear to engage.
+  if (electric) state.shifting = 0;
   // Only motion in the gear's own direction turns the engine; rolling the other way (back
   // down a hill in first, say) just slips the clutch.
   const along = state.gear < 0 ? -wheelSpeed : wheelSpeed;
@@ -87,7 +100,8 @@ export function stepDrivetrain(def: VehicleDef, state: DrivetrainState, throttle
   const coupled = wheelRpm * ratio;
   // Below idle the clutch slips: the engine holds its own speed, higher the more throttle,
   // up to where it pulls hardest at full throttle (as a driver pulling away on a hill would).
-  const slipping = d.idle + throttle * (peakTorqueRpm(d.torqueCurve) - d.idle);
+  // An electric motor needs no clutch: it turns with the wheels and pulls from standstill.
+  const slipping = electric ? 0 : d.idle + throttle * (peakTorqueRpm(d.torqueCurve) - d.idle);
   state.rpm = Math.min(d.redline, Math.max(coupled, slipping));
 
   if (state.shifting > 0) {
@@ -103,7 +117,10 @@ export function stepDrivetrain(def: VehicleDef, state: DrivetrainState, throttle
   let peak = 0;
   for (const point of d.torqueCurve) peak = Math.max(peak, point[1]!);
   const closed = Math.max(0, 1 - throttle * 4);
-  const engineBrakeForce = (closed * d.engineBraking * peak * Math.min(1, coupled / d.redline) * ratio) / radius;
+  // An engine brakes harder the faster it turns; a motor regenerating holds the same force
+  // down to a crawl, where it fades out.
+  const reach = electric ? Math.min(1, coupled / 300) : Math.min(1, coupled / d.redline);
+  const engineBrakeForce = (closed * d.engineBraking * peak * reach * ratio) / radius;
   return { driveForce, engineBrakeForce };
 }
 
