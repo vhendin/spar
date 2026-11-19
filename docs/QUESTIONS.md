@@ -25,10 +25,13 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Light 4×4 (ltb4)
 
-- **Feel.** 1450 kg, short wheelbase, 150 Nm, 0.36 m wheels, 23 cm clearance. Quicker and
-  twitchier than the Terrängbil; it turns sharply at low speed. Too tippy, too slow, about right?
+- **Feel.** Now built on the Willys M38A1's figures (this commit): 1300 kg with a driver,
+  3.52 m long, 2.06 m wheelbase, 155 Nm, three gears, governed at 4000 rpm (105 km/h),
+  0.375 m wheels, 23 cm clearance. Quicker and twitchier than the Terrängbil; it turns
+  sharply at low speed. Too tippy, too slow, about right?
 - **Differentials.** Open at the front, lockable at the back (Digit2 only), so it is clearly
-  weaker off road than the military ones. Keep, or make the front lockable too?
+  weaker off road than the military ones. The real M38A1 had no locks at all. Keep the rear
+  lock, take it away, or make the front lockable too?
 - **Sinking.** How deep a tyre settles depends on its size and the ground, not on the weight, so
   the light vehicle sinks about as far (relative to its wheels) as the heavy ones. Should ground
   pressure count, so it floats better over bog?
@@ -112,14 +115,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   big? Should it grow in the corner (as now) or open in the middle of the screen? On a
   gamepad there is no hold yet; the minimap button still steps near, far, hidden.
 
-### Power and grip (this commit)
+### Real figures (this commit)
 
-- **Climbing, after the change.** The military vehicles' engine now gives the real B30's
-  230 Nm (was 206), the light 4×4's 165 Nm (was 150); pulling away, the clutch holds the
-  engine where it pulls hardest (was 1900 rpm); dry grip is higher on grass (0.68, was 0.55),
-  dirt (0.72, was 0.62) and gravel (0.76, was 0.72). From a standstill on dry grass the 4×4
-  now climbs about 20° in high range (was 15°) and 30° in low (was 22.5°); the light one 22.5°
-  and 30°. Soft or wet ground takes a few degrees off. Enough, or still weak?
+- **Climbing with the real engines.** After 920a053 felt better, the engines went back to
+  their real figures: the military B30's 206 Nm (920a053 had 230, wrongly called the B30's
+  figure; the civilian one gives 224), the M38A1's 155 Nm and three gears. The clutch and
+  grip changes stay. On dry grass from a standstill: the 4×4 climbs 17.5° in high range (was
+  20° in 920a053, 15° before) and 25° in low with the locks (was 30°); the 6×6 12.5° and 30°;
+  the light 4×4 17.5° and 30°. Still feels right, or back to the stronger engine?
+- **Top speed and air drag.** Air drag is now worked out from the speed (Cd·A 3.6 m² for the
+  military trucks, 2.0 for the light one), replacing a hidden damping that slowed every
+  movement. Flat-out on asphalt: 4×4 about 106 km/h, 6×6 104, light 4×4 105 at its governor.
+  Wikipedia gives the C303 about 100 km/h. Right?
+- **Load.** The trucks' gross weights (3300 kg and 4400 kg) mean up to 900 and 1580 kg in
+  the back. Worth having a load to carry (heavier, lower, sinks deeper)?
+- **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
 ### Multiplayer (docs/MULTIPLAYER.md)
 
@@ -143,7 +153,8 @@ Not to be built until single player is called complete; answers shape the plan.
 ## Answered
 
 - Power on slopes: the vehicles struggled on slopes that should be easy; both power and grip
-  were raised (see "Power and grip" above for the retest).
+  were raised in 920a053, which felt better. The engines then went back to their real
+  figures (see "Real figures" above).
 - Exhaust: shot out like a water cannon, even standing still; slowed and softened.
 
 - Drowned engine: restarting by itself three seconds after leaving the water is fine.

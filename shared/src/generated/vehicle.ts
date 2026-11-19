@@ -46,6 +46,10 @@ export interface Chassis {
    * Deepest water, in metres above the bottom of the tyres, the engine can breathe through; deeper and it drowns. 0.6 if left out.
    */
   wading?: number;
+  /**
+   * Air drag: the drag coefficient times the frontal area, in square metres (Cd·A). Sets the top speed together with the engine. 0 if left out.
+   */
+  dragArea?: number;
 }
 /**
  * The bodywork as a box for collisions: its centre and full width, height and length. The frame under it, between the axles and down to the ground clearance, is added automatically; keeping the box above the wheels gives the vehicle its approach and departure angles.

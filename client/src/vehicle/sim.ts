@@ -61,6 +61,9 @@ const SNOW_DIG = 0.3;
 /** Thinner than this (metres) and the snow is only a dusting: the ground beneath decides. */
 const SNOW_DUSTING = 0.03;
 
+/** Kilograms per cubic metre of air near the ground. */
+const AIR_DENSITY = 1.2;
+
 // Water. Wheels go down to the bed, the body pushes through and is lifted a little, and too
 // deep for the air intake drowns the engine.
 const WATER_DENSITY = 1000;
@@ -246,7 +249,7 @@ export class VehicleSim {
           { x: 0, y: 0, z: 0, w: 1 },
         )
         .setCanSleep(false)
-        .setLinearDamping(0.02)
+        .setLinearDamping(0) // air drag is worked out from the speed (pushThroughAir)
         .setAngularDamping(0.25),
     );
     const solid = (hx: number, hy: number, hz: number, x: number, y: number, z: number): void => {
@@ -498,6 +501,7 @@ export class VehicleSim {
     });
 
     this.pushThroughWater(dt);
+    this.pushThroughAir(dt);
     c.updateVehicle(dt, undefined, groups(0xffff, GROUP_GROUND));
     const w = this.body.angvel();
     for (let i = 0; i < this.wheels.length; i++) {
@@ -615,6 +619,15 @@ export class VehicleSim {
     if (ice >= this.iceNeeded) return snow ? { ground: 'snow', water: 0, snow } : { ground: 'ice', water: 0, snow };
     this.ground.breakIce?.(x, z);
     return { ground, water, snow: 0 };
+  }
+
+  /** Air drag, at the centre of mass: half the air's density times Cd·A times the speed squared. */
+  private pushThroughAir(dt: number): void {
+    const area = this.def.chassis.dragArea ?? 0;
+    if (area <= 0) return;
+    const v = this.body.linvel();
+    const k = -0.5 * AIR_DENSITY * area * Math.hypot(v.x, v.y, v.z) * dt;
+    this.body.applyImpulse({ x: k * v.x, y: k * v.y, z: k * v.z }, true);
   }
 
   /** Lift and drag on the body where it is under water, worked out at the corners of its underside. */

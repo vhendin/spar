@@ -11,10 +11,10 @@ const DT = 1 / 60;
 describe('engineTorque', () => {
   it('follows the curve and holds its ends', () => {
     const curve = def.drivetrain.torqueCurve;
-    expect(engineTorque(curve, 2500)).toBe(230);
-    expect(engineTorque(curve, 2000)).toBe(221);
-    expect(engineTorque(curve, 100)).toBe(167);
-    expect(engineTorque(curve, 9000)).toBe(184);
+    expect(engineTorque(curve, 2500)).toBe(206);
+    expect(engineTorque(curve, 2000)).toBe(198);
+    expect(engineTorque(curve, 100)).toBe(150);
+    expect(engineTorque(curve, 9000)).toBe(165);
   });
 });
 

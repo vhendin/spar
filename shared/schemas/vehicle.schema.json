@@ -70,6 +70,11 @@
           "description": "Deepest water, in metres above the bottom of the tyres, the engine can breathe through; deeper and it drowns. 0.6 if left out.",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "dragArea": {
+          "description": "Air drag: the drag coefficient times the frontal area, in square metres (Cd·A). Sets the top speed together with the engine. 0 if left out.",
+          "type": "number",
+          "minimum": 0
         }
       }
     },
