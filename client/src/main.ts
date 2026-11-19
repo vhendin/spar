@@ -312,7 +312,7 @@ async function start(): Promise<void> {
         ? fly.captured
           ? 'WASD move · Space/Q up/down · Shift fast · wheel speed · F drive · Esc release'
           : 'click to fly · F drive · B masks · M map · F3 hide'
-        : `view ${chase.mode} · G wheels · K colliders · B masks · M map · F fly · F3 hide`,
+        : `view ${chase.mode} · J wheels · K colliders · B masks · M map · F fly · F3 hide`,
     );
     hud.textContent = lines.join('\n');
   };
@@ -781,7 +781,7 @@ async function start(): Promise<void> {
     }
     if (paused || starting) return;
     // The developer's keys work only while the developer read-out shows (F3).
-    if (!debug && ['KeyB', 'KeyF', 'KeyK', 'KeyG'].includes(e.code)) return;
+    if (!debug && ['KeyB', 'KeyF', 'KeyK', 'KeyJ'].includes(e.code)) return;
     switch (e.code) {
       case 'KeyM':
         toggleMap();
@@ -821,14 +821,14 @@ async function start(): Promise<void> {
       case 'KeyK':
         if (w?.obstacles) w.obstacles.debug.visible = !w.obstacles.debug.visible;
         break;
-      case 'KeyG':
+      case 'KeyJ':
         detailed = !detailed;
         break;
       case 'KeyH':
         // Lights: follow the daylight, then on, then off.
         lamps = lamps === null ? true : lamps ? false : null;
         break;
-      case 'KeyL':
+      case 'KeyG':
         if (!flying) w?.sim.toggleRange();
         break;
       case 'KeyE':
@@ -838,7 +838,7 @@ async function start(): Promise<void> {
       case 'Tab':
         if (w?.winch.state === 'choosing') w.winch.next();
         break;
-      case 'KeyX':
+      case 'KeyL':
         if (w?.winch.state === 'choosing') w.winch.cancel();
         break;
       case 'KeyR':
@@ -888,10 +888,10 @@ async function start(): Promise<void> {
     if (!paused && !flying && !w.unplaced && !w.map.open) {
       if (w.winch.state === 'choosing') {
         html = w.winch.choices.length
-          ? `Winch · ${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('X', 'winchOut')} cancel`
-          : `Nothing to hook the winch to within reach ahead · ${key('X', 'winchOut')} cancel`;
+          ? `Winch · ${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('L', 'winchOut')} cancel`
+          : `Nothing to hook the winch to within reach ahead · ${key('L', 'winchOut')} cancel`;
       } else if (w.winch.state === 'hooked') {
-        html = `Winch · hold ${key('Z', 'winchIn')} to winch in · ${key('X', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
+        html = `Winch · hold ${key('O', 'winchIn')} to winch in · ${key('L', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
       }
     }
     if (html === winchShown) return;
