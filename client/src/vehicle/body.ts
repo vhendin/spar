@@ -283,6 +283,14 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
   m.box(-hw, b.floor - 0.06, half - 0.02, hw, b.floor + 0.12, half + 0.1, c.trim);
   m.box(-hw, b.floor - 0.06, -half - 0.08, hw, b.floor + 0.1, -half + 0.02, c.trim);
   m.box(-0.42, clearance + 0.02, -half + 0.25, 0.42, b.floor, half - 0.25, c.trim);
+  // A small exhaust pipe beside the frame, coming out under the rear bumper on the right,
+  // with a sooty opening.
+  {
+    const y = Math.min(clearance + 0.12, b.floor - 0.11), x = -(hw - 0.2), z0 = -half + 0.15, z1 = -half - 0.2;
+    const steel = new THREE.Color(0x77716a), soot = new THREE.Color(0x0c0b0a);
+    m.cylinder('z', x, y, (z0 + z1) / 2, 0.038, (z0 - z1) / 2, 10, steel, soot);
+    m.box(x - 0.012, y + 0.03, z0 + 0.04, x + 0.012, b.floor, z0 + 0.07, c.trim);
+  }
   for (const axle of def.axles) {
     m.cylinder('x', 0, def.wheels.radius, axle.z, 0.07, axle.track / 2 - 0.05, 8, c.trim, c.trim);
     m.cylinder('z', 0.05, def.wheels.radius, axle.z, 0.16, 0.14, 8, c.trim, c.trim);

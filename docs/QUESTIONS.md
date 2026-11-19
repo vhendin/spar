@@ -93,12 +93,19 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   move to the server.
 - **Next layers:** fuel and depots, timed challenges, a best-time board per place?
 
+### Exhaust pipe (this commit)
+
+- **Smoke.** The pipe is only a shape. Want a faint puff of exhaust, darker under load and
+  visible on cold winter mornings?
+
 ### What next
 
 - **Something to do on a drive:** trips and the logbook are a first answer (see above).
 
 ## Answered
 
+- Fuel: not now. It would take away from the experience; maybe later as an option that can be
+  switched on.
 - Winch keys: Z and X sat awkwardly below WASD. I winds in and K pays out (K also cancels
   choosing an anchor); low range stays on L. The developer collider view moved from K to U.
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
