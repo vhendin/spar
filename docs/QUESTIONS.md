@@ -5,16 +5,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Multiplayer stage 4, winching each other (not built yet)
-
-- **Asking first?** Can anyone hook onto your vehicle, or do you get "Anna wants to winch you:
-  accept?" first?
-- **Who runs the physics?** The puller's browser runs both vehicles while hooked (the plan in
-  `docs/MULTIPLAYER.md`). The towed driver's steering, brake and throttle reach it about 50 ms
-  late. Fine, or should the towed vehicle stay in its own driver's hands?
-- **Chains:** a vehicle being towed can't winch anyone itself, so each cable has exactly one
-  simulating browser. Too limiting?
-
 ### Multiplayer stage 3, one world (1a75282)
 
 - **Felled trees last for the session.** The server forgets them when it restarts, and playing
@@ -217,6 +207,11 @@ same as the Terrängkombi.
 - **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
 ## Answered
+
+- Multiplayer winching (stage 4): anyone can hook onto anyone, without asking. The puller's
+  browser runs the physics while hooked, and about 50 ms of delay on the towed driver's
+  controls is fine. Chains are wanted if they work: every vehicle joined by cables is run by
+  one browser (see "Winching each other" in `MULTIPLAYER.md`).
 
 - Multiplayer touching (stage 2): a parked vehicle keeps its hold brake against pushes ("parked
   means parked"). Hits were a bit harsh: a steady shove (up to 0.5 m/s of change per message)

@@ -115,6 +115,21 @@ still steer and help with their own wheels. They feel about 50 ms of delay, whic
 being towed. Unhooking hands authority back. The towed player's browser then carries on from
 the last state it received. If the puller drops out, authority returns at once.
 
+**Decided:** anyone can hook onto anyone, without asking.
+
+**Chains.** All vehicles joined by cables form one group, and one browser runs the whole group,
+so no cable is ever split across two browsers:
+
+- **Anna winches Bo:** Anna's browser runs both. If Bo then winches Cecilia, his winch input
+  goes to Anna's browser like his steering, and Anna's browser takes Cecilia over too.
+- **Two groups joined by a new cable:** the bigger group's browser takes over the smaller
+  group, so as few vehicles as possible change hands. On a tie, the puller's browser does.
+- **A cable comes off:** each part still joined to the running browser's own vehicle stays
+  with it. Any other part goes back to its own drivers. A part that is still joined by a cable
+  goes to the browser of whoever pulls in it, one browser for the whole part.
+- **Range:** cables are at most 40 m, so even five vehicles in a chain stay within about 160 m.
+  The running browser loads ground and tree colliders around every vehicle it runs.
+
 The same machinery would later allow towing with a strap, and pushing a stuck vehicle out.
 
 ## Joining, names, chat
@@ -178,7 +193,8 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    and menu) sets off just behind them; in another region the page loads it first and joins
    once their vehicle shows up (within 30 s). A message the server refuses is only logged now,
    instead of marking the connection as offline. Protocol 6.
-4. **Winching each other.** Authority moves to the puller while hooked.
+4. **Winching each other.** Authority moves to the puller while hooked; cabled vehicles form
+   a group run by one browser, so chains work.
 5. **Together.** Shared destinations, the host's address in the start menu, the
    performance pass with 5 vehicles (draw calls, sound sources, particles).
 
