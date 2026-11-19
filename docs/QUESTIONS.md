@@ -5,7 +5,17 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Multiplayer stage 3, one world (this commit)
+### Multiplayer stage 4, winching each other (not built yet)
+
+- **Asking first?** Can anyone hook onto your vehicle, or do you get "Anna wants to winch you:
+  accept?" first?
+- **Who runs the physics?** The puller's browser runs both vehicles while hooked (the plan in
+  `docs/MULTIPLAYER.md`). The towed driver's steering, brake and throttle reach it about 50 ms
+  late. Fine, or should the towed vehicle stay in its own driver's hands?
+- **Chains:** a vehicle being towed can't winch anyone itself, so each cable has exactly one
+  simulating browser. Too limiting?
+
+### Multiplayer stage 3, one world (1a75282)
 
 - **Felled trees last for the session.** The server forgets them when it restarts, and playing
   alone (no server) they are forgotten on reload, as before. Should the server keep them on
