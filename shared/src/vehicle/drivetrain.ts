@@ -119,6 +119,8 @@ export function selectDirection(state: DrivetrainState, reverse: boolean): void 
 export interface AxleDrive {
   /** Both wheels turn together: a locked or permanently locked differential. */
   locked: boolean;
+  /** Traction control: an open differential whose spinning wheel is braked (see splitDrive). */
+  braked?: boolean;
   /** Largest force each wheel can put down right now: grip times load. Left wheel first. */
   available: [number, number];
 }
@@ -147,6 +149,14 @@ export function splitDrive(force: number, axles: AxleDrive[]): { forces: number[
       fr = total > 0 ? (put * right) / total : 0;
       const over = total > 0 ? Math.max(0, share / total - 1) : share > 0 ? 1 : 0;
       spin.push(Math.min(1, over), Math.min(1, over));
+    } else if (axle.braked) {
+      // The differential still gives each wheel half the torque, but the brake holds the
+      // spinning one so the other can push with its half. What the brake holds is lost.
+      const half = share / 2;
+      fl = Math.min(half, left);
+      fr = Math.min(half, right);
+      // The brake catches the spin quickly, so only a little shows.
+      spin.push(left > 0 ? Math.min(1, Math.max(0, half / left - 1)) * 0.25 : half > 0 ? 1 : 0, right > 0 ? Math.min(1, Math.max(0, half / right - 1)) * 0.25 : half > 0 ? 1 : 0);
     } else {
       const weakest = Math.min(left, right);
       fl = fr = Math.min(share / 2, weakest);

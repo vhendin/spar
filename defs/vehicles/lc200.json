@@ -1,0 +1,225 @@
+{
+  "name": "lc200",
+  "title": "Terrängkombi V8",
+  "chassis": {
+    "mass": 2700,
+    "centerOfMass": [
+      0,
+      0.8,
+      0.21
+    ],
+    "groundClearance": 0.225,
+    "wading": 0.7,
+    "dragArea": 1.3,
+    "box": {
+      "center": [
+        0,
+        1.25,
+        0
+      ],
+      "size": [
+        1.98,
+        1.4,
+        4.9
+      ]
+    }
+  },
+  "wheels": {
+    "radius": 0.4,
+    "width": 0.285
+  },
+  "axles": [
+    {
+      "z": 1.55,
+      "track": 1.64,
+      "driven": true,
+      "steer": 31,
+      "brakeShare": 0.62,
+      "suspension": {
+        "travel": 0.23,
+        "stiffness": 50000,
+        "damping": 3800
+      },
+      "differential": "braked"
+    },
+    {
+      "z": -1.3,
+      "track": 1.64,
+      "driven": true,
+      "steer": 0,
+      "brakeShare": 0.38,
+      "handbrake": true,
+      "suspension": {
+        "travel": 0.28,
+        "stiffness": 46000,
+        "damping": 3500
+      },
+      "differential": "braked"
+    }
+  ],
+  "drivetrain": {
+    "cylinders": 8,
+    "torqueCurve": [
+      [
+        650,
+        300
+      ],
+      [
+        1200,
+        520
+      ],
+      [
+        1600,
+        650
+      ],
+      [
+        2800,
+        650
+      ],
+      [
+        3600,
+        530
+      ],
+      [
+        4200,
+        400
+      ]
+    ],
+    "idle": 650,
+    "redline": 4200,
+    "gears": [
+      3.333,
+      1.96,
+      1.353,
+      1.0,
+      0.728,
+      0.588
+    ],
+    "reverse": 3.061,
+    "ranges": {
+      "high": 1.0,
+      "low": 2.618
+    },
+    "finalDrive": 3.909,
+    "efficiency": 0.82,
+    "engineBraking": 0.15,
+    "shift": {
+      "up": 3400,
+      "down": 1300
+    }
+  },
+  "brakes": {
+    "force": 23800
+  },
+  "tires": {
+    "grip": {
+      "asphalt": 1.0,
+      "gravel": 0.76,
+      "dirt": 0.7,
+      "grass": 0.64,
+      "rock": 0.8,
+      "sand": 0.5,
+      "bog": 0.32,
+      "water": 0.3,
+      "ice": 0.15,
+      "snow": 0.4
+    },
+    "wetGrip": {
+      "asphalt": 0.8,
+      "gravel": 0.85,
+      "dirt": 0.65,
+      "grass": 0.6,
+      "rock": 0.7,
+      "sand": 0.95,
+      "bog": 0.85,
+      "water": 1.0,
+      "ice": 1.0,
+      "snow": 0.8
+    },
+    "rollingResistance": {
+      "asphalt": 0.012,
+      "gravel": 0.03,
+      "dirt": 0.05,
+      "grass": 0.07,
+      "rock": 0.035,
+      "sand": 0.16,
+      "bog": 0.12,
+      "water": 0.15,
+      "ice": 0.015,
+      "snow": 0.03
+    }
+  },
+  "body": {
+    "length": 4.99,
+    "width": 1.98,
+    "height": 1.95,
+    "floor": 0.55,
+    "beltline": 1.22,
+    "cabLength": 2.45,
+    "windscreenRake": 0.5,
+    "bonnet": {
+      "length": 1.3,
+      "height": 1.12
+    },
+    "rear": "hardtop",
+    "roofRack": true,
+    "spareWheel": false,
+    "colors": {
+      "body": "#3c4148",
+      "roof": "#353a40",
+      "trim": "#1c1d1f",
+      "glass": "#141b20",
+      "canvas": "#2a2a2a",
+      "hub": "#8e9296",
+      "tire": "#151515"
+    },
+    "headlights": [
+      [
+        0.72,
+        0.98,
+        2.495
+      ],
+      [
+        -0.72,
+        0.98,
+        2.495
+      ]
+    ],
+    "taillights": [
+      [
+        0.86,
+        1.05,
+        -2.495
+      ],
+      [
+        -0.86,
+        1.05,
+        -2.495
+      ]
+    ]
+  },
+  "attachments": [
+    {
+      "name": "front_tow",
+      "position": [
+        0,
+        0.5,
+        2.545
+      ]
+    },
+    {
+      "name": "rear_tow",
+      "position": [
+        0,
+        0.5,
+        -2.545
+      ]
+    }
+  ],
+  "winch": {
+    "attachment": "front_tow",
+    "pull": 42000,
+    "speed": 0.5,
+    "cable": 30
+  }
+}

@@ -445,7 +445,7 @@ export class VehicleSim {
     def.axles.forEach((axle, a) => {
       if (!axle.driven) return;
       const left = this.wheels[a * 2]!, right = this.wheels[a * 2 + 1]!;
-      driven.push({ locked: this.locks[a]!, available: [left.grip * left.load, right.grip * right.load] });
+      driven.push({ locked: this.locks[a]!, braked: axle.differential === 'braked', available: [left.grip * left.load, right.grip * right.load] });
     });
     const split = splitDrive(out.driveForce, driven);
 

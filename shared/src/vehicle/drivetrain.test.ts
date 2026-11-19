@@ -119,6 +119,18 @@ describe('splitDrive', () => {
     expect(spin[1]).toBe(0);
   });
 
+  it('brakes the spinning wheel so the other pushes with its half (traction control)', () => {
+    const { forces, spin } = splitDrive(8000, [
+      { locked: false, braked: true, available: [500, 5000] },
+      { locked: false, braked: true, available: [5000, 5000] },
+    ]);
+    // Better than open (500 + 500) but short of locked: the braked share is lost.
+    expect(forces).toEqual([500, 2000, 2000, 2000]);
+    expect(spin[0]).toBeGreaterThan(0);
+    expect(spin[0]).toBeLessThan(1);
+    expect(spin[1]).toBe(0);
+  });
+
   it('keeps pulling with the differential locked', () => {
     const { forces, spin } = splitDrive(8000, [
       { locked: true, available: [500, 5000] },

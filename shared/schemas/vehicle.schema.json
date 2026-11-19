@@ -171,12 +171,13 @@
             }
           },
           "differential": {
-            "description": "open sends drive to the wheel that turns easiest; lockable can be locked by the driver; locked always drives both wheels together.",
+            "description": "open sends drive to the wheel that turns easiest; lockable can be locked by the driver; locked always drives both wheels together; braked is open with traction control, which brakes a spinning wheel so the other one can push with its half of the torque.",
             "type": "string",
             "enum": [
               "open",
               "lockable",
-              "locked"
+              "locked",
+              "braked"
             ]
           }
         }
@@ -199,6 +200,12 @@
         "shift"
       ],
       "properties": {
+        "cylinders": {
+          "description": "Number of cylinders, for the engine's sound. 6 if left out.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
         "torqueCurve": {
           "description": "Engine torque at full throttle as [rpm, newton metres] points, rising in rpm.",
           "type": "array",

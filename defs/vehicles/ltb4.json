@@ -58,6 +58,7 @@
     }
   ],
   "drivetrain": {
+    "cylinders": 4,
     "torqueCurve": [
       [
         800,

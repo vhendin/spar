@@ -6,7 +6,7 @@ const pad = (text: string, width: number): string => text.padEnd(width);
 export function driveReadout(sim: VehicleSim, detailed: boolean): string {
   const d = sim.drivetrain;
   const gear = d.gear < 0 ? 'R' : String(d.gear);
-  const locks = sim.def.axles.map((axle, a) => (axle.differential === 'open' ? '' : `${a + 1}${sim.locks[a] ? '■' : '□'}`)).filter(Boolean).join(' ');
+  const locks = sim.def.axles.map((axle, a) => (axle.differential === 'open' || axle.differential === 'braked' ? '' : `${a + 1}${sim.locks[a] ? '■' : '□'}`)).filter(Boolean).join(' ');
   const head = `${Math.abs(sim.speed * 3.6).toFixed(0)} km/h · gear ${gear} ${d.range} · ${d.rpm.toFixed(0)} rpm · locks ${locks}${sim.holding ? ' · holding' : ''}${sim.wading > 0 ? ` · wading ${sim.wading.toFixed(2)} m` : ''}${sim.drowned ? ' · DROWNED' : ''}`;
   if (!detailed) return head;
   const rows = sim.wheels.map((w, i) => {

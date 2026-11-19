@@ -10,9 +10,6 @@ import * as THREE from 'three/webgpu';
 import type { VehicleSim } from '../vehicle/sim';
 import { AudioOut, ease, place } from './output';
 
-/** The engine: an inline six, like the real vehicles' petrol engines. */
-const CYLINDERS = 6;
-
 interface Voice {
   /** Which of the output's noise loops. */
   buffer: keyof AudioOut['buffers'];
@@ -77,6 +74,8 @@ const HIT_G = 2.5;
 export class VehicleAudio {
   private readonly at: PannerNode;
   private engine: AudioWorkletNode | null = null;
+  /** Cylinders of the engine voice playing now. */
+  private cylinders = 0;
   private readonly engineTone: BiquadFilterNode;
   private readonly engineLevel: GainNode;
   private readonly intakeLevel: GainNode;
@@ -213,8 +212,15 @@ export class VehicleAudio {
   update(dt: number, sim: VehicleSim, group: THREE.Object3D, pedal: number, wetness: number, cracks: Crack[], impacts: Impact[], quiet: boolean): void {
     const ctx = this.out.ctx;
     const t = ctx.currentTime;
+    // A new engine voice when the vehicle changes to one with another number of cylinders.
+    const cylinders = sim.def.drivetrain.cylinders ?? 6;
+    if (this.engine && this.cylinders !== cylinders) {
+      this.engine.disconnect();
+      this.engine = null;
+    }
     if (!this.engine && this.out.ready) {
-      this.engine = new AudioWorkletNode(ctx, 'spar-engine', { processorOptions: { cylinders: CYLINDERS }, outputChannelCount: [1] });
+      this.cylinders = cylinders;
+      this.engine = new AudioWorkletNode(ctx, 'spar-engine', { processorOptions: { cylinders }, outputChannelCount: [1] });
       const grit = ctx.createWaveShaper();
       grit.curve = softClip();
       this.engine.connect(grit).connect(this.engineTone);

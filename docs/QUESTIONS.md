@@ -37,6 +37,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   pressure count, so it floats better over bog?
 - **Colour.** Faded red. Another colour, or several to choose from?
 
+### Terrängkombi V8 (lc200, this commit)
+
+A Land Cruiser J200 with the European 4.5 V8 diesel, without Toyota names or badges (like the
+Terrängbil without Volvo's): 2700 kg, 650 Nm at 1600–2800 rpm, six-speed automatic, low range
+2.62, 0.40 m road-biased all-terrain tyres, 22.5 cm clearance, 0.7 m wading, an add-on 42 kN
+winch. 0–100 km/h in about 9 s, about 200 km/h flat out.
+
+- **Traction control instead of locks.** Both axles have open differentials with A-TRAC (new
+  differential type `braked`): a spinning wheel is braked so the other one pushes with its
+  half of the torque. Better than open, short of locked; there is nothing to switch. Some
+  markets had a rear locker: wanted (Digit2)?
+- **Feel.** On dry grass it climbs 25° in high range and 27.5° in low, grip-limited; it is
+  quick and comfortable on roads but with the lower clearance and road tyres no better than
+  the Terrängbil in a bog. Right balance?
+- **Look.** The body generator makes it boxy (closer to an older Land Cruiser): a sloping,
+  rounded bonnet and a slanted tailgate would need new body options. Worth it?
+- **Colour.** Dark grey. Another?
+- **Crawl control** (off-road cruise control at walking pace): wanted?
+
 ### Seasons: colours (a0d0cec)
 
 - **Bare trees.** Out of leaf, birch, aspen, rowan and alder crowns turn a grey-brown haze of

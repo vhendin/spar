@@ -83,9 +83,9 @@ export interface Axle {
   handbrake?: boolean;
   suspension: Suspension;
   /**
-   * open sends drive to the wheel that turns easiest; lockable can be locked by the driver; locked always drives both wheels together.
+   * open sends drive to the wheel that turns easiest; lockable can be locked by the driver; locked always drives both wheels together; braked is open with traction control, which brakes a spinning wheel so the other one can push with its half of the torque.
    */
-  differential: 'open' | 'lockable' | 'locked';
+  differential: 'open' | 'lockable' | 'locked' | 'braked';
 }
 /**
  * Per wheel.
@@ -105,6 +105,10 @@ export interface Suspension {
   damping: number;
 }
 export interface Drivetrain {
+  /**
+   * Number of cylinders, for the engine's sound. 6 if left out.
+   */
+  cylinders?: number;
   /**
    * Engine torque at full throttle as [rpm, newton metres] points, rising in rpm.
    *
