@@ -7,15 +7,10 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Multiplayer stage 4, winching each other
 
-- **Pausing while running someone's vehicle** (Esc, or switching tab) freezes it too, since
-  your physics stops. Should pausing hand the vehicles you run back to their drivers instead?
-- **A winched vehicle lets go of its parking hold** while it is being winched in, so the winch
-  can move it. The handbrake (Space) still holds it against the cable. Is that how you want it?
 - **Your own vehicle is drawn about 100 ms late while you are on someone's cable**, the same
   delay as other players' vehicles, because their browser runs it. Steering and throttle reach
-  it about 50 ms late on top of that. Does it feel sluggish?
-- **The hook goes on the other vehicle's nearer tow point**, front or rear. Is that the right
-  end, or should you be able to choose?
+  it about 50 ms late on top of that. Does it feel sluggish? (To be tried with a few
+  more people.)
 
 ### Multiplayer stage 3, one world (1a75282)
 
@@ -219,6 +214,13 @@ same as the Terrängkombi.
 - **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
 ## Answered
+
+- Multiplayer winching, after trying stage 4: pausing no longer freezes the vehicles you run
+  for others. The server gives them, and your own, to a browser in the group that is not
+  paused (`pause { paused }`, protocol 8); your paused screen follows along. Holding the brake
+  holds, winch or no winch: only the automatic parking hold lets go while winched, the pedal
+  and handbrake still brake. The hook goes on the tow point you aim at, front or rear, and the
+  help line names it ("Bo's rear").
 
 - Multiplayer winching (stage 4): anyone can hook onto anyone, without asking. The puller's
   browser runs the physics while hooked, and about 50 ms of delay on the towed driver's

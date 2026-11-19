@@ -344,7 +344,7 @@ export class Others {
     return o.solid ?? o.vehicle.body;
   }
 
-  /** The others' vehicles within `radius` of (x, z) as winch anchors: each by its nearer tow point. */
+  /** The others' vehicles within `radius` of (x, z) as winch anchors: each tow point is one, picked by aiming at it. */
   vehicleAnchors(x: number, z: number, radius: number): Anchor[] {
     const out: Anchor[] = [];
     for (const [id, o] of this.others) {
@@ -353,18 +353,13 @@ export class Others {
       if (!body || !def) continue;
       const p = body.translation(), r = body.rotation();
       const q = this.inverse.makeRotationFromQuaternion(new THREE.Quaternion(r.x, r.y, r.z, r.w));
-      let best: Anchor | null = null, bestD = Infinity;
       for (const name of ['front_tow', 'rear_tow']) {
         const at = def.attachments.find((a) => a.name === name)?.position;
         if (!at) continue;
         const w = this.at.set(at[0]!, at[1]!, at[2]!).applyMatrix4(q).add(this.lo.set(p.x, p.y, p.z));
-        const d = Math.hypot(w.x - x, w.z - z);
-        if (d < bestD) {
-          bestD = d;
-          best = { key: `v:${id}`, kind: 'vehicle', x: w.x, y: w.y, z: w.z, radius: 0, diameter: 0, vehicle: id, local: [at[0]!, at[1]!, at[2]!] };
-        }
+        if (Math.hypot(w.x - x, w.z - z) > radius) continue;
+        out.push({ key: `v:${id}:${name}`, kind: 'vehicle', x: w.x, y: w.y, z: w.z, radius: 0, diameter: 0, vehicle: id, local: [at[0]!, at[1]!, at[2]!] });
       }
-      if (best && bestD <= radius) out.push(best);
     }
     return out;
   }

@@ -98,7 +98,7 @@ server.
 ## Time, pausing, flying
 
 - **Pausing** stops only your own physics. Your vehicle stands still for the others, marked as
-  paused. The world clock keeps running.
+  paused. On another driver's cable it is run by a browser that is not paused instead. The world clock keeps running.
 - **The time panel (T)** changes the clock and weather for everybody, as it already does through
   `set_world`. A chat line says who changed what.
 - **Flying and the map:** allowed. Your vehicle is parked where you left it.
@@ -196,7 +196,7 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    once their vehicle shows up (within 30 s). A message the server refuses is only logged now,
    instead of marking the connection as offline. Protocol 6.
 4. **Winching each other.** *Built.* Another driver's vehicle is an anchor like a tree: the hook
-   goes on its nearer tow point (`Others.vehicleAnchors`). The browser running a winch tells
+   goes on the tow point you aim at, front or rear (`Others.vehicleAnchors` gives both). The browser running a winch tells
    the server when it hooks on to a vehicle or lets go (`cable { from, to?, seq }`). The server
    keeps the cables and works out who runs each group (`server/src/towing.ts`, rules as under
    "Chains" above), and sends everyone `towing { cables, runs, ack }`. `ack` is the last
@@ -222,8 +222,11 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    - **Drawing:** a snapshot carries the winch's cable while it is out, so everyone sees
      everyone's cables. Ground and tree colliders are kept around every vehicle a browser runs.
 
+   - **Pausing** (`pause { paused }`, protocol 8): a paused browser runs nothing while another
+     in its group can. What it ran, its own vehicle included, goes to one that is not paused,
+     and its paused screen follows along (physics keeps stepping while it follows).
+
    Known limits:
-   - Pausing freezes the vehicles you run for others.
    - A vehicle run for someone else breaks thin trees only by pushing on them, not by
      hitting them at speed: tree breaking still measures our own vehicle's speed.
    - The diff lock lights on a towed driver's dash do not change until they drive their own

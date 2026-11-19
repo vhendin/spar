@@ -77,4 +77,28 @@ describe('towing', () => {
     expect(t.list().cables).toEqual([{ from: 'david', to: 'erik' }]);
     expect(runs(t)).toEqual({ erik: 'david' });
   });
+
+  it('a paused browser runs nothing while another in the group can', () => {
+    const t = new Towing();
+    t.hook('anna', 'bo');
+    t.hook('bo', 'cecilia');
+    expect(t.pause('anna', true)).toBe(true);
+    // Bo, at the head of the rest, runs the lot, Anna's vehicle too.
+    expect(runs(t)).toEqual({ anna: 'bo', cecilia: 'bo' });
+    // Carrying on changes nothing: Bo's browser runs more of it.
+    expect(t.pause('anna', false)).toBe(false);
+    expect(runs(t)).toEqual({ anna: 'bo', cecilia: 'bo' });
+    // Bo pauses in turn: back to Anna's browser.
+    expect(t.pause('bo', true)).toBe(true);
+    expect(runs(t)).toEqual({ bo: 'anna', cecilia: 'anna' });
+    // Everyone paused: it stays where it is.
+    t.pause('cecilia', true);
+    expect(t.pause('anna', true)).toBe(false);
+    expect(runs(t)).toEqual({ bo: 'anna', cecilia: 'anna' });
+    // Hooking on to a paused driver: the one hooking runs it, as ever.
+    const u = new Towing();
+    u.pause('bo', true);
+    u.hook('anna', 'bo');
+    expect(runs(u)).toEqual({ bo: 'anna' });
+  });
 });

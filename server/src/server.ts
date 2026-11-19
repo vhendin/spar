@@ -352,6 +352,9 @@ export function createGameServer(config: ServerConfig): GameServer {
           if (towing.free(player.id)) announceTowing();
           else towingTo(ws);
           break;
+        case 'pause':
+          if (towing.pause(player.id, msg.paused)) announceTowing();
+          break;
         case 'drive': {
           // To the browser running this driver's vehicle, if not their own.
           const runner = towing.runnerOf(player.id);

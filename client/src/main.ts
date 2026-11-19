@@ -780,11 +780,14 @@ async function start(): Promise<void> {
     if (paused) return;
     paused = true;
     audio.paused = true;
+    // Vehicles run here for others go to a browser that is not paused.
+    connection?.send({ type: 'pause', paused: true });
     if (document.pointerLockElement) document.exitPointerLock();
     menu.show();
   };
   const resume = (): void => {
     paused = false;
+    connection?.send({ type: 'pause', paused: false });
     audio.paused = false;
     menu.hide();
     if (panel.open) panel.toggle();
@@ -1014,6 +1017,7 @@ async function start(): Promise<void> {
         others.me = state.welcome.playerId;
         towing.me = state.welcome.playerId;
         towing.reconnected();
+        if (paused) connection?.send({ type: 'pause', paused: true });
         // After a reconnect the others need to see our vehicle again from scratch.
         present = false;
         enterRoom();
@@ -1093,8 +1097,10 @@ async function start(): Promise<void> {
     let html = '';
     if (!paused && !flying && !w.unplaced && !w.map.open) {
       if (w.winch.state === 'choosing') {
+        const picked = w.winch.pickedAnchor;
+        const on = picked?.kind === 'vehicle' && picked.vehicle ? `${nameOf(picked.vehicle)}'s ${(picked.local?.[2] ?? 0) >= 0 ? 'front' : 'rear'} · ` : '';
         html = w.winch.choices.length
-          ? `Winch · ${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('K', 'winchOut')} cancel`
+          ? `Winch · ${on}${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('K', 'winchOut')} cancel`
           : `Nothing to hook the winch to within reach ahead · ${key('K', 'winchOut')} cancel`;
       } else if (w.winch.state === 'hooked') {
         const on = towing.hookedTo(towing.me);
@@ -1152,7 +1158,8 @@ async function start(): Promise<void> {
       const still = flying || paused || starting || w.map.open;
       const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : input.read(dt);
       const winching: WinchControls = still || w.unplaced ? { pull: false, slack: false } : input.winch();
-      if (!paused) owed += dt;
+      // Paused, the physics still runs while our vehicle follows another browser: it is not ours to stop.
+      if (!paused || towing.following) owed += dt;
       let steps = 0;
       if (starting) owed = 0;
       while (owed >= STEP && steps < 4) {

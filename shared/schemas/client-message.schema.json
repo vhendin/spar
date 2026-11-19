@@ -44,6 +44,9 @@
     },
     {
       "$ref": "#/definitions/Handover"
+    },
+    {
+      "$ref": "#/definitions/Pause"
     }
   ],
   "definitions": {
@@ -1019,6 +1022,25 @@
         },
         "state": {
           "$ref": "#/definitions/VehicleHandover"
+        }
+      }
+    },
+    "Pause": {
+      "title": "Pause",
+      "description": "The driver paused or carried on. A paused browser runs no vehicle for others: what it ran goes to a browser in the group that is not paused.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "paused"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "pause"
+        },
+        "paused": {
+          "type": "boolean"
         }
       }
     }

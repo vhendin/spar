@@ -9,7 +9,10 @@
 //   vehicles as possible change hands; on a tie, the browser of the one that hooked on;
 // - when a group comes apart, each part that still holds the running browser's own vehicle
 //   stays with it; a lone vehicle goes back to its own driver; any other part goes to the
-//   browser of the vehicle at the head of it (pulling, not pulled).
+//   browser of the vehicle at the head of it (pulling, not pulled);
+// - a paused browser runs nothing: its physics is stopped, so what it ran goes to a
+//   browser in the group that is not paused (and its own vehicle along with it), unless
+//   every one in the group is paused.
 
 export interface CableLine {
   from: string;
@@ -22,6 +25,8 @@ export class Towing {
   /** Vehicles not run by their own driver's browser, and whose browser runs them. */
   private readonly runner = new Map<string, string>();
   private count = 0;
+  /** Players whose game is paused. */
+  private readonly paused = new Set<string>();
 
   /** The player whose browser runs this vehicle. */
   runnerOf(vehicle: string): string {
@@ -74,8 +79,19 @@ export class Towing {
       }
     }
     if (this.runner.delete(id)) changed = true;
+    this.paused.delete(id);
     if (changed) this.settle();
     return changed;
+  }
+
+  /** `id` paused or carried on; true if that changed who runs what. */
+  pause(id: string, on: boolean): boolean {
+    if (on === this.paused.has(id)) return false;
+    if (on) this.paused.add(id);
+    else this.paused.delete(id);
+    const before = JSON.stringify([...this.runner]);
+    this.settle();
+    return JSON.stringify([...this.runner]) !== before;
   }
 
   list(): { cables: CableLine[]; runs: { vehicle: string; by: string }[] } {
@@ -122,12 +138,14 @@ export class Towing {
 
   /** Whose browser runs a group, given who ran its vehicles before. */
   private choose(group: string[], was: (v: string) => string, hooked?: string): string {
-    const members = new Set(group);
-    // Only a browser whose own vehicle is in the group may run it.
+    // Only a browser whose own vehicle is in the group may run it, and not a paused one
+    // while another can.
+    const awake = group.filter((v) => !this.paused.has(v));
+    const able = new Set(awake.length ? awake : group);
     const counts = new Map<string, number>();
     for (const v of group) {
       const r = was(v);
-      if (members.has(r)) counts.set(r, (counts.get(r) ?? 0) + 1);
+      if (able.has(r)) counts.set(r, (counts.get(r) ?? 0) + 1);
     }
     const most = Math.max(0, ...counts.values());
     const best = [...counts].filter(([, n]) => n === most).map(([r]) => r);
@@ -137,8 +155,8 @@ export class Towing {
     const towed = new Set([...this.cables.values()].map((c) => c.to));
     const rank = (v: string): number => (v === hooked ? 0 : towed.has(v) ? 2 : 1);
     const pullers = group
-      .filter((v) => this.cables.has(v) && (best.length === 0 || best.includes(v)))
+      .filter((v) => able.has(v) && this.cables.has(v) && (best.length === 0 || best.includes(v)))
       .sort((a, b) => rank(a) - rank(b) || this.cables.get(b)!.n - this.cables.get(a)!.n);
-    return pullers[0] ?? best.sort()[0] ?? group.sort()[0]!;
+    return pullers[0] ?? best.sort()[0] ?? [...able].sort()[0]!;
   }
 }

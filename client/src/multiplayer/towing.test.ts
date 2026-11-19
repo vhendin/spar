@@ -108,6 +108,9 @@ function setup(...drivers: { id: string; vehicle: string; z: number }[]) {
         if (runner !== from) queue.push({ to: runner, msg: { type: 'drive', from, controls: msg.controls } });
         return;
       }
+      case 'pause':
+        server.pause(from, msg.paused);
+        return toAll({ type: 'towing', ...server.list() });
       case 'handover':
         queue.push({ to: msg.to, msg: { type: 'handover', from, vehicle: msg.vehicle, state: msg.state } });
         return;
@@ -174,7 +177,7 @@ function setup(...drivers: { id: string; vehicle: string; z: number }[]) {
     const p = b.sim.body.translation();
     return { key: `v:${id}`, kind: 'vehicle', x: p.x, y: p.y + local[1], z: p.z + local[2], radius: 0, diameter: 0, vehicle: id, local };
   };
-  return { browsers: (id: string) => browsers.get(id)!, server, run, anchorOn, now: () => now };
+  return { browsers: (id: string) => browsers.get(id)!, server, run, anchorOn, now: () => now, receive };
 }
 
 describe('winching each other', () => {
@@ -285,5 +288,31 @@ describe('winching each other', () => {
     run(WAIT / 1000);
     expect(anna.towing.hosted.has('bo')).toBe(true);
     expect(anna.towing.hosted.get('bo')!.sim.body.translation().z).toBeCloseTo(-20, 0);
+  });
+
+  it('pausing hands what this browser runs to one that is not paused', () => {
+    const { browsers, server, run, anchorOn, receive } = setup({ id: 'anna', vehicle: 'tgb11', z: 0 }, { id: 'bo', vehicle: 'ltb4', z: -20 });
+    const anna = browsers('anna'), bo = browsers('bo');
+    run(1);
+    anna.winch.hookTo(anchorOn('bo', 'rear_tow'));
+    run(0.5);
+    expect(anna.towing.hosted.has('bo')).toBe(true);
+    const at = anna.sim.body.translation().z;
+    // Anna pauses: Bo's browser takes both vehicles, Anna's winch with them.
+    receive('anna', { type: 'pause', paused: true });
+    run(0.5);
+    expect(server.runnerOf('anna')).toBe('bo');
+    expect(bo.towing.following).toBe(false);
+    expect(bo.towing.hosted.has('anna')).toBe(true);
+    expect(bo.towing.hosted.get('anna')!.winch.state).toBe('hooked');
+    expect(anna.towing.following).toBe(true);
+    expect(anna.towing.hosted.size).toBe(0);
+    // Bo drives away against Anna's cable and drags her parked vehicle a little; her paused
+    // browser shows it where his does.
+    bo.input.throttle = 1;
+    run(4);
+    const there = bo.towing.hosted.get('anna')!.sim.body.translation().z;
+    expect(Math.abs(there - at)).toBeGreaterThan(0.1);
+    expect(Math.abs(anna.sim.body.translation().z - there)).toBeLessThan(0.5);
   });
 });

@@ -4,7 +4,21 @@
  * Every message a client may send to the server.
  */
 export type ClientMessage =
-  Hello | SetWorld | Profile | State | Away | Chat | Push | Room | Felled | BrokeIce | Cable | Free | Drive | Handover;
+  | Hello
+  | SetWorld
+  | Profile
+  | State
+  | Away
+  | Chat
+  | Push
+  | Room
+  | Felled
+  | BrokeIce
+  | Cable
+  | Free
+  | Drive
+  | Handover
+  | Pause;
 
 /**
  * First message on a new connection, with the driver's name and colour.
@@ -720,4 +734,11 @@ export interface WinchHandover {
    * @maxItems 3
    */
   reelStart: [number, number, number];
+}
+/**
+ * The driver paused or carried on. A paused browser runs no vehicle for others: what it ran goes to a browser in the group that is not paused.
+ */
+export interface Pause {
+  type: 'pause';
+  paused: boolean;
 }
