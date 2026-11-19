@@ -3,7 +3,7 @@
 /**
  * Every message a client may send to the server.
  */
-export type ClientMessage = Hello | SetWorld | Profile | State | Away | Chat | Push;
+export type ClientMessage = Hello | SetWorld | Profile | State | Away | Chat | Push | Room | Felled | BrokeIce;
 
 /**
  * First message on a new connection, with the driver's name and colour.
@@ -313,4 +313,78 @@ export interface Push {
    * @maxItems 3
    */
   at: [number, number, number];
+}
+/**
+ * This driver is now in this region: the server sends back what has changed in it.
+ */
+export interface Room {
+  type: 'room';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+}
+/**
+ * Our vehicle or winch knocked a tree down.
+ */
+export interface Felled {
+  type: 'felled';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  tree: FelledTree;
+}
+/**
+ * A tree knocked down: kept by the server for the session and passed on to everyone in the region.
+ */
+export interface FelledTree {
+  /**
+   * The tree's permanent key: layer, cell x, cell z.
+   */
+  key: string;
+  /**
+   * Where it stood, metres east.
+   */
+  x: number;
+  /**
+   * Where it stood, metres south.
+   */
+  z: number;
+  /**
+   * The way it fell: a unit vector on the ground, east part.
+   */
+  dx: number;
+  /**
+   * The way it fell, south part.
+   */
+  dz: number;
+  /**
+   * Trunk diameter, metres, for the sound of it.
+   */
+  diameter: number;
+}
+/**
+ * Our vehicle broke through the ice.
+ */
+export interface BrokeIce {
+  type: 'ice_hole';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  hole: IceHole;
+}
+/**
+ * Where a vehicle broke through the ice.
+ */
+export interface IceHole {
+  /**
+   * Metres east.
+   */
+  x: number;
+  /**
+   * Metres south.
+   */
+  z: number;
 }

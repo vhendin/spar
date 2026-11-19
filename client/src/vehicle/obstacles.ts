@@ -7,6 +7,7 @@
 
 import type RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
+import type { FelledTree } from '@spar/shared';
 import type { Features } from '../features/features';
 import type { Vegetation } from '../vegetation/vegetation';
 import { Felling } from './felling';
@@ -62,6 +63,8 @@ export class Obstacles {
   undrawn = 0;
   /** Trees the vehicle has knocked over. */
   felled = 0;
+  /** Told of every tree our vehicle or winch knocks down, to pass on to the others. */
+  onFelled: ((tree: FelledTree) => void) | null = null;
   /** Trees that gave way since the sound last took them: where, and how thick. */
   readonly cracks: { x: number; y: number; z: number; diameter: number }[] = [];
   readonly undrawnEver = new Set<string>();
@@ -120,7 +123,22 @@ export class Obstacles {
       this.felled++;
       if (this.cracks.length < 8) this.cracks.push({ x: p.x, y: p.y, z: p.z, diameter: f.diameter });
       if (entry) this.drop(f.key, entry);
+      this.onFelled?.(tree(f.key, p.x, p.z, f.dx, f.dz, f.diameter));
     }
+  }
+
+  /**
+   * A tree another driver knocked down: it lies the way it fell for them and is no longer
+   * solid. With the ground height `y` there its crack is heard (not for the list sent on
+   * entering a region).
+   */
+  fellFromAfar(t: FelledTree, y: number | null): void {
+    if (!this.standing(t.key)) return;
+    this.vegetation?.fell(t.key, t.x, t.z, t.dx, t.dz);
+    this.felled++;
+    if (y !== null && this.cracks.length < 8) this.cracks.push({ x: t.x, y: y + 0.6, z: t.z, diameter: t.diameter });
+    const entry = this.colliders.get(t.key);
+    if (entry) this.drop(t.key, entry);
   }
 
   private drop(key: string, entry: Entry): void {
@@ -177,6 +195,7 @@ export class Obstacles {
     if (this.cracks.length < 8) this.cracks.push({ x: anchor.x, y: anchor.y, z: anchor.z, diameter: anchor.diameter });
     const entry = this.colliders.get(anchor.key);
     if (entry) this.drop(anchor.key, entry);
+    this.onFelled?.(tree(anchor.key, anchor.x, anchor.z, dx, dz, anchor.diameter));
   }
 
   get count(): number {
@@ -230,4 +249,10 @@ export class Obstacles {
     }
     this.undrawn = undrawn;
   }
+}
+
+/** A felled tree as sent to the others, rounded. */
+function tree(key: string, x: number, z: number, dx: number, dz: number, diameter: number): FelledTree {
+  const r = (v: number, k = 100): number => Math.round(v * k) / k;
+  return { key, x: r(x), z: r(z), dx: r(dx, 1000), dz: r(dz, 1000), diameter: Math.min(5, Math.max(0, r(diameter))) };
 }

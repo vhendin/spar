@@ -50,6 +50,9 @@ import { dateOfYear, formatDuration, seasonName, Trips } from './trips';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
+/** Session key for a driver to join after the page loads their region, and how long to wait for them (ms). */
+const JOIN_KEY = 'spar.join';
+const JOIN_WAIT = 30_000;
 /** Milliseconds between snapshots of our vehicle sent to the others. */
 const SEND_EVERY = 50;
 
@@ -262,6 +265,20 @@ async function start(): Promise<void> {
   // T opens the time and weather panel; the server makes the change for everyone.
   const panel = new WorldPanel(worldRoot, (msg) => connection?.send(msg));
   let world: World | null = null;
+  /** Loads another region (the page loads again), once a world has been built. */
+  let switchRegion: (name: string) => void = () => {};
+  /** Region titles by name, for the player lists. */
+  let regionTitles = new Map<string, string>();
+  /** A driver to join once their vehicle shows up in this region, after loading it to join them. */
+  let pendingJoin: { id: string; until: number } | null = (() => {
+    try {
+      const raw = sessionStorage.getItem(JOIN_KEY);
+      sessionStorage.removeItem(JOIN_KEY);
+      return raw ? (JSON.parse(raw) as { id: string; until: number }) : null;
+    } catch {
+      return null;
+    }
+  })();
   let loadingRegion: string | null = null;
   let fps: number | null = null;
   /** CPU time of the last frames' work, smoothed, in milliseconds. */
@@ -529,8 +546,11 @@ async function start(): Promise<void> {
       goToRegion,
       () => start.show(),
     );
+    switchRegion = goToRegion;
+    regionTitles = new Map(listed.regions.map((r) => [r.name, r.title]));
     const start = new StartMenu(startRoot, index, vectors, starts, defs, def.name, listed.regions, {
       region: goToRegion,
+      join: (id) => joinFriend(id),
       placeStarts: () => toggleMap(),
       newArea: () => {
         start.hide();
@@ -567,6 +587,10 @@ async function start(): Promise<void> {
     });
     start.setPlayers(others.list());
     world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    // What we change in the world goes to the others in this region; what they changed is asked for.
+    if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
+    ground.onBreak = (x, z) => connection?.send({ type: 'ice_hole', region: index.name, hole: { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 } });
+    enterRoom();
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
     if (!direct) showStart(world);
@@ -659,6 +683,30 @@ async function start(): Promise<void> {
     w.tracks.break();
     w.winch.stow();
     w.unplaced = true;
+  };
+  /**
+   * Sets off just behind another driver. In another region the page loads that one first and
+   * joins them once their vehicle shows up there (JOIN_KEY).
+   */
+  const joinFriend = (id: string): void => {
+    const w = world;
+    const at = others.whereIs(id);
+    if (!w || !at) return;
+    if (at.region !== w.index.name) {
+      try {
+        sessionStorage.setItem(JOIN_KEY, JSON.stringify({ id, until: Date.now() + JOIN_WAIT }));
+      } catch {
+        return;
+      }
+      switchRegion(at.region);
+      return;
+    }
+    const s = { name: `With ${at.name}`, x: at.x, z: at.z, heading: at.heading };
+    if (starting) w.start.driveFrom(s);
+    else {
+      travel(w, s);
+      if (paused) resume();
+    }
   };
   /** Where the vehicle is and faces, or the camera when flying. */
   const mapState = (w: World): MapState => {
@@ -753,7 +801,8 @@ async function start(): Promise<void> {
         entries: trips.entries.filter((e) => e.region === world?.index.name),
         places: placesToReach,
       }),
-      players: () => ({ list: others.list(), region: world?.index.title ?? '' }),
+      players: () => ({ list: others.list(), region: world?.index.title ?? '', titleOf: (name) => regionTitles.get(name) ?? name }),
+      join: (id) => joinFriend(id),
       vehicles: Object.values(VEHICLES).map((d) => ({ name: d.name, title: d.title })).sort((a, b) => a.title.localeCompare(b.title)),
       vehicle: () => world?.sim.def.name ?? '',
       chooseVehicle: (name) => {
@@ -919,6 +968,10 @@ async function start(): Promise<void> {
   const playersChanged = (): void => {
     world?.start.setPlayers(others.list());
   };
+  /** Tells the server which region we are in, so it sends what has changed there. */
+  function enterRoom(): void {
+    if (world && connection?.state.status === 'online') connection.send({ type: 'room', region: world.index.name });
+  }
   connection = new Connection({
     change: (state) => {
       link = state;
@@ -926,6 +979,7 @@ async function start(): Promise<void> {
         others.me = state.welcome.playerId;
         // After a reconnect the others need to see our vehicle again from scratch.
         present = false;
+        enterRoom();
       }
       if (state.status === 'online' && loadingRegion === null) {
         enterRegion(state.welcome).catch((err: unknown) => {
@@ -947,8 +1001,13 @@ async function start(): Promise<void> {
       others.setPlayers(msg.players);
       playersChanged();
     },
-    state: (msg) => others.receive(msg.id, msg.vehicle, performance.now()),
-    away: (msg) => others.away(msg.id),
+    state: (msg) => {
+      if (others.receive(msg.id, msg.vehicle, performance.now())) playersChanged();
+    },
+    away: (msg) => {
+      others.away(msg.id);
+      playersChanged();
+    },
     push: (msg) => {
       // Another vehicle pushed ours; only this browser moves it. Heard as a knock too.
       const w = world;
@@ -956,6 +1015,22 @@ async function start(): Promise<void> {
       applyPush(w.sim.body, msg.impulse, msg.at);
       const force = Math.hypot(...msg.impulse) / (SEND_EVERY / 1000);
       if (impacts.length < 32) impacts.push({ kind: 'object', force });
+    },
+    room: (msg) => {
+      // Entering a region: the trees others knocked down there and the holes in its ice.
+      const w = world;
+      if (!w || msg.region !== w.index.name) return;
+      for (const tree of msg.felled) w.obstacles?.fellFromAfar(tree, null);
+      for (const hole of msg.holes) w.ground.breakIce(hole.x, hole.z, true);
+    },
+    felled: (msg) => {
+      const w = world;
+      if (!w || msg.region !== w.index.name) return;
+      w.obstacles?.fellFromAfar(msg.tree, w.terrain.heightAt(msg.tree.x, msg.tree.z) ?? null);
+    },
+    iceHole: (msg) => {
+      const w = world;
+      if (w && msg.region === w.index.name) w.ground.breakIce(msg.hole.x, msg.hole.z, true);
     },
     chat: (msg) => {
       const from = msg.from === undefined ? undefined : others.players.find((p) => p.id === msg.from);
@@ -1085,6 +1160,15 @@ async function start(): Promise<void> {
       w.winchView.update(dt, w.winch, w.view.group, (x, z) => w.terrain.heightAt(x, z), camera.position);
       drawWinchHelp(w);
 
+      if (starting && pendingJoin) {
+        // Loaded this region to join someone: off behind them as soon as their vehicle is known.
+        if (Date.now() > pendingJoin.until) pendingJoin = null;
+        else if (others.whereIs(pendingJoin.id)?.region === w.index.name) {
+          const id = pendingJoin.id;
+          pendingJoin = null;
+          joinFriend(id);
+        }
+      }
       if (starting) {
         // A slow turn round the middle of the region, high up, while the start screen shows.
         tour += dt * 0.012;

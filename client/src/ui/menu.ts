@@ -27,7 +27,9 @@ export interface MenuActions {
   /** The logbook for this area: its title, the arrivals there, and how many places there are to reach. */
   logbook(): { title: string; entries: LogEntry[]; places: number };
   /** Everyone connected, and the title of the region we drive in. */
-  players(): { list: PlayerLine[]; region: string };
+  players(): { list: PlayerLine[]; region: string; titleOf(name: string): string };
+  /** Set off just behind another driver, wherever they are. */
+  join(id: string): void;
 }
 
 const CONTROLS: [string, string][] = [
@@ -184,10 +186,10 @@ export class Menu {
           button(v.title, () => this.actions.chooseVehicle(v.name), row, v.name === this.actions.vehicle() ? 'on' : '');
         }
       }
-      const { list: players, region } = this.actions.players();
+      const { list: players, region, titleOf } = this.actions.players();
       if (players.length > 1) {
         add('div', 'On the road', box, 'label');
-        fillPlayers(add('div', '', box), players, region);
+        fillPlayers(add('div', '', box), players, region, { titleOf, join: (id) => this.actions.join(id) });
       }
       add('div', 'Stuck?', box, 'label');
       const row = add('div', '', box, 'row');

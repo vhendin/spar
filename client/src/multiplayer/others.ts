@@ -15,6 +15,7 @@ import { Spray } from '../vehicle/spray';
 import type { VehicleState } from '../vehicle/state';
 import { Tracks } from '../vehicle/tracks';
 import { aimBeam, HEADLIGHT, newBeam, VehicleView } from '../vehicle/view';
+import type { PlayerLine } from '../ui/players';
 import { Track, type Pose } from './track';
 
 type Rapier = typeof RAPIER;
@@ -244,10 +245,11 @@ export class Others {
     this.physics = { R, world };
   }
 
-  /** A snapshot of another driver's vehicle. */
-  receive(id: string, s: VehicleSnapshot, now: number): void {
-    if (id === this.me) return;
+  /** A snapshot of another driver's vehicle; true when they have just come on the road, or moved region. */
+  receive(id: string, s: VehicleSnapshot, now: number): boolean {
+    if (id === this.me) return false;
     let o = this.others.get(id);
+    const news = !o || o.away || o.track.latest?.region !== s.region;
     if (!o) {
       const player = this.players.find((p) => p.id === id) ?? { id, name: '…' };
       const tag = document.createElement('div');
@@ -261,6 +263,7 @@ export class Others {
     }
     o.away = false;
     o.track.push(s, now);
+    return news;
   }
 
   /** Another driver has gone back to the start screen. */
@@ -270,19 +273,34 @@ export class Others {
   }
 
   /** Who is in which region, for the player lists: names, colours, and whether they are with us. */
-  list(): { name: string; color: string; here: boolean; you: boolean; paused: boolean }[] {
+  list(): PlayerLine[] {
     return this.players.map((p) => {
       const o = this.others.get(p.id);
       const s = o?.track.latest;
       const you = p.id === this.me;
+      const region = you ? this.region : (p.region ?? '');
+      const driving = !!s && !o!.away && s.region === region;
       return {
+        id: p.id,
         name: p.name,
         color: p.color ?? PLAIN,
-        here: you || (!!s && !o!.away && s.region === this.region),
+        here: you || (region === this.region && region !== ''),
         you,
         paused: !!s?.paused,
+        region,
+        driving: you || driving,
       };
     });
+  }
+
+  /** Where another driver's vehicle is now, from what they last sent, or null if not on the road. */
+  whereIs(id: string): { region: string; x: number; z: number; heading: number; name: string } | null {
+    const o = this.others.get(id);
+    const s = o?.track.latest;
+    if (!o || !s || o.away) return null;
+    const [x, y, z, w] = s.q as [number, number, number, number];
+    const heading = 180 - THREE.MathUtils.radToDeg(Math.atan2(2 * (w * y + x * z), 1 - 2 * (y * y + x * x)));
+    return { region: s.region, x: s.p[0]!, z: s.p[2]!, heading: ((heading % 360) + 360) % 360, name: o.player.name };
   }
 
   /**

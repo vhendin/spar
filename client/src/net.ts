@@ -16,6 +16,9 @@ export interface ConnectionHandlers {
   away?(msg: Of<'away'>): void;
   chat?(msg: Of<'chat'>): void;
   push?(msg: Of<'push'>): void;
+  room?(msg: Of<'room'>): void;
+  felled?(msg: Of<'felled'>): void;
+  iceHole?(msg: Of<'ice_hole'>): void;
 }
 
 /** The driver as others see them, sent on joining and whenever it changes. */
@@ -105,10 +108,21 @@ export class Connection {
         case 'push':
           this.on.push?.(msg);
           break;
+        case 'room':
+          this.on.room?.(msg);
+          break;
+        case 'felled':
+          this.on.felled?.(msg);
+          break;
+        case 'ice_hole':
+          this.on.iceHole?.(msg);
+          break;
         case 'error':
-          // A version mismatch will not fix itself by retrying.
-          if (msg.code === 'protocol_mismatch') this.stopped = true;
-          this.set({ status: 'offline', reason: msg.message });
+          // A version mismatch will not fix itself by retrying; a refused message is only that one.
+          if (msg.code === 'protocol_mismatch') {
+            this.stopped = true;
+            this.set({ status: 'offline', reason: msg.message });
+          } else console.warn(`Server refused a message: ${msg.message}`);
           break;
       }
     };

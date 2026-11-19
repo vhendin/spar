@@ -4,7 +4,17 @@
  * Every message the server may send to a client.
  */
 export type ServerMessage =
-  Welcome | WorldUpdate | ServerError | Players | PlayerState | PlayerAway | ChatLine | PlayerPush;
+  | Welcome
+  | WorldUpdate
+  | ServerError
+  | Players
+  | PlayerState
+  | PlayerAway
+  | ChatLine
+  | PlayerPush
+  | RoomState
+  | TreeFelled
+  | IceBroken;
 
 /**
  * Reply to hello: who you are and which world to load.
@@ -77,6 +87,10 @@ export interface Player {
   id: string;
   name: string;
   color?: string;
+  /**
+   * The region they are in, once they have entered one.
+   */
+  region?: string;
 }
 /**
  * Another driver's vehicle now, passed on as they sent it.
@@ -338,4 +352,92 @@ export interface PlayerPush {
    * @maxItems 3
    */
   at: [number, number, number];
+}
+/**
+ * What has changed in a region this session: sent to a driver entering it.
+ */
+export interface RoomState {
+  type: 'room';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  felled: FelledTree[];
+  /**
+   * @maxItems 8
+   */
+  holes:
+    | []
+    | [IceHole]
+    | [IceHole, IceHole]
+    | [IceHole, IceHole, IceHole]
+    | [IceHole, IceHole, IceHole, IceHole]
+    | [IceHole, IceHole, IceHole, IceHole, IceHole]
+    | [IceHole, IceHole, IceHole, IceHole, IceHole, IceHole]
+    | [IceHole, IceHole, IceHole, IceHole, IceHole, IceHole, IceHole]
+    | [IceHole, IceHole, IceHole, IceHole, IceHole, IceHole, IceHole, IceHole];
+}
+/**
+ * A tree knocked down: kept by the server for the session and passed on to everyone in the region.
+ */
+export interface FelledTree {
+  /**
+   * The tree's permanent key: layer, cell x, cell z.
+   */
+  key: string;
+  /**
+   * Where it stood, metres east.
+   */
+  x: number;
+  /**
+   * Where it stood, metres south.
+   */
+  z: number;
+  /**
+   * The way it fell: a unit vector on the ground, east part.
+   */
+  dx: number;
+  /**
+   * The way it fell, south part.
+   */
+  dz: number;
+  /**
+   * Trunk diameter, metres, for the sound of it.
+   */
+  diameter: number;
+}
+/**
+ * Where a vehicle broke through the ice.
+ */
+export interface IceHole {
+  /**
+   * Metres east.
+   */
+  x: number;
+  /**
+   * Metres south.
+   */
+  z: number;
+}
+/**
+ * Another driver knocked a tree down.
+ */
+export interface TreeFelled {
+  type: 'felled';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  tree: FelledTree;
+}
+/**
+ * Another driver broke through the ice.
+ */
+export interface IceBroken {
+  type: 'ice_hole';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  hole: IceHole;
 }

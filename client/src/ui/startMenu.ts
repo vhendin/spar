@@ -34,6 +34,8 @@ export interface StartActions {
   settings(): void;
   controls(): void;
   credits(): void;
+  /** Set off just behind another driver, wherever they are. */
+  join(id: string): void;
 }
 
 const NAME_KEY = 'spar.name';
@@ -105,6 +107,9 @@ export class StartMenu {
   private color: string;
   /** Who else is connected, kept up to date in place so typing a name is not interrupted. */
   private readonly players = document.createElement('div');
+  /** The players as last listed, and each region card's detail line, for the counts. */
+  private lines: PlayerLine[] = [];
+  private regionCards: Map<string, { detail: HTMLElement; base: string }>;
   private playersLabel = document.createElement('div');
   private picture: HTMLCanvasElement | null = null;
   /** Whether this computer may make and remove areas (it runs the server). */
@@ -125,6 +130,7 @@ export class StartMenu {
     const color = read(COLOR_KEY) ?? '';
     this.color = PAINTS.some((p) => p.color === color) ? color : '';
     this.playersLabel.className = 'label';
+    this.regionCards = new Map();
     this.playersLabel.textContent = 'On the road';
     this.box = document.createElement('div');
     this.box.className = 'box';
@@ -201,6 +207,7 @@ export class StartMenu {
   private render(): void {
     const box = this.box;
     box.replaceChildren();
+    this.regionCards.clear();
     const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
       const e = document.createElement(tag);
       if (text) e.textContent = text;
@@ -232,7 +239,8 @@ export class StartMenu {
       const c = add('button', '', maps, `card${here ? ' on' : ''}`);
       add('div', r.title, c, 'title');
       const km = (r.size / 1000).toFixed(0);
-      add('div', here ? `${km} × ${km} km` : `${km} × ${km} km · loads the map`, c, 'detail');
+      const detail = add('div', '', c, 'detail');
+      this.regionCards.set(r.name, { detail, base: here ? `${km} × ${km} km` : `${km} × ${km} km · loads the map` });
       c.addEventListener('click', (e) => {
         e.stopPropagation();
         if (!here) this.actions.region(r.name);
@@ -254,6 +262,7 @@ export class StartMenu {
         });
       }
     }
+    this.countDrivers();
     if (this.maker) button('New area…', () => this.actions.newArea(), left, 'add');
     left.append(this.preview);
     this.drawPreview();
@@ -323,9 +332,22 @@ export class StartMenu {
 
   /** Who is connected; the list shows only when someone else is. */
   setPlayers(players: PlayerLine[]): void {
-    fillPlayers(this.players, players, this.index.title);
+    this.lines = players;
+    fillPlayers(this.players, players, this.index.title, {
+      titleOf: (name) => this.regions.find((r) => r.name === name)?.title ?? name,
+      join: (id) => this.actions.join(id),
+    });
     const show = players.length > 1;
     this.players.style.display = this.playersLabel.style.display = show ? '' : 'none';
+    this.countDrivers();
+  }
+
+  /** How many others drive in each region, on its card. */
+  private countDrivers(): void {
+    for (const [name, card] of this.regionCards) {
+      const n = this.lines.filter((p) => !p.you && p.region === name).length;
+      card.detail.textContent = n ? `${card.base} · ${n} ${n === 1 ? 'driver' : 'drivers'} there` : card.base;
+    }
   }
 
   /** Drives off with what is chosen (the Drive button, Enter, or Start on a gamepad). */

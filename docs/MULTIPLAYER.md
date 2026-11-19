@@ -1,14 +1,14 @@
 # Multiplayer plan
 
 Step 6 of `PLAN.md`, revisited. Started on 2026-11-19 with the recommendations below accepted
-(see "Answered" in `QUESTIONS.md`). Stages 1 and 2 are built; see "Stages" for what they do and
+(see "Answered" in `QUESTIONS.md`). Stages 1 to 3 are built; see "Stages" for what they do and
 do not do yet.
 
 ## What exists today
 
 - **The server** already owns what everyone must agree on: the clock and the weather
   (`server/src/world.ts`), sent to every client every 2 s. Any client can change them with
-  `set_world`. Messages have JSON Schemas and a protocol version (now 5), and the server
+  `set_world`. Messages have JSON Schemas and a protocol version (now 6), and the server
   validates what it receives.
 - **The vehicle** is simulated entirely in the browser (`VehicleSim`, Rapier). Its state record
   already has room for an `authority` field (planned since milestone 1).
@@ -167,8 +167,17 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    of change per message) passes whole, anything harder at half, at most 2 m/s. A parked
    vehicle's hold brake resists pushes, on purpose. The chase camera rises over another
    vehicle in its way.
-3. **One world.** Felled trees and ice holes shared and sent to late joiners; regions as rooms;
-   who changed the clock or weather shown in chat; "join a friend".
+3. **One world.** *Built.* The server keeps, per region and for the session only, the trees
+   knocked down (`felled { region, tree: { key, x, z, dx, dz, diameter } }`, at most 5000) and
+   the holes in the ice (`ice_hole { region, hole }`, at most 8, dropped once the calendar
+   says the lakes are open), in `server/src/rooms.ts`. Each change goes to the others in that
+   region, who hear the tree crack. A browser entering a region (after loading it, and after
+   every reconnect) sends `room { region }` and gets back everything changed there so far. The
+   server also notes each player's region, so the lists show where everyone is and the start
+   screen's map cards say how many drive in each. "Join" next to another driver (start screen
+   and menu) sets off just behind them; in another region the page loads it first and joins
+   once their vehicle shows up (within 30 s). A message the server refuses is only logged now,
+   instead of marking the connection as offline. Protocol 6.
 4. **Winching each other.** Authority moves to the puller while hooked.
 5. **Together.** Shared destinations, the host's address in the start menu, the
    performance pass with 5 vehicles (draw calls, sound sources, particles).

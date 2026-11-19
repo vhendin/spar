@@ -335,6 +335,36 @@ describe('websocket', () => {
     watcher.ws.close();
   });
 
+  it('keeps felled trees and ice holes per region, for whoever enters it later', async () => {
+    const a = await connect('Anna');
+    const b = await connect('Bo');
+    a.ws.send(JSON.stringify({ type: 'room', region: 'demo' }));
+    expect(await a.next('room')).toEqual({ type: 'room', region: 'demo', felled: [], holes: [] });
+    b.ws.send(JSON.stringify({ type: 'room', region: 'demo' }));
+    await b.next('room');
+    const listed = await a.waitFor('players', (m) => m.players.some((p) => p.id === b.id && p.region === 'demo'));
+    expect(listed.players.find((p) => p.id === a.id)!.region).toBe('demo');
+
+    const tree = { key: '2:-14:803', x: 120.5, z: 340.25, dx: 0.6, dz: -0.8, diameter: 0.12 };
+    a.ws.send(JSON.stringify({ type: 'felled', region: 'demo', tree }));
+    expect(await b.next('felled')).toEqual({ type: 'felled', region: 'demo', tree });
+    a.ws.send(JSON.stringify({ type: 'ice_hole', region: 'demo', hole: { x: 50, z: 60 } }));
+    expect(await b.next('ice_hole')).toEqual({ type: 'ice_hole', region: 'demo', hole: { x: 50, z: 60 } });
+    // The same hole again, and a change in another region, are not passed on here.
+    a.ws.send(JSON.stringify({ type: 'ice_hole', region: 'demo', hole: { x: 51, z: 60 } }));
+    a.ws.send(JSON.stringify({ type: 'felled', region: 'other', tree: { ...tree, key: '2:1:1' } }));
+
+    // Late to the region: it is all there.
+    const c = await connect('Cilla');
+    c.ws.send(JSON.stringify({ type: 'room', region: 'demo' }));
+    expect(await c.next('room')).toEqual({ type: 'room', region: 'demo', felled: [tree], holes: [{ x: 50, z: 60 }] });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(b.seen('ice_hole')).toHaveLength(1);
+    expect(b.seen('felled')).toHaveLength(1);
+    expect(a.seen('felled')).toHaveLength(0);
+    for (const p of [a, b, c]) p.ws.close();
+  });
+
   it('passes on nothing before hello, and refuses a malformed vehicle', async () => {
     const a = await connect('Anna');
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);

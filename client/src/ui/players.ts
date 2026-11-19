@@ -15,16 +15,28 @@ export const PAINTS: { name: string; color: string }[] = [
 ];
 
 export interface PlayerLine {
+  id: string;
   name: string;
   color: string;
   /** Driving in the same region as us. */
   here: boolean;
   you: boolean;
   paused: boolean;
+  /** The region they are in, by name; '' before they have entered one. */
+  region: string;
+  /** On the road somewhere, so there is a vehicle to join. */
+  driving: boolean;
+}
+
+export interface PlayerListOptions {
+  /** A region's title from its name. */
+  titleOf?: (region: string) => string;
+  /** Offered for everyone else on the road: set off behind them. */
+  join?: (id: string) => void;
 }
 
 /** Fills `parent` with one line per player, or says it is just us. */
-export function fillPlayers(parent: HTMLElement, players: PlayerLine[], regionTitle: string): void {
+export function fillPlayers(parent: HTMLElement, players: PlayerLine[], regionTitle: string, options: PlayerListOptions = {}): void {
   parent.replaceChildren();
   parent.classList.add('players');
   for (const p of players) {
@@ -38,8 +50,20 @@ export function fillPlayers(parent: HTMLElement, players: PlayerLine[], regionTi
     name.textContent = p.name;
     const where = document.createElement('span');
     where.className = 'where';
-    where.textContent = p.you ? 'you' : p.here ? (p.paused ? `${regionTitle} · paused` : regionTitle) : 'elsewhere';
+    const elsewhere = p.region ? (options.titleOf?.(p.region) ?? p.region) : 'not driving yet';
+    where.textContent = p.you ? 'you' : p.here ? (p.paused ? `${regionTitle} · paused` : regionTitle) : elsewhere;
     line.append(dot, name, where);
+    if (!p.you && p.driving && options.join) {
+      const join = document.createElement('button');
+      join.className = 'join';
+      join.textContent = 'Join';
+      join.title = `Set off just behind ${p.name}${p.here ? '' : `, in ${elsewhere}`}`;
+      join.addEventListener('click', (e) => {
+        e.stopPropagation();
+        options.join!(p.id);
+      });
+      line.append(join);
+    }
     parent.append(line);
   }
 }

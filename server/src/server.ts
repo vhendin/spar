@@ -1,12 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { PROTOCOL_VERSION, type Player, type ServerMessage } from '@spar/shared';
+import { dayOfYear, PROTOCOL_VERSION, seasonAt, type Player, type SeasonCalendar, type ServerMessage } from '@spar/shared';
+import seasonDefs from '../../defs/seasons.json';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
 import { AREA_SIZES, AreaMaker, checkRequest, cleanStarts, fromHost, readStarts, writeStarts, type AreaRequest } from './areas';
 import { cleanName, describeWorldChange, playerList } from './players';
 import { listRegions } from './regions';
+import { Rooms } from './rooms';
 import { serveFile } from './static';
 import { WorldState } from './world';
 
@@ -159,6 +161,8 @@ export function createGameServer(config: ServerConfig): GameServer {
   wss.on('error', () => {});
   let nextPlayer = 1;
   const world = new WorldState(config);
+  /** Trees knocked down and holes in the ice, per region. */
+  const rooms = new Rooms();
   /** Everyone who has said hello, by their socket. */
   const joined = new Map<WebSocket, Player>();
   /**
@@ -172,6 +176,8 @@ export function createGameServer(config: ServerConfig): GameServer {
   let ticks = 0;
   const timer = setInterval(() => {
     world.step();
+    // Once the lakes are open the holes in the ice are gone with it.
+    if (seasonAt(seasonDefs as SeasonCalendar, dayOfYear(world.utc(), config.utcOffset)).ice <= 0) rooms.thaw();
     if (++ticks % WORLD_INTERVAL !== 0 || joined.size === 0) return;
     const update = JSON.stringify(world.message());
     for (const ws of joined.keys()) ws.send(update);
@@ -182,6 +188,11 @@ export function createGameServer(config: ServerConfig): GameServer {
   const broadcast = (msg: ServerMessage, except?: WebSocket): void => {
     const text = JSON.stringify(msg);
     for (const ws of joined.keys()) if (ws !== except && ws.readyState === ws.OPEN) ws.send(text);
+  };
+  /** To everyone else in a region. */
+  const toRoom = (region: string, msg: ServerMessage, except: WebSocket): void => {
+    const text = JSON.stringify(msg);
+    for (const [ws, p] of joined) if (ws !== except && p.region === region && ws.readyState === ws.OPEN) ws.send(text);
   };
   const announcePlayers = (): void => broadcast({ type: 'players', players: playerList(joined.values()) });
   const say = (text: string): void => broadcast({ type: 'chat', text });
@@ -273,6 +284,20 @@ export function createGameServer(config: ServerConfig): GameServer {
           break;
         case 'away':
           broadcast({ type: 'away', id: player.id }, ws);
+          break;
+        case 'room':
+          // Entering a region: what has changed there so far.
+          if (player.region !== msg.region) {
+            player.region = msg.region;
+            announcePlayers();
+          }
+          send(ws, { type: 'room', region: msg.region, ...rooms.state(msg.region) });
+          break;
+        case 'felled':
+          if (rooms.fell(msg.region, msg.tree)) toRoom(msg.region, { type: 'felled', region: msg.region, tree: msg.tree }, ws);
+          break;
+        case 'ice_hole':
+          if (rooms.breakIce(msg.region, msg.hole)) toRoom(msg.region, { type: 'ice_hole', region: msg.region, hole: msg.hole }, ws);
           break;
         case 'push':
           // Only to the driver pushed: their browser moves their vehicle.

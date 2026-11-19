@@ -26,6 +26,15 @@
     },
     {
       "$ref": "#/definitions/PlayerPush"
+    },
+    {
+      "$ref": "#/definitions/RoomState"
+    },
+    {
+      "$ref": "#/definitions/TreeFelled"
+    },
+    {
+      "$ref": "#/definitions/IceBroken"
     }
   ],
   "definitions": {
@@ -223,6 +232,11 @@
               "color": {
                 "type": "string",
                 "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "region": {
+                "description": "The region they are in, once they have entered one.",
+                "type": "string",
+                "pattern": "^[a-z0-9_-]+$"
               }
             }
           }
@@ -338,6 +352,92 @@
           },
           "minItems": 3,
           "maxItems": 3
+        }
+      }
+    },
+    "RoomState": {
+      "title": "RoomState",
+      "description": "What has changed in a region this session: sent to a driver entering it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "felled",
+        "holes"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "room"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "felled": {
+          "type": "array",
+          "items": {
+            "$ref": "client-message.schema.json#/definitions/FelledTree"
+          }
+        },
+        "holes": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "client-message.schema.json#/definitions/IceHole"
+          }
+        }
+      }
+    },
+    "TreeFelled": {
+      "title": "TreeFelled",
+      "description": "Another driver knocked a tree down.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "tree"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "felled"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "tree": {
+          "$ref": "client-message.schema.json#/definitions/FelledTree"
+        }
+      }
+    },
+    "IceBroken": {
+      "title": "IceBroken",
+      "description": "Another driver broke through the ice.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "hole"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "ice_hole"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "hole": {
+          "$ref": "client-message.schema.json#/definitions/IceHole"
         }
       }
     }

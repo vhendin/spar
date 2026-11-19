@@ -5,6 +5,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Multiplayer stage 3, one world (this commit)
+
+- **Felled trees last for the session.** The server forgets them when it restarts, and playing
+  alone (no server) they are forgotten on reload, as before. Should the server keep them on
+  disk, so a forest stays knocked down from one evening to the next?
+- **Joining in another region** loads that region (the page reloads), then sets you off behind
+  them once their vehicle shows up. Fine, or should "Join" only be offered in your own region?
+
 ### Mud and water (f536609)
 
 - **How stuck is stuck?** Spinning digs a tyre down to at most 25 cm. With open diffs that leaves

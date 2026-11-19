@@ -38,5 +38,10 @@ export function describeWorldChange(msg: SetWorld): string {
 
 /** The players' list as sent to everyone. */
 export function playerList(players: Iterable<Player>): Player[] {
-  return [...players].map((p) => (p.color ? { id: p.id, name: p.name, color: p.color } : { id: p.id, name: p.name }));
+  return [...players].map((p) => ({
+    id: p.id,
+    name: p.name,
+    ...(p.color && { color: p.color }),
+    ...(p.region && { region: p.region }),
+  }));
 }

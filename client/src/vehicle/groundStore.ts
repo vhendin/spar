@@ -57,6 +57,8 @@ export class GroundStore implements GroundProbe {
   snow = 0;
   /** Where vehicles have broken through the ice, newest last. */
   readonly holes: IceHole[] = [];
+  /** Told of every hole our vehicle breaks, to pass on to the others. */
+  onBreak: ((x: number, z: number) => void) | null = null;
 
   private readonly level: RegionIndex['heights']['levels'][number];
   private readonly maskLevel: RegionIndex['masks']['levels'][number];
@@ -241,11 +243,15 @@ export class GroundStore implements GroundProbe {
     return depth * (PACKED[this.surfaceName[s.mask[this.planes.surface * s.plane + s.at]!]!] ?? 1);
   }
 
-  /** A vehicle broke through the ice here: it stays open (until the newest holes push it out). */
-  breakIce(x: number, z: number): void {
+  /**
+   * A vehicle broke through the ice here: it stays open (until the newest holes push it out).
+   * Ours is passed on to the others (`onBreak`); `fromAfar` for one another driver broke.
+   */
+  breakIce(x: number, z: number, fromAfar = false): void {
     if (this.holes.some((h) => Math.hypot(x - h.x, z - h.z) < h.radius)) return;
     this.holes.push({ x, z, radius: HOLE_RADIUS });
     if (this.holes.length > MAX_HOLES) this.holes.shift();
+    if (!fromAfar) this.onBreak?.(x, z);
   }
 
   /** Metres to the nearest stream, searched as far as it matters for the ice. */

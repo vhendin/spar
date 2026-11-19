@@ -23,6 +23,15 @@
     },
     {
       "$ref": "#/definitions/Push"
+    },
+    {
+      "$ref": "#/definitions/Room"
+    },
+    {
+      "$ref": "#/definitions/Felled"
+    },
+    {
+      "$ref": "#/definitions/BrokeIce"
     }
   ],
   "definitions": {
@@ -374,6 +383,141 @@
           },
           "minItems": 3,
           "maxItems": 3
+        }
+      }
+    },
+    "Room": {
+      "title": "Room",
+      "description": "This driver is now in this region: the server sends back what has changed in it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "room"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        }
+      }
+    },
+    "FelledTree": {
+      "title": "FelledTree",
+      "description": "A tree knocked down: kept by the server for the session and passed on to everyone in the region.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "x",
+        "z",
+        "dx",
+        "dz",
+        "diameter"
+      ],
+      "properties": {
+        "key": {
+          "description": "The tree's permanent key: layer, cell x, cell z.",
+          "type": "string",
+          "pattern": "^[0-9a-z_-]+:-?[0-9]+:-?[0-9]+$",
+          "maxLength": 48
+        },
+        "x": {
+          "description": "Where it stood, metres east.",
+          "type": "number"
+        },
+        "z": {
+          "description": "Where it stood, metres south.",
+          "type": "number"
+        },
+        "dx": {
+          "description": "The way it fell: a unit vector on the ground, east part.",
+          "type": "number"
+        },
+        "dz": {
+          "description": "The way it fell, south part.",
+          "type": "number"
+        },
+        "diameter": {
+          "description": "Trunk diameter, metres, for the sound of it.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5
+        }
+      }
+    },
+    "Felled": {
+      "title": "Felled",
+      "description": "Our vehicle or winch knocked a tree down.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "tree"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "felled"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "tree": {
+          "$ref": "#/definitions/FelledTree"
+        }
+      }
+    },
+    "IceHole": {
+      "title": "IceHole",
+      "description": "Where a vehicle broke through the ice.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "z"
+      ],
+      "properties": {
+        "x": {
+          "description": "Metres east.",
+          "type": "number"
+        },
+        "z": {
+          "description": "Metres south.",
+          "type": "number"
+        }
+      }
+    },
+    "BrokeIce": {
+      "title": "BrokeIce",
+      "description": "Our vehicle broke through the ice.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "hole"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "ice_hole"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "hole": {
+          "$ref": "#/definitions/IceHole"
         }
       }
     }
