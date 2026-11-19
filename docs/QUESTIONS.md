@@ -37,7 +37,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   pressure count, so it floats better over bog?
 - **Colour.** Faded red. Another colour, or several to choose from?
 
-### Seasons: colours (this commit)
+### Seasons: colours (a0d0cec)
 
 - **Bare trees.** Out of leaf, birch, aspen, rowan and alder crowns turn a grey-brown haze of
   the same shape. Reads as winter, or as dead trees? Real twigs would cost more triangles.
@@ -48,14 +48,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Choosing the season.** The time panel (T) has a date slider and Winter/Spring/Summer/Autumn
   buttons. Also wanted in the start menu? The server still starts on 15 August.
 
-### Seasons: winter snow (this commit)
+### Seasons: winter snow (1f044da)
 
 - **Snow calendar.** Snow from late October, 0.4 m by mid-December, 0.75 m at the end of March,
   gone by mid-May at 600 m; 12 % deeper per hundred metres up. Right for Vålådalen?
 - **Roofs, fences and cabins** carry no snow yet. Wanted?
 - **Bare birches** under snow read as grey-brown lumps at a distance; see the bare-tree question above.
 
-### Lake ice (this commit)
+### Lake ice (648da29)
 
 - **Ice calendar.** Lakes freeze mid-November, 25 cm by mid-December, 65 cm at the end of
   March, open again early June. Right?
@@ -69,16 +69,13 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   spring thaw. Should holes freeze over again after a few in-game days?
 - **Grip on ice** is 0.15; with snow on top it is the snow's 0.32.
 
-### Driving on snow (this commit)
+### Driving on snow (407766a, 8657af6, 9e43570)
 
-- **Eased W.** On a key the throttle now comes in over 0.15 s on firm ground and up to 1.8 s
-  on ice, and backs off (to no less than a quarter) while the driven tyres spin. A gamepad
-  trigger is left alone. Does it feel right, or does it take too long to get going?
 - **Ploughed roads.** Asphalt keeps 10 % of the snow, gravel 12 %, dirt tracks 15 %; paths are
   not cleared. The plough takes the verges too. Right?
 - **Snow spray** clods look grey against the light. Mostly powder instead?
 
-### Trips and the logbook (this commit)
+### Trips and the logbook (a5334ff)
 
 - **Destinations.** 30 in Vålådalen from OpenStreetMap: 5 summits, 3 lodges, 2 camp sites,
   Vålåforsen, 8 viewpoints and 11 shelters. Unnamed ones are called "Viewpoint 2.4 km W of
@@ -91,9 +88,9 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   from a little further off?
 - **The logbook lives in this browser** (local storage). Fine for now; with multiplayer it could
   move to the server.
-- **Next layers:** fuel and depots, timed challenges, a best-time board per place?
+- **Next layers:** timed challenges, a best-time board per place? (Fuel is set aside, see below.)
 
-### Exhaust fumes (this commit)
+### Exhaust fumes (8b1c66c, 0d36826)
 
 - **Strength.** A faint grey haze at idle, darker when the engine is pushed or winching, and a
   white plume in cold air that lasts longer. The wind carries it off quickly; in a breeze it is
@@ -102,13 +99,12 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   12 °C in July, 5 °C warmer by day than at night). The plume shows below about 8 °C. Should
   the weather (clouds, rain) change the temperature too, or the height above sea level?
 
-### What next
-
-- **Something to do on a drive:** trips and the logbook are a first answer (see above).
-
 ## Answered
 
+- Eased W on a key (9e43570): feels right together with the deep-snow retune.
 - Exhaust fumes from the pipe: yes.
+- Something to do on a drive: trips and the logbook (a5334ff) are the first answer; see the
+  open questions about them above.
 - Fuel: not now. It would take away from the experience; maybe later as an option that can be
   switched on.
 - Winch keys: Z and X sat awkwardly below WASD. I winds in and K pays out (K also cancels
