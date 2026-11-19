@@ -83,7 +83,23 @@ export interface VehicleInput {
   /** -1 full right to 1 full left. */
   steer: number;
   handbrake: boolean;
+  /**
+   * The pedals are keys, only on or off: the driving pedal is then eased in, slowly where
+   * the tyres have little grip and backed off while they spin, as a driver's foot would.
+   */
+  digital?: boolean;
 }
+
+/** Seconds a key-pressed pedal takes to come fully in on firm ground, and on the slipperiest. */
+const EASE_FIRM = 0.15;
+const EASE_SLIPPERY = 1.8;
+/** Grip from which the ground counts as firm, and at which as slipperiest. */
+const GRIP_FIRM = 0.7;
+const GRIP_SLIPPERY = 0.3;
+/** Spin above which an eased pedal backs off, how fast (share per second), and how far at most. */
+const EASE_SPIN = 0.15;
+const EASE_BACK = 1.5;
+const EASE_FLOOR = 0.25;
 
 export interface WheelTelemetry {
   contact: boolean;
@@ -205,6 +221,8 @@ export class VehicleSim {
   /** Seconds with the intake under water, or the engine drowned and out of it. */
   private drowning = 0;
   private steerAngle = 0;
+  /** How far in an eased (key-pressed) driving pedal is, 0..1. */
+  private eased = 0;
   /** While being put back on its wheels: where from, where to, and how far along (0..1). */
   private righting: { from: { p: { x: number; y: number; z: number }; q: Quat }; to: { p: { x: number; y: number; z: number }; q: Quat }; t: number } | null = null;
 
@@ -390,7 +408,8 @@ export class VehicleSim {
     const state = this.drivetrain;
     if (state.gear > 0 && input.brake > 0.1 && input.throttle < 0.1 && this.speed < 0.5) selectDirection(state, true);
     else if (state.gear < 0 && input.throttle > 0.1 && input.brake < 0.1 && this.speed > -0.5) selectDirection(state, false);
-    const drive = this.drowned ? 0 : state.gear > 0 ? input.throttle : input.brake;
+    const pedal = this.drowned ? 0 : state.gear > 0 ? input.throttle : input.brake;
+    const drive = input.digital ? this.ease(pedal, dt) : pedal;
     const brake = state.gear > 0 ? input.brake : input.throttle;
     this.pedal = drive;
 
@@ -559,6 +578,25 @@ export class VehicleSim {
         this.drowning = 0;
       }
     }
+  }
+
+  /** A key-pressed driving pedal, eased in and feathered by how the driven tyres grip. */
+  private ease(pedal: number, dt: number): number {
+    if (pedal <= 0) return (this.eased = 0);
+    let grip = 0, spin = 0, n = 0;
+    this.def.axles.forEach((axle, a) => {
+      if (!axle.driven) return;
+      for (const wheel of [this.wheels[a * 2]!, this.wheels[a * 2 + 1]!]) {
+        if (!wheel.contact) continue;
+        grip += wheel.grip;
+        spin = Math.max(spin, wheel.spin);
+        n++;
+      }
+    });
+    const slippery = n ? Math.min(1, Math.max(0, (GRIP_FIRM - grip / n) / (GRIP_FIRM - GRIP_SLIPPERY))) : 0;
+    if (spin > EASE_SPIN && slippery > 0) this.eased = Math.max(Math.min(this.eased, EASE_FLOOR), this.eased - EASE_BACK * slippery * dt);
+    else this.eased = Math.min(pedal, this.eased + dt / (EASE_FIRM + (EASE_SLIPPERY - EASE_FIRM) * slippery));
+    return this.eased;
   }
 
   /**

@@ -23,6 +23,7 @@ export class DriveInput {
     const keys = this.down;
     let throttle = held(keys, 'KeyW', 'ArrowUp') ? 1 : 0;
     let brake = held(keys, 'KeyS', 'ArrowDown') ? 1 : 0;
+    let digital = true;
     let handbrake = keys.has('Space');
     const wanted = (held(keys, 'KeyA', 'ArrowLeft') ? 1 : 0) - (held(keys, 'KeyD', 'ArrowRight') ? 1 : 0);
     const rate = (wanted === 0 ? 5 : 3) * dt;
@@ -33,11 +34,14 @@ export class DriveInput {
     if (g.pad) {
       const stick = g.pad.axes[0] ?? 0;
       if (Math.abs(stick) > 0.08) steer = -Math.sign(stick) * ((Math.abs(stick) - 0.08) / 0.92) ** 1.5;
+      // The triggers are pedals the driver feathers; keys are only on or off.
+      const pad = Math.max(g.value('throttle'), g.value('brake'));
+      if (pad > 0.05) digital = false;
       throttle = Math.max(throttle, g.value('throttle'));
       brake = Math.max(brake, g.value('brake'));
       handbrake ||= g.held('handbrake');
     }
-    return { throttle, brake, steer, handbrake };
+    return { throttle, brake, steer, handbrake, digital };
   }
 
   /** The winch's hold-down controls: Z winds in, X pays out. */

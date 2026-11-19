@@ -341,3 +341,29 @@ describe('snow', () => {
     expect(onSnow.car.wheels[0]!.grip).toBeGreaterThan(bare.car.wheels[0]!.grip);
   });
 });
+
+describe('throttle on a key', () => {
+  const drive = (ground: string, digital: boolean) => {
+    const { car, run } = setup('tgb11', { ground: () => ground });
+    run(1);
+    let spin = 0;
+    const steps = 6 * 60;
+    for (let s = 0; s < steps; s++) {
+      run(1 / 60, { throttle: 1, digital });
+      spin += Math.max(...car.wheels.map((w) => w.spin)) / steps;
+    }
+    return { speed: car.speed, spin };
+  };
+
+  it('comes in at once on firm ground', () => {
+    const key = drive('gravel', true), pedal = drive('gravel', false);
+    expect(key.speed).toBeGreaterThan(pedal.speed * 0.95);
+  });
+
+  it('is eased in and feathered on ice, so the tyres spin far less', () => {
+    const key = drive('ice', true), pedal = drive('ice', false);
+    expect(key.spin).toBeLessThan(pedal.spin * 0.5);
+    expect(key.speed).toBeGreaterThan(pedal.speed * 0.8);
+    expect(key.speed).toBeGreaterThan(3);
+  });
+});
