@@ -1099,7 +1099,7 @@ async function start(): Promise<void> {
         camera.lookAt(mid, below + 150 * k, mid);
         w.start.setPicture(w.map.picture);
       } else if (flying) fly.update(dt);
-      else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z));
+      else chase.update(dt, w.view.group, (x, z) => w.terrain.heightAt(x, z), (from, to) => others.clearance(from, to));
       // Our vehicle sent to the others (drawn further down, once the weather is known), with
       // any pushes it gave theirs.
       camera.updateMatrixWorld();

@@ -104,8 +104,17 @@ export class ChaseCamera {
     if (this.mode !== 'orbit') this.yaw = this.pitch = 0;
   }
 
-  /** `groundAt` gives the terrain height under a point, to keep the camera out of hillsides. */
-  update(dt: number, vehicle: THREE.Object3D, groundAt: (x: number, z: number) => number | null): void {
+  /**
+   * `groundAt` gives the terrain height under a point, to keep the camera out of hillsides;
+   * `clearance`, how high a camera looking from one point to another must be to see over
+   * whatever stands between (other vehicles), or null when nothing does.
+   */
+  update(
+    dt: number,
+    vehicle: THREE.Object3D,
+    groundAt: (x: number, z: number) => number | null,
+    clearance: (from: THREE.Vector3, to: THREE.Vector3) => number | null = () => null,
+  ): void {
     if (dt > 0 && this.settled) this.speed = vehicle.position.distanceTo(this.lastPosition) / dt;
     this.lastPosition.copy(vehicle.position);
 
@@ -164,6 +173,9 @@ export class ChaseCamera {
     this.wanted.set(Math.sin(angle) * Math.cos(elevation), Math.sin(elevation), Math.cos(angle) * Math.cos(elevation)).multiplyScalar(reach).add(pivot);
     const floor = groundAt(this.wanted.x, this.wanted.z);
     if (floor !== null && this.wanted.y < floor + 1.2) this.wanted.y = floor + 1.2;
+    // Over another vehicle standing in the way, rather than inside it.
+    const over = clearance(pivot, this.wanted);
+    if (over !== null && this.wanted.y < over) this.wanted.y = over;
 
     // Chase lags a little behind the vehicle; a view the player is turning follows the hand.
     const rate = this.mode === 'orbit' || turning ? 18 : 5;

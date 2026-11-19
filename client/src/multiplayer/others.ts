@@ -37,10 +37,17 @@ const EFFECTS = 400;
 /** Heard within HEAR metres; its sound is let go beyond FORGET. */
 const HEAR = 300;
 const FORGET = 380;
+/** How far (m) the chase camera keeps from the others' bodywork. */
+const CAMERA_MARGIN = 0.5;
 /** A body further than this (m) from where it should be is put there at once instead of moved. */
 const TELEPORT = 5;
-/** The most a push may change the other vehicle's speed by in one message, m/s. */
-const MOST_PUSH = 3;
+/**
+ * Pushes up to GENTLE m/s of speed change per message are a steady shove (0.8 g for 50 ms is
+ * 0.4) and pass whole; above it only HARD_SHARE of the rest; never more than MOST_PUSH.
+ */
+const GENTLE = 0.5;
+const HARD_SHARE = 0.5;
+const MOST_PUSH = 2;
 
 /** Another driver's vehicle as the view and the effects need it, moved along by their snapshots. */
 class RemoteVehicle implements VehicleState {
@@ -195,6 +202,11 @@ export class Others {
   private readonly others = new Map<string, Other>();
   private readonly tags: HTMLDivElement;
   private readonly at = new THREE.Vector3();
+  private readonly lo = new THREE.Vector3();
+  private readonly hi = new THREE.Vector3();
+  private readonly box = new THREE.Box3();
+  private readonly ray = new THREE.Ray();
+  private readonly inverse = new THREE.Matrix4();
   /** Pairs of beams lent to the nearest others; made with the first other vehicle. */
   private beams: [THREE.SpotLight, THREE.SpotLight][] = [];
   private physics: { R: Rapier; world: RAPIER.World } | null = null;
@@ -299,6 +311,35 @@ export class Others {
       out.push({ x: p.x, z: p.z, heading, name: o.player.name, color: o.player.color ?? PLAIN });
     }
     return out;
+  }
+
+  /**
+   * How high a camera looking from `from` to `to` must be to clear the others' vehicles: the
+   * roof height plus a margin of the first one the sight line passes through, or null.
+   */
+  clearance(from: THREE.Vector3, to: THREE.Vector3): number | null {
+    let need: number | null = null;
+    const length = from.distanceTo(to);
+    if (length < 1e-3) return null;
+    for (const o of this.others.values()) {
+      const view = o.view, def = o.vehicle?.def;
+      if (!view?.group.visible || !def) continue;
+      const c = def.chassis.box.center, size = def.chassis.box.size;
+      const box = this.box.set(
+        this.lo.set(c[0]! - size[0]! / 2, 0, c[2]! - size[2]! / 2).subScalar(CAMERA_MARGIN),
+        this.hi.set(c[0]! + size[0]! / 2, Math.max(def.body.height, c[1]! + size[1]! / 2), c[2]! + size[2]! / 2).addScalar(CAMERA_MARGIN),
+      );
+      // The sight line in the vehicle's own frame.
+      this.inverse.copy(view.group.matrixWorld).invert();
+      const a = this.at.copy(from).applyMatrix4(this.inverse);
+      const b = this.lo.copy(to).applyMatrix4(this.inverse);
+      this.ray.set(a, b.sub(a).normalize());
+      const hit = this.ray.intersectBox(box, this.hi);
+      if (!hit || hit.distanceTo(a) > length) continue;
+      const roof = view.group.position.y + box.max.y + 0.6;
+      need = Math.max(need ?? -Infinity, roof);
+    }
+    return need;
   }
 
   /** Whether a collider is one of the others' vehicles. */
@@ -604,10 +645,19 @@ function disposeObject(object: THREE.Object3D): void {
   });
 }
 
-/** Applies a push another driver's vehicle made on ours, kept within what is believable. */
+/**
+ * Applies a push another driver's vehicle made on ours. Their browser saw ours as a wall, so a
+ * hit comes through about twice as hard as between two real vehicles: a steady shove (up to
+ * GENTLE m/s of change per message) is passed on whole, anything harder at half, and never
+ * more than MOST_PUSH.
+ */
 export function applyPush(body: RAPIER.RigidBody, impulse: readonly number[], at: readonly number[]): void {
-  const most = body.mass() * MOST_PUSH;
-  const size = Math.hypot(impulse[0]!, impulse[1]!, impulse[2]!);
-  const k = size > most ? most / size : 1;
+  const k = pushScale(Math.hypot(impulse[0]!, impulse[1]!, impulse[2]!) / body.mass());
   body.applyImpulseAtPoint({ x: impulse[0]! * k, y: impulse[1]! * k, z: impulse[2]! * k }, { x: at[0]!, y: at[1]!, z: at[2]! }, true);
+}
+
+/** The share of a push to apply that would change the speed by `dv` m/s. */
+export function pushScale(dv: number): number {
+  if (dv <= GENTLE) return 1;
+  return Math.min(MOST_PUSH, GENTLE + (dv - GENTLE) * HARD_SHARE) / dv;
 }

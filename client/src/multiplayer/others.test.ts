@@ -1,7 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { pushOn, type Pushed } from './others';
+import { pushOn, pushScale, type Pushed } from './others';
 
 beforeAll(() => RAPIER.init());
 
@@ -33,5 +33,14 @@ describe('pushOn', () => {
     world.step();
     pushOn(world, theirs, new Set([-1]), none);
     expect(none.pushWeight).toBe(0);
+  });
+});
+
+describe('pushScale', () => {
+  it('passes a steady shove whole and softens a hit', () => {
+    expect(pushScale(0.4)).toBe(1);
+    // 3 m/s of hit: 0.5 whole and half of the other 2.5.
+    expect(pushScale(3) * 3).toBeCloseTo(1.75, 6);
+    expect(pushScale(20) * 20).toBeCloseTo(2, 6);
   });
 });

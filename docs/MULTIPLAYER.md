@@ -162,9 +162,11 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    the same box shapes as the simulation's, moved to its snapshot pose before every step
    (jumped there when more than 5 m off). After each step the contact impulses between our
    body and theirs are summed (`pushOn`), and every 50 ms sent as `push { to, impulse, at }`,
-   which the server passes to that driver only; their browser applies it to their body, at
-   most 3 m/s of change per message, and hears it as a knock. A parked vehicle's hold brake
-   resists pushes (see `QUESTIONS.md`).
+   which the server passes to that driver only; their browser applies it to their body and
+   hears it as a knock. Since it was measured against a wall, a steady shove (up to 0.5 m/s
+   of change per message) passes whole, anything harder at half, at most 2 m/s. A parked
+   vehicle's hold brake resists pushes, on purpose. The chase camera rises over another
+   vehicle in its way.
 3. **One world.** Felled trees and ice holes shared and sent to late joiners; regions as rooms;
    who changed the clock or weather shown in chat; "join a friend".
 4. **Winching each other.** Authority moves to the puller while hooked.

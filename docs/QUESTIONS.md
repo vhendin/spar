@@ -5,21 +5,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Multiplayer stage 2, touching (this commit)
-
-- **A parked vehicle resists a push.** Standing still with nobody on the pedals, a vehicle holds
-  itself with a brake of about 0.8 g (the P lamp). Pushed by another, it slides along slowly
-  against that brake, like a real one on its handbrake. Should being pushed let go of the hold,
-  so a friend standing still rolls freely?
-- **How hard a push is.** Your browser sees the other vehicle as an immovable wall, and the
-  whole push that stopped you goes to its driver (at most 3 m/s of change per message). Steady
-  pushing, nose to tail, comes out right; a fast hit is felt about twice as hard by the one hit
-  as it would be in reality. Halve it, or wait and see how it feels?
-- **The camera goes through other vehicles.** The chase camera only keeps clear of the ground,
-  so it can end up inside a vehicle right behind you. Worth keeping it out of them?
-- **Others' sound** is heard within 300 m, through the world's sound (muffled from the cab).
-  Only checked for errors headless, not listened to. Too loud, too quiet?
-
 ### Mud and water (f536609)
 
 - **How stuck is stuck?** Spinning digs a tyre down to at most 25 cm. With open diffs that leaves
@@ -215,6 +200,10 @@ same as the Terrängkombi.
 
 ## Answered
 
+- Multiplayer touching (stage 2): a parked vehicle keeps its hold brake against pushes ("parked
+  means parked"). Hits were a bit harsh: a steady shove (up to 0.5 m/s of change per message)
+  still passes whole, anything harder at half, at most 2 m/s. The chase camera now rises over
+  another vehicle in the way instead of going inside it. Others' volume stays as it is.
 - Power on slopes: the vehicles struggled on slopes that should be easy; both power and grip
   were raised in 920a053, which felt better. The engines then went back to their real
   figures (see "Real figures" above).
