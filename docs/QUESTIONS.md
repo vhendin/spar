@@ -96,6 +96,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   12 °C in July, 5 °C warmer by day than at night). The plume shows below about 8 °C. Should
   the weather (clouds, rain) change the temperature too, or the height above sea level?
 
+### Multiplayer (docs/MULTIPLAYER.md)
+
+Not to be built until single player is called complete; answers shape the plan.
+
+- **Regions.** Recommended: each region is a room, and you only see players in the same one.
+  Or should the whole server drive in one region, chosen by the host?
+- **Who may change the time and weather.** Recommended: anyone, with a chat line saying who did
+  it. Or the host only?
+- **Bumping.** Recommended: vehicles are solid to each other. Or pass through (ghosts), or a
+  setting?
+- **Winching each other** is the hardest part (the puller's browser takes over the towed
+  vehicle). Wanted in the first round, or after the rest works?
+- **Players.** Up to 5, as in `PLAN.md`?
+- **Telling players apart.** Recommended: each player picks a vehicle colour, together with the
+  light 4×4 colour question above. Name tags too.
+- **Chat.** Text only? Voice would need a browser-to-browser connection setup and more work.
+- **Trips together.** A shared destination on everyone's map, each arrival logged in your own
+  logbook with who else arrived. Enough to start with?
+
 ## Answered
 
 - Drowned engine: restarting by itself three seconds after leaving the water is fine.
