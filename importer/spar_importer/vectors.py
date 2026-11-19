@@ -263,6 +263,7 @@ def build_vectors(osm: OsmData, region: Region, levels: dict[str, float], clearc
         "waterways": waterways,
         "lakes": lakes,
         "places": places,
+        "destinations": destinations(osm, region, places),
         "spawns": _spawns(places, drivable_points, region),
         "buildings": buildings(osm, region),
         "powerLines": power_lines(osm, region, box),
@@ -300,3 +301,46 @@ def _spawns(places: list[dict], segments: list[tuple], region: Region) -> list[d
         seen.add(key)
         spawns.append({"name": name, "x": round(hit[0], 1), "z": round(hit[1], 1), "heading": round(hit[2], 1), "road": hit[3]})
     return spawns
+
+
+KIND_NAMES = {"peak": "Summit", "hut": "Hut", "shelter": "Shelter", "viewpoint": "Viewpoint", "lodge": "Lodge", "camp": "Camp site", "sight": "Sight"}
+COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+
+
+def destinations(osm: OsmData, region: Region, places: list[dict]) -> list[dict]:
+    """Summits, huts, shelters, viewpoints and the like inside the area. Those without a name
+    are named by what they are and where: "Viewpoint 1.2 km NE of Ottsjö", "Summit 1285 m"."""
+    out, seen = [], set()
+    for poi in osm.pois:
+        if not (region.west <= poi.easting <= region.east and region.south <= poi.northing <= region.north):
+            continue
+        x, z = round(poi.easting - region.west, 1), round(region.north - poi.northing, 1)
+        # The same hut mapped as a point and an outline, or two shelters on one spot.
+        key = (poi.kind, round(x / 25), round(z / 25))
+        if key in seen:
+            continue
+        seen.add(key)
+        name = poi.name or _unnamed(poi.kind, poi.ele, x, z, places)
+        entry = {"id": poi.id, "kind": poi.kind, "name": name, "x": x, "z": z}
+        if poi.ele is not None:
+            entry["ele"] = round(poi.ele)
+        out.append(entry)
+    out.sort(key=lambda d: (list(KIND_NAMES).index(d["kind"]), d["name"]))
+    return out
+
+
+def _unnamed(kind: str, ele: float | None, x: float, z: float, places: list[dict]) -> str:
+    what = KIND_NAMES[kind]
+    if kind == "peak" and ele is not None:
+        return f"{what} {round(ele)} m"
+    named = [p for p in places if p["kind"] != "locality"] or places
+    if not named:
+        return what
+    near = min(named, key=lambda p: math.hypot(p["x"] - x, p["z"] - z))
+    dx, dz = x - near["x"], z - near["z"]
+    distance = math.hypot(dx, dz)
+    if distance < 400:
+        return f"{what} at {near['name']}"
+    # Heading: 0 north (towards -z), 90 east.
+    bearing = math.degrees(math.atan2(dx, -dz)) % 360
+    return f"{what} {distance / 1000:.1f} km {COMPASS[round(bearing / 45) % 8]} of {near['name']}"

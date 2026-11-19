@@ -10,7 +10,7 @@ from pathlib import Path
 
 from osgeo import ogr, osr
 
-from .ground import WATERWAYS, biome_for, road_for
+from .ground import WATERWAYS, biome_for, destination_for, road_for
 from .region import CRS
 
 ogr.UseExceptions()
@@ -53,6 +53,18 @@ class Place:
 
 
 @dataclass
+class Poi:
+    """Somewhere worth driving to: a summit, hut, shelter, viewpoint, lodge or sight."""
+
+    id: str
+    kind: str
+    name: str | None
+    ele: float | None
+    easting: float
+    northing: float
+
+
+@dataclass
 class Feature:
     """A building outline, power line or barrier line: kept with its tags for the vectors."""
 
@@ -71,6 +83,7 @@ class OsmData:
     roads: list[Road] = field(default_factory=list)
     waterways: list[Waterway] = field(default_factory=list)
     places: list[Place] = field(default_factory=list)
+    pois: list[Poi] = field(default_factory=list)
     buildings: list[Feature] = field(default_factory=list)
     power: list[Feature] = field(default_factory=list)
     barriers: list[Feature] = field(default_factory=list)
@@ -104,6 +117,10 @@ def load_osm(path: Path) -> OsmData:
                 # A closed way comes out both as a line and as a polygon; take each feature
                 # only in the shape its tags are about.
                 fid = str(feature.get("id", ""))
+                destination = destination_for(tags)
+                if destination and kind in ("Point", "Polygon", "MultiPolygon"):
+                    point = _geometry(feature, to_metres).Centroid()
+                    data.pois.append(Poi(fid, destination, tags.get("name") or None, _elevation(tags.get("ele")), point.GetX(), point.GetY()))
                 if kind in ("Polygon", "MultiPolygon"):
                     biome = biome_for(tags)
                     if biome:
@@ -128,6 +145,16 @@ def load_osm(path: Path) -> OsmData:
                     x, y, _ = to_metres.TransformPoint(*feature["geometry"]["coordinates"][:2])
                     data.places.append(Place(tags["name"], tags["place"], x, y))
     return data
+
+
+def _elevation(text: str | None) -> float | None:
+    """An ele tag in metres ("1295", "1295 m", "1 295"), or None when it is not a number."""
+    if not text:
+        return None
+    try:
+        return float(text.replace("m", "").replace(" ", "").replace(",", "."))
+    except ValueError:
+        return None
 
 
 def _geometry(feature: dict, to_metres: osr.CoordinateTransformation) -> ogr.Geometry:

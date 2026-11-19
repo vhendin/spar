@@ -154,3 +154,26 @@ def road_for(tags: dict) -> tuple[str, float, bool] | None:
 
 # waterway value -> width in metres of the water drawn along the line
 WATERWAYS: dict[str, float] = {"stream": 2.0, "river": 8.0, "canal": 5.0, "ditch": 1.0, "drain": 1.0}
+
+
+# Places worth driving to, by tag: kind -> what marks it. Unnamed sights are left out.
+DESTINATIONS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("peak", "natural", ("peak",)),
+    ("hut", "tourism", ("alpine_hut", "wilderness_hut")),
+    ("shelter", "amenity", ("shelter",)),
+    ("viewpoint", "tourism", ("viewpoint",)),
+    ("lodge", "tourism", ("hotel", "hostel", "chalet", "guest_house")),
+    ("camp", "tourism", ("camp_site",)),
+    ("sight", "tourism", ("attraction",)),
+    ("sight", "natural", ("waterfall",)),
+]
+
+
+def destination_for(tags: dict) -> str | None:
+    """The destination kind of a feature, or None when it is not one."""
+    for kind, key, values in DESTINATIONS:
+        if tags.get(key) in values:
+            if kind == "sight" and not tags.get("name"):
+                return None
+            return kind
+    return None

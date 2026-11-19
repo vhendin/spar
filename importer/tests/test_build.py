@@ -119,6 +119,11 @@ def write_osm(data, region=REGION):
         inner = "".join(f'<tag k="{k}" v="{v}"/>' for k, v in tags.items())
         ways.append(f'<way id="{len(ways) + 1}" version="1">{refs}{inner}</way>')
     node(2100, 2900, {"place": "hamlet", "name": "Testby"})
+    node(3300, 600, {"natural": "peak", "name": "Testtoppen", "ele": "912"})
+    node(3600, 3400, {"natural": "peak", "ele": "870 m"})
+    node(2100, 1500, {"tourism": "viewpoint"})
+    node(2150, 2950, {"amenity": "shelter"})
+    node(900, 900, {"tourism": "attraction"})  # unnamed sight: left out
     path = data / "raw/osm" / f"{region.name}.osm"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('<?xml version="1.0" encoding="UTF-8"?><osm version="0.6">' + "".join(nodes) + "".join(ways) + "</osm>")
@@ -358,6 +363,12 @@ def test_vectors(data):
     centre = ground(REGION.west + 1200.0, REGION.north - 1200.0)
     assert abs(lake["level"] - centre) < 15
     assert vectors["places"] == [{"name": "Testby", "kind": "hamlet", "x": 2100.0, "z": 2900.0}]
+
+    names = {d["name"]: d for d in vectors["destinations"]}
+    assert set(names) == {"Testtoppen", "Summit 870 m", "Viewpoint 1.4 km N of Testby", "Shelter at Testby"}, names
+    assert names["Testtoppen"]["kind"] == "peak" and names["Testtoppen"]["ele"] == 912
+    assert names["Testtoppen"]["x"] == 3300.0 and names["Testtoppen"]["z"] == 600.0
+    assert [d["kind"] for d in vectors["destinations"]] == ["peak", "peak", "shelter", "viewpoint"]
 
     (house,) = vectors["buildings"]
     assert house["kind"] == "house" and house["levels"] == 2 and len(house["outline"]) == 4

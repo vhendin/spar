@@ -20,6 +20,8 @@ export class Guide {
   private target: Destination | null = null;
   private arrivedUntil = 0;
   private readonly forward = new THREE.Vector3();
+  /** Called on arriving; what it returns is added to the arrival message. */
+  onArrive: ((d: Destination) => string) | null = null;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -83,7 +85,9 @@ export class Guide {
     if (distance < ARRIVED) {
       this.destination = null;
       this.arrivedUntil = now + 5000;
-      this.text.textContent = `Arrived at ${d.name === 'Marked spot' ? 'the marked spot' : d.name}`;
+      const more = this.onArrive?.(d) ?? '';
+      this.arrivedUntil = now + (more ? 9000 : 5000);
+      this.text.textContent = `Arrived at ${d.name === 'Marked spot' ? 'the marked spot' : d.name}${more}`;
       this.beacon.visible = false;
       return;
     }

@@ -149,6 +149,53 @@
         }
       }
     },
+    "destinations": {
+      "description": "Places worth driving to: summits, huts, shelters, viewpoints, lodges, camp sites and sights from OpenStreetMap. Unnamed ones are named by kind and position. Optional: older regions have none.",
+      "type": "array",
+      "items": {
+        "title": "DestinationPoint",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "x",
+          "z"
+        ],
+        "properties": {
+          "id": {
+            "description": "OpenStreetMap id, such as n123 or w456.",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "peak",
+              "hut",
+              "shelter",
+              "viewpoint",
+              "lodge",
+              "camp",
+              "sight"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number"
+          },
+          "ele": {
+            "description": "Height above sea level from the map, metres.",
+            "type": "number"
+          }
+        }
+      }
+    },
     "spawns": {
       "description": "Points on drivable roads where a vehicle can start; the first is the default.",
       "type": "array",

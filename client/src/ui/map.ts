@@ -12,12 +12,27 @@ export interface Destination {
   name: string;
   x: number;
   z: number;
+  /** For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight. */
+  kind?: string;
 }
+
+/** Colours of the destination markers by kind. */
+const DESTINATION_COLORS: Record<string, string> = {
+  peak: '#5a3c26', hut: '#b0472c', shelter: '#8a5a2b', viewpoint: '#2c6fb0', lodge: '#7a3d8f', camp: '#2f6f4f', sight: '#c28a12',
+};
+const DESTINATION_GROUPS: [string, string[]][] = [
+  ['Summits', ['peak']],
+  ['Huts, lodges and camp sites', ['hut', 'lodge', 'camp']],
+  ['Viewpoints and sights', ['viewpoint', 'sight']],
+  ['Shelters', ['shelter']],
+];
 
 type Spawn = RegionVectors['spawns'][number];
 
 export interface MapActions {
   setDestination(d: Destination | null): void;
+  /** Names of the places already reached here, from the logbook. */
+  reached(): Set<string>;
   /** Puts the vehicle down at a start point. */
   travel(spawn: Pick<Spawn, 'name' | 'x' | 'z' | 'heading'>): void;
   close(): void;
@@ -44,7 +59,9 @@ interface MapPick {
   name: string;
   x: number;
   z: number;
-  kind: 'place' | 'summit' | 'spawn';
+  kind: 'place' | 'summit' | 'spawn' | 'destination';
+  /** For a destination: what kind of place. */
+  sort?: string;
 }
 
 export class MapScreen {
@@ -427,6 +444,7 @@ export class MapScreen {
   private picks(): MapPick[] {
     const r = this.rasters;
     return [
+      ...(this.vectors.destinations ?? []).map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'destination', sort: p.kind })),
       ...this.vectors.places.map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'place' })),
       ...this.tops.map((t): MapPick => ({ name: `Summit ${t.height.toFixed(0)} m`, x: t.x * (r?.spacing ?? 1), z: t.y * (r?.spacing ?? 1), kind: 'summit' })),
       ...this.starts.list.map((s): MapPick => ({ name: s.name, x: s.x, z: s.z, kind: 'spawn' })),
@@ -475,7 +493,7 @@ export class MapScreen {
     }
     const [x, z] = this.toWorld(sx, sy);
     if (x < 0 || z < 0 || x > this.index.size || z > this.index.size) return;
-    this.choose(best ? { name: best.name, x: best.x, z: best.z } : { name: 'Marked spot', x, z });
+    this.choose(best ? { name: best.name, x: best.x, z: best.z, ...(best.sort ? { kind: best.sort } : {}) } : { name: 'Marked spot', x, z });
   }
 
   private choose(d: Destination | null): void {
@@ -510,6 +528,23 @@ export class MapScreen {
     add('span', '', row, 'distance');
     if (d) button('Clear', () => this.choose(null), row);
     this.updateDistance();
+
+    // Places from the map data worth a trip, ticked off once reached.
+    const reached = this.actions.reached();
+    const all = this.vectors.destinations ?? [];
+    if (all.length) {
+      add('div', `Trips · ${all.filter((p) => reached.has(p.name)).length} of ${all.length} reached`, box, 'label');
+      for (const [title, kinds] of DESTINATION_GROUPS) {
+        const group = all.filter((p) => kinds.includes(p.kind));
+        if (!group.length) continue;
+        add('div', title, box, 'sublabel');
+        const list = add('div', '', box, 'list');
+        for (const p of group) {
+          const text = `${reached.has(p.name) ? '✓ ' : ''}${p.name}${p.ele !== undefined && !p.name.includes(' m') ? ` · ${p.ele} m` : ''}`;
+          button(text, () => this.choose({ name: p.name, x: p.x, z: p.z, kind: p.kind }), list, d?.name === p.name ? 'on' : '');
+        }
+      }
+    }
 
     add('div', 'Places', box, 'label');
     const places = add('div', '', box, 'list');
@@ -719,6 +754,26 @@ export class MapScreen {
       c.closePath();
       c.fill();
       label(top.height.toFixed(0), sx, sy + 13, '11px system-ui, sans-serif');
+    }
+    // Destinations: a dot in the colour of their kind, ringed once reached; named when zoomed in.
+    const reached = this.actions.reached();
+    for (const p of this.vectors.destinations ?? []) {
+      const [sx, sy] = this.toScreen(p.x, p.z);
+      c.fillStyle = DESTINATION_COLORS[p.kind] ?? '#444';
+      c.strokeStyle = '#fff';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.arc(sx, sy, 4.5, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      if (reached.has(p.name)) {
+        c.strokeStyle = '#1f7a3a';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(sx, sy, 8, 0, Math.PI * 2);
+        c.stroke();
+      }
+      if (s >= 0.25 || (s >= 0.08 && !/ (of|at) /.test(p.name))) label(p.name, sx, sy + 13, '11px system-ui, sans-serif');
     }
     for (const p of this.vectors.places) {
       const [sx, sy] = this.toScreen(p.x, p.z);

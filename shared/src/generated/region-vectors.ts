@@ -26,6 +26,10 @@ export interface RegionVectors {
   lakes: Lake[];
   places: Place[];
   /**
+   * Places worth driving to: summits, huts, shelters, viewpoints, lodges, camp sites and sights from OpenStreetMap. Unnamed ones are named by kind and position. Optional: older regions have none.
+   */
+  destinations?: DestinationPoint[];
+  /**
    * Points on drivable roads where a vehicle can start; the first is the default.
    */
   spawns: SpawnPoint[];
@@ -94,6 +98,20 @@ export interface Place {
   kind: string;
   x: number;
   z: number;
+}
+export interface DestinationPoint {
+  /**
+   * OpenStreetMap id, such as n123 or w456.
+   */
+  id: string;
+  kind: 'peak' | 'hut' | 'shelter' | 'viewpoint' | 'lodge' | 'camp' | 'sight';
+  name: string;
+  x: number;
+  z: number;
+  /**
+   * Height above sea level from the map, metres.
+   */
+  ele?: number;
 }
 export interface SpawnPoint {
   name: string;

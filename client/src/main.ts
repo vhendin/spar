@@ -35,12 +35,13 @@ import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
 import { VehicleAudio, type Impact } from './audio/vehicleAudio';
 import { Guide } from './ui/guide';
-import { MapScreen, type MapState } from './ui/map';
+import { formatDistance, MapScreen, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu } from './ui/startMenu';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
+import { dateOfYear, formatDuration, seasonName, Trips } from './trips';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -194,6 +195,24 @@ async function start(): Promise<void> {
   const ambience = new Ambience(audio);
   // The way to the destination chosen on the map.
   const guide = new Guide(document.body);
+  // Trips to the destination and the logbook of arrivals.
+  const trips = new Trips();
+  /** Destinations on the map of the area being driven. */
+  let placesToReach = 0;
+  let tripFrom: { x: number; z: number } | null = null;
+  guide.onArrive = () => {
+    const w = world;
+    // Flying there is not a trip.
+    if (!w || flying || w.unplaced) {
+      trips.begin(null);
+      return '';
+    }
+    const day = w.environment.dayOfYear();
+    const season = seasonAt(CALENDAR, day);
+    const entry = trips.arrive({ region: w.index.name, vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(season, day) });
+    if (!entry) return ' · not logged: the vehicle was moved on the way';
+    return ` · ${formatDuration(entry.seconds)} · ${formatDistance(entry.metres)} · written in the logbook`;
+  };
   scene.add(guide.beacon);
   const minimap = new Minimap(document.body);
 
@@ -339,6 +358,7 @@ async function start(): Promise<void> {
       fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>),
     ]);
     scene.add(terrain.group, horizon);
+    placesToReach = vectors.destinations?.length ?? 0;
 
     // Time and weather come from the server. For a look at a particular moment, the URL can
     // freeze them here instead: ?time=2026-12-21T14:00 and ?weather=clear|cloudy|wet|overcast|rain;
@@ -428,7 +448,9 @@ async function start(): Promise<void> {
     const map = new MapScreen(document.body, index, vectors, {
       setDestination: (d) => {
         guide.destination = d;
+        trips.begin(d);
       },
+      reached: () => trips.reached(index.name),
       travel: (s) => {
         const w = world;
         if (!w) return;
@@ -581,6 +603,7 @@ async function start(): Promise<void> {
   };
   /** Off to another start point, which then becomes the one to go back to. */
   const travel = (w: World, s: World['spawn']): void => {
+    trips.jumped();
     w.spawn = { name: s.name, x: s.x, z: s.z, heading: s.heading };
     w.arrival = w.spawn;
     // Moved there first, so the ground around it loads; set down properly once it has.
@@ -609,6 +632,7 @@ async function start(): Promise<void> {
     if (starting && !opening) world.start.show();
   };
   const toStart = (w: World): void => {
+    trips.jumped();
     w.unplaced = !setDown(w, w.spawn.x, w.spawn.z, w.spawn.heading);
   };
 
@@ -677,6 +701,11 @@ async function start(): Promise<void> {
         resume();
       },
       credits: () => showCredits(true),
+      logbook: () => ({
+        title: world?.index.title ?? '',
+        entries: trips.entries.filter((e) => e.region === world?.index.name),
+        places: placesToReach,
+      }),
       vehicles: Object.values(VEHICLES).map((d) => ({ name: d.name, title: d.title })).sort((a, b) => a.title.localeCompare(b.title)),
       vehicle: () => world?.sim.def.name ?? '',
       chooseVehicle: (name) => {
@@ -1070,6 +1099,11 @@ async function start(): Promise<void> {
 
       // The map, and the way to the destination.
       const where = mapState(w);
+      // The trip's clock runs while driving: not paused, not on the map, not flying.
+      if (!w.unplaced && !flying && !paused && !w.map.open && !starting) {
+        trips.tick(dt, tripFrom ? Math.min(50, Math.hypot(where.x - tripFrom.x, where.z - tripFrom.z)) : 0, now);
+        tripFrom = { x: where.x, z: where.z };
+      } else tripFrom = null;
       if (!w.unplaced && !flying) {
         w.map.record(where.x, where.z);
         // Remembered now and then, for "Where you left off" next time.

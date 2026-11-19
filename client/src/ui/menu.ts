@@ -2,6 +2,8 @@
 // and the way back to the start.
 
 import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../vehicle/gamepad';
+import { formatDuration, type LogEntry } from '../trips';
+import { formatDistance } from './map';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
 
 export interface MenuActions {
@@ -21,6 +23,8 @@ export interface MenuActions {
   changed(key: keyof Settings): void;
   /** Builds the world again with the settings that need it, keeping the vehicle where it is. */
   restart(): void;
+  /** The logbook for this area: its title, the arrivals there, and how many places there are to reach. */
+  logbook(): { title: string; entries: LogEntry[]; places: number };
 }
 
 const CONTROLS: [string, string][] = [
@@ -45,7 +49,7 @@ const CONTROLS: [string, string][] = [
 ];
 
 export class Menu {
-  private page: 'main' | 'settings' | 'controls' = 'main';
+  private page: 'main' | 'settings' | 'controls' | 'logbook' = 'main';
   private readonly box: HTMLDivElement;
   /** When a page was opened on its own (from the start screen): where Back goes instead of the main page. */
   private exit: (() => void) | null = null;
@@ -165,6 +169,7 @@ export class Menu {
       button('Resume', () => this.actions.resume(), list, 'primary');
       button('Map', () => this.actions.map(), list);
       button('Time and weather', () => this.actions.timeAndWeather(), list);
+      button('Logbook', () => go('logbook'), list);
       button('Settings', () => go('settings'), list);
       button('Controls', () => go('controls'), list);
       if (this.actions.vehicles.length > 1) {
@@ -182,6 +187,35 @@ export class Menu {
       button('Main menu', () => this.actions.mainMenu(), foot, 'link');
       add('span', ' · ', foot, 'note');
       button('Credits', () => this.actions.credits(), foot, 'link');
+      return;
+    }
+
+    if (this.page === 'logbook') {
+      const { title, entries, places } = this.actions.logbook();
+      const names = new Set(entries.map((e) => e.destination));
+      add('h2', 'Logbook');
+      add('p', places
+        ? `${title}: ${names.size} place${names.size === 1 ? '' : 's'} reached of the ${places} on the map, in ${entries.length} trip${entries.length === 1 ? '' : 's'}.`
+        : `${title}: ${entries.length} trip${entries.length === 1 ? '' : 's'}.`, box, 'sub');
+      if (!entries.length) {
+        add('p', 'Choose a destination on the map (M) and drive there: every arrival is written down here, with the time it took, the season and the vehicle. Trips that jump to a start point on the way do not count.', box, 'hint');
+      } else {
+        // Newest first; the quickest arrival at each place marked.
+        const quickest = new Map<string, LogEntry>();
+        for (const e of entries) if (!quickest.has(e.destination) || e.seconds < quickest.get(e.destination)!.seconds) quickest.set(e.destination, e);
+        const table = add('table', '', box, 'log');
+        const head = add('tr', '', table);
+        for (const h of ['Place', 'When', 'Vehicle', 'Time', 'Distance']) add('th', h, head);
+        for (const e of [...entries].reverse()) {
+          const tr = add('tr', '', table);
+          add('td', e.destination, tr);
+          add('td', `${e.date}, ${e.season}`, tr);
+          add('td', e.vehicle, tr);
+          add('td', formatDuration(e.seconds), tr, `num${quickest.get(e.destination) === e && entries.filter((o) => o.destination === e.destination).length > 1 ? ' best' : ''}`);
+          add('td', formatDistance(e.metres), tr, 'num');
+        }
+      }
+      button('Back', () => go('main'), add('div', '', box, 'foot'), 'back');
       return;
     }
 

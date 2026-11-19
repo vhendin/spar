@@ -78,9 +78,24 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   not cleared. The plough takes the verges too. Right?
 - **Snow spray** clods look grey against the light. Mostly powder instead?
 
+### Trips and the logbook (this commit)
+
+- **Destinations.** 30 in Vålådalen from OpenStreetMap: 5 summits, 3 lodges, 2 camp sites,
+  Vålåforsen, 8 viewpoints and 11 shelters. Unnamed ones are called "Viewpoint 2.4 km W of
+  Ottsjö" and the like. The mountain huts are all outside the area. Worth adding lakes (reach
+  the shore), or leaving out the many shelters?
+- **What counts.** The clock runs only while driving (not paused, not on the map, not flying).
+  Jumping to a start point or back to the start voids the trip; swapping vehicle on the way
+  does not, and the arrival is logged with the vehicle you arrive in. Fair?
+- **Arriving** means coming within 30 m. Summits sit on rough ground: should a summit count
+  from a little further off?
+- **The logbook lives in this browser** (local storage). Fine for now; with multiplayer it could
+  move to the server.
+- **Next layers:** fuel and depots, timed challenges, a best-time board per place?
+
 ### What next
 
-- **Something to do on a drive:** timed routes, summit challenges, fuel and depots?
+- **Something to do on a drive:** trips and the logbook are a first answer (see above).
 
 ## Answered
 

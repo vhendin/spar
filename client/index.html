@@ -94,6 +94,12 @@
       #menu button.primary:hover { background: #d8b673; }
       #menu button.link { padding: 0; background: none; border: none; color: #9fb4bc; text-decoration: underline; }
       #menu .foot { margin-top: 18px; }
+      #menu .box:has(table.log) { width: min(640px, calc(100vw - 32px)); }
+      #menu table.log { width: 100%; border-collapse: collapse; font-size: 13px; }
+      #menu table.log th { text-align: left; font-weight: 600; color: #9fb4bc; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 6px 4px 0; }
+      #menu table.log td { padding: 4px 6px 4px 0; border-top: 1px solid rgba(255, 255, 255, 0.08); vertical-align: top; }
+      #menu table.log td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+      #menu table.log .best { color: #c9a45c; }
       #menu .back { margin-top: 16px; }
       #menu .row .back { margin-top: 0; }
       #menu p.hint { margin: 14px 0 12px; color: #9fb4bc; font-size: 12px; }
@@ -232,6 +238,7 @@
       }
       #map h2 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
       #map .label { margin: 16px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #9fb4bc; }
+      #map .sublabel { margin: 8px 0 4px; font-size: 12px; color: #c8d4d8; }
       #map .dest { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
       #map .dest .name { font-weight: 600; color: #f0a070; }
       #map .dest .none { color: #9fb4bc; font-size: 13px; }
