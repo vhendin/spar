@@ -93,19 +93,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   move to the server.
 - **Next layers:** fuel and depots, timed challenges, a best-time board per place?
 
-### Controls
-
-- **Low range on G.** It had to leave L for the winch. G (for gear) is near the left hand but
-  not under it. Easy to find, or would another key suit better?
-
 ### What next
 
 - **Something to do on a drive:** trips and the logbook are a first answer (see above).
 
 ## Answered
 
-- Winch keys: Z and X sat awkwardly below WASD. Now O winds in and L pays out (L also cancels
-  choosing an anchor); low range moved from L to G, and the developer wheel read-out from G to J.
+- Winch keys: Z and X sat awkwardly below WASD. I winds in and K pays out (K also cancels
+  choosing an anchor); low range stays on L. The developer collider view moved from K to U.
 - Second vehicle: a light Jeep-style 4×4, lighter than the others. Not an ATV (a rider would have
   to be shown) and not a tractor (too dull). Added as `ltb4`.
 - Keyboard throttle: ease W in gently where grip is low.

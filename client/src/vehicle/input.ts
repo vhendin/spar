@@ -44,12 +44,12 @@ export class DriveInput {
     return { throttle, brake, steer, handbrake, digital };
   }
 
-  /** The winch's hold-down controls: O winds in, L pays out. */
+  /** The winch's hold-down controls: I winds in, K pays out. */
   winch(): WinchControls {
     const g = this.gamepad;
     return {
-      pull: this.down.has('KeyO') || (g.pad !== null && g.held('winchIn')),
-      slack: this.down.has('KeyL') || (g.pad !== null && g.held('winchOut')),
+      pull: this.down.has('KeyI') || (g.pad !== null && g.held('winchIn')),
+      slack: this.down.has('KeyK') || (g.pad !== null && g.held('winchOut')),
     };
   }
 }
