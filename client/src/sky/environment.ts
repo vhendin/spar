@@ -23,7 +23,7 @@ const AMBIENT = 0.7;
 /** Half-width of the square around the focus that gets shadows, in metres. */
 const SHADOW_REACH = 70;
 /** Strongest wind, in m/s, for moving rain. */
-const GALE = 22;
+export const GALE = 22;
 /** Mist lies in the valleys: thickest at this height above the region's lowest ground, thinning upwards over each further MIST_THICKNESS metres. */
 const MIST_FLOOR = 90;
 const MIST_THICKNESS = 60;

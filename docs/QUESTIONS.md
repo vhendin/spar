@@ -93,10 +93,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   move to the server.
 - **Next layers:** fuel and depots, timed challenges, a best-time board per place?
 
-### Exhaust pipe (this commit)
+### Exhaust fumes (this commit)
 
-- **Smoke.** The pipe is only a shape. Want a faint puff of exhaust, darker under load and
-  visible on cold winter mornings?
+- **Strength.** A faint grey haze at idle, darker when the engine is pushed or winching, and a
+  white plume in cold air that lasts longer. The wind carries it off quickly; in a breeze it is
+  easy to miss. Stronger, or right as it is?
+- **Air temperature** is a rough guess from the month and the sun (about -10 °C in January,
+  12 °C in July, 5 °C warmer by day than at night). The plume shows below about 8 °C. Should
+  the weather (clouds, rain) change the temperature too, or the height above sea level?
 
 ### What next
 
@@ -104,6 +108,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Answered
 
+- Exhaust fumes from the pipe: yes.
 - Fuel: not now. It would take away from the experience; maybe later as an option that can be
   switched on.
 - Winch keys: Z and X sat awkwardly below WASD. I winds in and K pays out (K also cancels

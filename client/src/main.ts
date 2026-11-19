@@ -8,7 +8,7 @@ import { Connection, type ConnectionState } from './net';
 import { WorldPanel } from './worldPanel';
 import { loadSettings, saveSettings, type Settings } from './settings';
 import { SeeThrough } from './seeThrough';
-import { Environment } from './sky/environment';
+import { Environment, GALE } from './sky/environment';
 import { GROUND_VIEWS, GroundShading, snowLine } from './terrain/groundMaterial';
 import { loadHorizon } from './terrain/horizon';
 import { loadRegionIndex, loadRegionList, RegionMissingError, regionUrl } from './terrain/region';
@@ -24,6 +24,7 @@ import { Obstacles } from './vehicle/obstacles';
 import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
 import { Spray } from './vehicle/spray';
+import { airTemperature, Exhaust } from './vehicle/exhaust';
 import { Tracks } from './vehicle/tracks';
 import { VehicleView } from './vehicle/view';
 import { Winch, type WinchControls } from './vehicle/winch';
@@ -133,6 +134,7 @@ interface World {
   sim: VehicleSim;
   view: VehicleView;
   spray: Spray;
+  exhaust: Exhaust;
   tracks: Tracks;
   felling: Felling;
   winch: Winch;
@@ -238,6 +240,7 @@ async function start(): Promise<void> {
   let lamps: boolean | null = null;
   let groundView = Number(params.get('view')) || 0;
   let detailed = params.get('wheels') !== '0';
+  const exhaustWind = new THREE.Vector2();
   // F3, or ?debug=1, shows the developer read-out and allows the developer keys
   // (F fly, B masks, K colliders, G wheels).
   let debug = params.get('debug') === '1';
@@ -424,8 +427,9 @@ async function start(): Promise<void> {
     const view = new VehicleView(sim);
     chase.eye.set(...driverEye(def));
     const spray = new Spray();
+    const exhaust = new Exhaust();
     const tracks = new Tracks();
-    scene.add(view.group, spray.group, tracks.mesh);
+    scene.add(view.group, spray.group, exhaust.group, tracks.mesh);
     sim.place(spawn.x, (terrain.heightAt(spawn.x, spawn.z) ?? index.heights.max) + 1, spawn.z, spawn.heading);
     view.snap();
 
@@ -522,7 +526,7 @@ async function start(): Promise<void> {
       starts.editable = info?.enabled ?? false;
       start.setMaker(info?.enabled ?? false);
     });
-    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, spray, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // The start screen, unless the URL asks for a particular start or a rebuild is resuming.
     const direct = resumeAt !== null || ['spawn', 'vehicle', 'fly', 'pos', 'camera'].some((k) => params.has(k)) || params.get('menu') === '0';
     if (!direct) showStart(world);
@@ -1069,6 +1073,9 @@ async function start(): Promise<void> {
       if (!w.unplaced) w.tracks.update(w.sim, env.weather.wetness, now);
       w.view.grime.update(w.unplaced || paused ? 0 : dt, w.sim, env.weather.wetness, env.weather.rain);
       w.spray.update(w.unplaced || paused ? 0 : dt, w.sim, w.view.group, camera, env.weather.wetness, (x, z) => w.terrain.heightAt(x, z));
+      // Fumes from the pipe, carried off by the wind; white in the cold.
+      exhaustWind.copy(env.windVector).multiplyScalar(env.weather.wind * GALE);
+      w.exhaust.update(paused ? 0 : dt, w.sim, w.view.group, camera, !w.unplaced, Math.min(1, w.winch.tension / 80_000), exhaustWind, airTemperature(day, env.sunElevation));
       const braking = w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05;
       w.view.setLights(lamps ?? env.dark, braking || controls.handbrake);
 

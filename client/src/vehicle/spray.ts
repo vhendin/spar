@@ -35,7 +35,7 @@ const LOOKS: Record<string, Look> = {
 };
 
 /** One batch of particles, packed so the live ones come first. */
-class Batch {
+export class Batch {
   readonly mesh: THREE.Mesh;
   count = 0;
   readonly pos: Float32Array;
@@ -44,6 +44,8 @@ class Batch {
   readonly total: Float32Array;
   readonly size: Float32Array;
   readonly colour: Float32Array;
+  /** Each particle's own opacity, multiplied with the fade. */
+  readonly alpha: Float32Array;
   private readonly geometry = new THREE.InstancedBufferGeometry();
   private readonly at: THREE.InstancedBufferAttribute;
   private readonly tint: THREE.InstancedBufferAttribute;
@@ -55,6 +57,7 @@ class Batch {
     this.total = new Float32Array(max);
     this.size = new Float32Array(max);
     this.colour = new Float32Array(max * 3);
+    this.alpha = new Float32Array(max);
     this.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0]), 3));
     this.geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), 3));
     this.geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), 2));
@@ -70,13 +73,14 @@ class Batch {
     this.mesh.matrixAutoUpdate = false;
   }
 
-  add(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, rgb: [number, number, number], shade: number): void {
+  add(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, rgb: [number, number, number], shade: number, alpha = 1): void {
     if (this.count >= this.max) return;
     const i = this.count++;
     this.pos.set([x, y, z], i * 3);
     this.vel.set([vx, vy, vz], i * 3);
     this.life[i] = this.total[i] = life;
     this.size[i] = size;
+    this.alpha[i] = alpha;
     this.colour.set([rgb[0] * shade, rgb[1] * shade, rgb[2] * shade], i * 3);
   }
 
@@ -90,6 +94,7 @@ class Batch {
     this.life[i] = this.life[last]!;
     this.total[i] = this.total[last]!;
     this.size[i] = this.size[last]!;
+    this.alpha[i] = this.alpha[last]!;
   }
 
   /** Hands the live particles to the GPU; `fade` gives (size scale, alpha) from the fraction of life left. */
@@ -105,7 +110,7 @@ class Batch {
       tint[i * 4] = this.colour[i * 3]!;
       tint[i * 4 + 1] = this.colour[i * 3 + 1]!;
       tint[i * 4 + 2] = this.colour[i * 3 + 2]!;
-      tint[i * 4 + 3] = alpha;
+      tint[i * 4 + 3] = alpha * this.alpha[i]!;
     }
     this.geometry.instanceCount = this.count;
     this.mesh.visible = this.count > 0;

@@ -117,6 +117,12 @@ export function driverEye(def: VehicleDef): P3 {
   return [b.width * 0.22, Math.min(b.beltline + 0.36, b.height - 0.4), cabFront(def) - b.windscreenRake - 0.6];
 }
 
+/** The open end of the exhaust pipe in the vehicle's frame: under the rear bumper on the right. */
+export function exhaustOutlet(def: VehicleDef): P3 {
+  const b = def.body;
+  return [-(b.width / 2 - 0.2), Math.min(def.chassis.groundClearance + 0.12, b.floor - 0.11), -b.length / 2 - 0.2];
+}
+
 /** Where the cab starts: the front of the body, or the back of the bonnet. */
 function cabFront(def: VehicleDef): number {
   return def.body.length / 2 - (def.body.bonnet?.length ?? 0);
@@ -286,7 +292,7 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
   // A small exhaust pipe beside the frame, coming out under the rear bumper on the right,
   // with a sooty opening.
   {
-    const y = Math.min(clearance + 0.12, b.floor - 0.11), x = -(hw - 0.2), z0 = -half + 0.15, z1 = -half - 0.2;
+    const [x, y, z1] = exhaustOutlet(def), z0 = -half + 0.15;
     const steel = new THREE.Color(0x77716a), soot = new THREE.Color(0x0c0b0a);
     m.cylinder('z', x, y, (z0 + z1) / 2, 0.038, (z0 - z1) / 2, 10, steel, soot);
     m.box(x - 0.012, y + 0.03, z0 + 0.04, x + 0.012, b.floor, z0 + 0.07, c.trim);
