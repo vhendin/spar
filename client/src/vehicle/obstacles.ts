@@ -1,5 +1,6 @@
 // Trees, boulders, buildings, poles and fences near the vehicle as physics colliders. They
 // come and go as the vehicle moves; each keeps the permanent name it was placed with.
+// Thin trunks and stretches of wooden fence give way when hit hard enough.
 //
 // For debugging, `debug` holds a wireframe of every collider (K in the game): green for
 // plants, blue for buildings and the like, red for a plant that is solid but not drawn,
@@ -19,6 +20,11 @@ const MIN_ROCK = 0.7;
 
 /** What a solid is, for the sound of hitting it. */
 export type SolidKind = 'tree' | 'rock' | 'object';
+
+/** A stretch of fence breaking sounds like a pole this thick snapping. */
+const FENCE_CRACK = 0.12;
+/** Fence stretches have keys of their own shape (`f<fence>#<piece>:<post>`); trees never have a #. */
+const isFence = (key: string): boolean => key.includes('#');
 
 /** Trunks thinner than this (metres across) are no use to hook a winch to. */
 const MIN_ANCHOR_TRUNK = 0.1;
@@ -122,8 +128,7 @@ export class Obstacles {
     for (const f of this.felling.after(dt)) {
       const entry = this.colliders.get(f.key);
       const p = f.collider.translation();
-      this.vegetation?.fell(f.key, p.x, p.z, f.dx, f.dz);
-      this.felled++;
+      this.knock(f.key, p.x, p.z, f.dx, f.dz);
       if (this.cracks.length < 8) this.cracks.push({ x: p.x, y: p.y, z: p.z, diameter: f.diameter });
       if (entry) this.drop(f.key, entry);
       this.onFelled?.(tree(f.key, p.x, p.z, f.dx, f.dz, f.diameter));
@@ -137,11 +142,17 @@ export class Obstacles {
    */
   fellFromAfar(t: FelledTree, y: number | null): void {
     if (!this.standing(t.key)) return;
-    this.vegetation?.fell(t.key, t.x, t.z, t.dx, t.dz);
-    this.felled++;
+    this.knock(t.key, t.x, t.z, t.dx, t.dz);
     if (y !== null && this.cracks.length < 8) this.cracks.push({ x: t.x, y: y + 0.6, z: t.z, diameter: t.diameter });
     const entry = this.colliders.get(t.key);
     if (entry) this.drop(t.key, entry);
+  }
+
+  /** Lays a tree or fence stretch down on screen. */
+  private knock(key: string, x: number, z: number, dx: number, dz: number): void {
+    if (isFence(key)) this.features?.knockDown(key, dx, dz);
+    else this.vegetation?.fell(key, x, z, dx, dz);
+    this.felled++;
   }
 
   private drop(key: string, entry: Entry): void {
@@ -187,7 +198,7 @@ export class Obstacles {
 
   /** False once the tree with this name has been knocked down. */
   standing(key: string): boolean {
-    return !this.vegetation?.isFelled(key);
+    return isFence(key) ? !this.features?.isBroken(key) : !this.vegetation?.isFelled(key);
   }
 
   /** Pulls a tree over (by a winch): it falls the way (dx, dz) and loses its collider. */
@@ -231,11 +242,14 @@ export class Obstacles {
         known.seen = this.pass;
         return;
       }
-      const desc = solid
+      let desc = solid
         .cuboid(s.hx, s.hy, s.hz)
         .setTranslation(s.x, s.y, s.z)
         .setRotation({ x: 0, y: Math.sin(s.yaw / 2), z: 0, w: Math.cos(s.yaw / 2) });
-      this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, 'object');
+      const breaks = this.felling ? s.breaks : undefined;
+      if (breaks) desc = this.felling!.listen(desc, this.R);
+      const collider = this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, 'object');
+      if (breaks) this.felling!.track(collider, { key: s.key, diameter: FENCE_CRACK, energy: breaks.energy, push: breaks.push });
     });
     this.vegetation?.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight, drawn) => {
       const known = this.colliders.get(key);

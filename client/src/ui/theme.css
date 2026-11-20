@@ -82,9 +82,38 @@ kbd {
 #hint { bottom: 16px; padding: 6px 14px; opacity: 0; transition: opacity 0.8s; }
 #winch-help { bottom: 16px; padding: 6px 14px; display: none; }
 #prompt { top: 62%; padding: 9px 18px; font-size: 15px; opacity: 0; transition: opacity 0.4s; }
-.guide { top: 12px; display: none; align-items: center; gap: 10px; padding: 5px 16px 5px 10px; font-size: 14px; }
+.guide { top: 54px; display: none; align-items: center; gap: 10px; padding: 5px 16px 5px 10px; font-size: 14px; }
 .guide .arrow { display: inline-flex; width: 20px; height: 20px; }
 .guide .name { font: 18px/1.2 var(--serif); }
+
+/* The compass along the top: a strip of glass that fades out at both ends. */
+#compass {
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); width: min(460px, 64vw); height: 34px;
+  overflow: hidden; pointer-events: none; user-select: none; background: var(--glass); border: 1px solid var(--glass-rule);
+  border-radius: var(--radius); backdrop-filter: blur(4px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+#compass .tape { position: absolute; inset: 0; will-change: transform; }
+#compass .tick {
+  position: absolute; top: 0; transform: translateX(-50%); padding-top: 13px;
+  font: 600 11px/1 var(--sans); letter-spacing: 0.08em; color: var(--birch);
+}
+#compass .tick::before {
+  content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 5px; margin-left: -0.5px; background: rgba(236, 235, 230, 0.45);
+}
+#compass .tick.point::before { width: 2px; height: 8px; margin-left: -1px; background: var(--birch); }
+#compass .tick.north { color: var(--mustard); }
+#compass .tick.north::before { background: var(--mustard); }
+#compass .pointer {
+  position: absolute; top: 0; left: 50%; margin-left: -5px; width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid var(--mustard);
+}
+#compass .mark {
+  position: absolute; bottom: 3px; width: 7px; height: 7px; margin-left: -4.5px; border-radius: 50%;
+  border: 1px solid var(--spruce); transition: opacity 0.2s;
+}
+#compass .mark.edge { opacity: 0.5; }
 
 /* A place name fading in on arrival: a chapter card. */
 #chapter {

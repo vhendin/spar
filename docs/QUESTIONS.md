@@ -5,6 +5,19 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Fences, edges and the compass (this commit)
+
+- **How hard is hard?** Wire fence goes at about 10 km/h head on (10 kJ, or 12 kN of steady
+  push), roundpole fence at about 15 km/h (20 kJ, 18 kN), in `defs/objects/*.json`
+  (`breakEnergy`, `breakPush`). Stone walls never give way. A stretch is about 6 m; it tips over
+  flat and stays down for the session, like felled trees, for everyone in the region.
+- **Glancing off edges.** When the body (not the wheels) hits the ground hard, it gets 65 % of
+  the lost speed and 70 % of the nose-up spin back (`GLANCE_*` in `sim.ts`). A 1.4 m bank at
+  55 km/h used to stop the 4×4 dead; now it hops over and drives on at about 15 km/h. Banks of
+  2.5 m still stop you, and so do trees, rocks and buildings. Too bouncy, or not enough?
+- **Compass**: shown whenever the guide line is (not on the map or the start screen), also
+  while flying. Wanted in cab view, or as a setting?
+
 ### Multiplayer stage 4, winching each other
 
 - **Your own vehicle is drawn about 100 ms late while you are on someone's cable**, the same

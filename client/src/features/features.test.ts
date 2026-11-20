@@ -120,6 +120,25 @@ describe('buildTile', () => {
     expect(t.parts.find((p) => p.kind === 'wire')!.lines.length).toBeGreaterThan(0);
   });
 
+  it('lets wooden fences break in stretches that between them hold every post, but not stone walls', () => {
+    // As the game has them: cut into pieces at tile edges, each named <fence>#<piece>.
+    const t = buildTile({ buildings: [], power: [], fences: job.fences.map((f) => ({ ...f, id: `${f.id}#0` })), objects: [] }, OBJECTS, 7, hilly);
+    for (const kind of ['roundpole', 'wire']) {
+      const part = t.parts.find((p) => p.kind === kind)!;
+      const stretches = t.solids.filter((s) => s.breaks?.kind === kind).map((s) => s.breaks!);
+      expect(stretches.length).toBeGreaterThan(0);
+      // Back to back from the first vertex to the last, for the mesh and for the wires.
+      for (const [range, total] of [['verts', part.positions.length / 3], ['lines', part.lines.length / 3]] as const) {
+        expect(stretches[0]![range][0]).toBe(0);
+        for (let k = 1; k < stretches.length; k++) expect(stretches[k]![range][0]).toBe(stretches[k - 1]![range][1]);
+        expect(stretches[stretches.length - 1]![range][1]).toBe(total);
+      }
+      // The keys can be told from trees' when passed to the others.
+      for (const s of t.solids.filter((s) => s.breaks?.kind === kind)) expect(s.key).toMatch(/^f[0-9A-Za-z_.-]+#[0-9]+:[0-9]+$/);
+    }
+    expect(t.solids.some((s) => s.key.startsWith('ff3') && s.breaks)).toBe(false);
+  });
+
   it('stands buildings on the ground: walls start at or below the lowest corner', () => {
     const t = buildTile({ buildings: [house], power: [], fences: [], objects: [] }, OBJECTS, 3, hilly);
     const ys = t.parts[0]!.positions.filter((_, k) => k % 3 === 1);

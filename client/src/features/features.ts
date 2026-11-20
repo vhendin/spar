@@ -1,13 +1,14 @@
 // Streams and draws the man-made objects of a region: buildings, power lines, fences and
 // log piles. Each tile is built once in a worker; every object kind in it is one mesh,
-// shown up to that kind's own distance.
+// shown up to that kind's own distance. Stretches of wooden fence knocked over stay over,
+// tipped about their foot, and are no longer solid.
 
 import * as THREE from 'three/webgpu';
 import type { SeeThrough } from '../seeThrough';
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 import type { BuiltPart, BuiltTile } from './build';
 import { OBJECTS } from './defs';
-import type { Solid } from './mesh';
+import type { Breakable, Solid } from './mesh';
 import type { FeatureRequest, FeatureResponse } from './worker';
 
 const MAX_IN_FLIGHT = 2;
@@ -19,7 +20,12 @@ interface Tile {
   group: THREE.Group | null;
   parts: { object: THREE.Object3D; range: number; triangles: number }[];
   solids: Solid[];
+  /** Each kind's mesh and wires, for tipping fences over. */
+  drawn: Map<string, { mesh?: THREE.Mesh; lines?: THREE.LineSegments }>;
 }
+
+/** How far a knocked-over fence leans, radians from upright. */
+const TIPPED = (78 * Math.PI) / 180;
 
 export interface FeatureStats {
   tiles: number;
@@ -45,6 +51,8 @@ export class Features {
   private nextId = 1;
   private inFlight = 0;
   private warned = false;
+  /** Fence stretches knocked over, and the way they fell. */
+  private readonly broken = new Map<string, { dx: number; dz: number }>();
 
   constructor(
     private readonly index: RegionIndex,
@@ -119,8 +127,27 @@ export class Features {
       if (Math.max(tile.tx * size - x, 0, x - tile.tx * size - size) > radius + 40) continue;
       if (Math.max(tile.tz * size - z, 0, z - tile.tz * size - size) > radius + 40) continue;
       for (const s of tile.solids) {
+        if (s.breaks && this.broken.has(s.key)) continue;
         const reach = radius + Math.max(s.hx, s.hz);
         if ((s.x - x) * (s.x - x) + (s.z - z) * (s.z - z) <= reach * reach) visit(s);
+      }
+    }
+  }
+
+  /** Whether the fence stretch with this key has been knocked over. */
+  isBroken(key: string): boolean {
+    return this.broken.has(key);
+  }
+
+  /** Knocks a stretch of fence over, falling the way (dx, dz); it stays down while the region is loaded. */
+  knockDown(key: string, dx: number, dz: number): void {
+    if (this.broken.has(key)) return;
+    this.broken.set(key, { dx, dz });
+    for (const tile of this.tiles.values()) {
+      const s = tile.solids.find((s) => s.key === key);
+      if (s?.breaks) {
+        tip(tile, s.breaks, dx, dz);
+        return;
       }
     }
   }
@@ -138,7 +165,7 @@ export class Features {
 
   private request(tx: number, tz: number): void {
     const key = `${tx},${tz}`;
-    const tile: Tile = { tx, tz, state: 'loading', group: null, parts: [], solids: [] };
+    const tile: Tile = { tx, tz, state: 'loading', group: null, parts: [], solids: [], drawn: new Map() };
     this.tiles.set(key, tile);
     const id = this.nextId++;
     this.inFlight++;
@@ -169,8 +196,11 @@ export class Features {
     for (const part of built.parts) {
       const range = OBJECTS[part.kind]?.range ?? 500;
       const holder = new THREE.Group();
+      const drawn: { mesh?: THREE.Mesh; lines?: THREE.LineSegments } = {};
+      tile.drawn.set(part.kind, drawn);
       if (part.indices.length > 0) {
         const mesh = new THREE.Mesh(this.geometry(part, sphere), this.material);
+        drawn.mesh = mesh;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.matrixAutoUpdate = false;
@@ -181,6 +211,7 @@ export class Features {
         geometry.setAttribute('position', new THREE.BufferAttribute(part.lines, 3));
         geometry.boundingSphere = sphere;
         const lines = new THREE.LineSegments(geometry, this.wireMaterial);
+        drawn.lines = lines;
         lines.matrixAutoUpdate = false;
         holder.add(lines);
       }
@@ -191,6 +222,11 @@ export class Features {
     group.matrixAutoUpdate = false;
     tile.group = group;
     this.group.add(group);
+    // Built anew from the data, so what was knocked over is knocked over again.
+    for (const s of tile.solids) {
+      const fell = s.breaks && this.broken.get(s.key);
+      if (fell) tip(tile, s.breaks!, fell.dx, fell.dz);
+    }
   }
 
   private geometry(part: BuiltPart, sphere: THREE.Sphere): THREE.BufferGeometry {
@@ -211,4 +247,33 @@ export class Features {
       if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) o.geometry.dispose();
     });
   }
+}
+
+/** Turns a fence stretch's drawing about its foot until it lies nearly flat, falling towards (dx, dz). */
+function tip(tile: Tile, b: Breakable, dx: number, dz: number): void {
+  const drawn = tile.drawn.get(b.kind);
+  if (!drawn) return;
+  const [ax, ay, az, bx, by, bz] = b.foot;
+  const axis = new THREE.Vector3(bx - ax, by - ay, bz - az).normalize();
+  // Turning the upright about the foot by a positive angle moves it towards axis × up.
+  const side = -axis.z * dx + axis.x * dz;
+  const turn = new THREE.Quaternion().setFromAxisAngle(axis, side < 0 ? -TIPPED : TIPPED);
+  const v = new THREE.Vector3(), origin = new THREE.Vector3(ax, ay, az);
+  const turnRange = (attr: THREE.BufferAttribute, [first, end]: [number, number], about: boolean): void => {
+    for (let i = first; i < end; i++) {
+      v.fromBufferAttribute(attr, i);
+      if (about) v.sub(origin);
+      v.applyQuaternion(turn);
+      if (about) v.add(origin);
+      attr.setXYZ(i, v.x, v.y, v.z);
+    }
+    attr.addUpdateRange(first * 3, (end - first) * 3);
+    attr.needsUpdate = true;
+  };
+  if (drawn.mesh && b.verts[1] > b.verts[0]) {
+    const g = drawn.mesh.geometry;
+    turnRange(g.getAttribute('position') as THREE.BufferAttribute, b.verts, true);
+    turnRange(g.getAttribute('normal') as THREE.BufferAttribute, b.verts, false);
+  }
+  if (drawn.lines && b.lines[1] > b.lines[0]) turnRange(drawn.lines.geometry.getAttribute('position') as THREE.BufferAttribute, b.lines, true);
 }

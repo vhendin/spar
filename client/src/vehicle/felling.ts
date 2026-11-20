@@ -1,6 +1,7 @@
 // Small trees give way. A trunk the vehicle hits snaps or is flattened when the vehicle
 // brings enough energy for a trunk that thick, or pushes on it hard enough for long enough;
 // the vehicle then carries on, slowed by what breaking it took. Thick trunks stay put.
+// Stretches of wooden fence go the same way, with what it takes to break them given.
 // No rendering in here, so it runs in tests.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
@@ -22,6 +23,9 @@ export interface Tree {
   key: string;
   /** Trunk diameter in metres. */
   diameter: number;
+  /** What breaking it takes, when not worked out from the diameter: joules, and newtons of push. */
+  energy?: number;
+  push?: number;
 }
 
 /** A tree that has given way, and the way it fell (a unit vector on the ground). */
@@ -101,9 +105,9 @@ export class Felling {
       // Speed towards the trunk just before the hit.
       const closing = Math.abs(v.x * nx + v.z * nz);
       const energy = 0.5 * mass * closing * closing;
-      const needed = breakEnergy(tree.diameter);
+      const needed = tree.energy ?? breakEnergy(tree.diameter);
       tree.pushed += (e.totalForceMagnitude() - tree.pushed) * Math.min(1, dt / PUSH_TIME);
-      if (energy <= needed && tree.pushed < pushForce(tree.diameter)) return;
+      if (energy <= needed && tree.pushed < (tree.push ?? pushForce(tree.diameter))) return;
       // It goes. The vehicle keeps its speed less what the breaking took.
       if (energy > needed) {
         const left = Math.sqrt(Math.max(0, closing * closing - (2 * needed) / mass));

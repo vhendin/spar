@@ -22,6 +22,23 @@ export interface Solid {
   hy: number;
   hz: number;
   yaw: number;
+  /** Wooden fences give way when hit hard enough; left out for what never does. */
+  breaks?: Breakable;
+}
+
+/** What it takes to knock a stretch over, and what is drawn of it, to tip over when it goes. */
+export interface Breakable {
+  /** Joules a hit must bring. */
+  energy: number;
+  /** Or newtons of steady push. */
+  push: number;
+  /** The object kind, whose mesh it is drawn in. */
+  kind: string;
+  /** Its vertices in that mesh, and its wire points, as [first, end). */
+  verts: [number, number];
+  lines: [number, number];
+  /** The line along its foot it tips over about: two points. */
+  foot: [number, number, number, number, number, number];
 }
 
 /** Ground height in metres at a local position. */

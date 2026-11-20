@@ -36,7 +36,8 @@ import { Look, type Grade } from './sky/look';
 import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
 import { VehicleAudio, type Impact } from './audio/vehicleAudio';
-import { Guide, SHARED } from './ui/guide';
+import { bearing, Compass } from './ui/compass';
+import { Guide, OWN, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
@@ -234,6 +235,8 @@ async function start(): Promise<void> {
    */
   let shared: { destination: Destination; by: string | null } | null = null;
   const sharedGuide = new Guide(document.body, SHARED);
+  const compass = new Compass(document.body);
+  const compassLook = new THREE.Vector3();
   /** The other drivers' arrivals of the last minute: who, where, and when (Date.now()). */
   const arrivals: { name: string; destination: Destination; at: number }[] = [];
   const samePlace = (a: Destination, b: Destination): boolean => a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
@@ -1293,9 +1296,11 @@ async function start(): Promise<void> {
         }
         towing.step(STEP, now);
         w.felling.before();
+        if (!towing.following) w.sim.beforeWorldStep();
         // The others' vehicles where they are at the end of this step.
         others.step(stepAt);
         w.physics.step(w.felling.events);
+        if (!towing.following) w.sim.afterWorldStep();
         others.gather(towing.chassis());
         towing.afterStep();
         // The event queue must be emptied every step, with or without obstacles around.
@@ -1515,6 +1520,17 @@ async function start(): Promise<void> {
       sharedGuide.update(now, camera, from, groundAt, guiding);
       guide.update(now, camera, from, groundAt, guiding);
       sharedGuide.row = guide.showing ? 1 : 0;
+      camera.getWorldDirection(compassLook);
+      const css = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
+      compass.update(
+        guiding,
+        bearing(0, 0, compassLook.x, compassLook.z),
+        from,
+        [
+          ...(guide.destination && !guide.hidden ? [{ ...guide.destination, color: css(OWN.color) }] : []),
+          ...(sharedGuide.destination ? [{ ...sharedGuide.destination, color: css(SHARED.color) }] : []),
+        ],
+      );
 
       // On its side or roof and not going anywhere: say how to get back on the wheels.
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;

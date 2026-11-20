@@ -80,7 +80,7 @@ export class Guide {
 
   /** First or second line from the top. */
   set row(row: 0 | 1) {
-    this.el.style.top = row ? '48px' : '';
+    this.el.style.top = row ? '90px' : '';
   }
 
   get destination(): Destination | null {

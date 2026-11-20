@@ -435,11 +435,11 @@ export interface RoomState {
   };
 }
 /**
- * A tree knocked down: kept by the server for the session and passed on to everyone in the region.
+ * A tree, or a stretch of wooden fence, knocked down: kept by the server for the session and passed on to everyone in the region.
  */
 export interface FelledTree {
   /**
-   * The tree's permanent key: layer, cell x, cell z.
+   * The tree's permanent key: layer, cell x, cell z; or a fence stretch's: f, fence id, # piece, : first post.
    */
   key: string;
   /**
@@ -459,7 +459,7 @@ export interface FelledTree {
    */
   dz: number;
   /**
-   * Trunk diameter, metres, for the sound of it.
+   * Trunk diameter, metres, for the sound of it (a fence gives about a pole's).
    */
   diameter: number;
 }

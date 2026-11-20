@@ -17,6 +17,17 @@ export const GROUP_VEHICLE = 0x0004;
 export const groups = (member: number, filter: number): number => ((member << 16) | filter) >>> 0;
 
 const GRAVITY = 9.81;
+/**
+ * The body glancing off the ground: when it meets the ground (not a tree, rock or building)
+ * hard enough to lose more than GLANCE_LOST m/s ahead in one step while going faster than
+ * GLANCE_MIN, it is given GLANCE_KEEP of that back. The solver still lifts it out of the
+ * edge, so it bumps up and over instead of stopping dead: less real, more fun.
+ */
+const GLANCE_MIN = 4;
+const GLANCE_LOST = 0.8;
+const GLANCE_KEEP = 0.65;
+/** And this share of the spin the blow gave it is taken back. */
+const GLANCE_STEADY = 0.7;
 /** Steering lock halves at this speed (m/s), so the vehicle stays steady on the road. */
 const STEER_HALF_SPEED = 13;
 /** Speed (m/s) by which rear-wheel steering has faded out. */
@@ -244,6 +255,11 @@ export class VehicleSim {
   /** Seconds with the intake under water, or the engine drowned and out of it. */
   private drowning = 0;
   private steerAngle = 0;
+  /** Velocity just before the world was last stepped. */
+  private readonly before = { x: 0, y: 0, z: 0 };
+  private readonly spinBefore = { x: 0, y: 0, z: 0 };
+  /** Times the body has glanced off the ground, for the read-out. */
+  glanced = 0;
   /** How far in an eased (key-pressed) driving pedal is, 0..1. */
   private eased = 0;
   /** True while another browser runs it and this one only follows what it says (`follow`). */
@@ -274,12 +290,12 @@ export class VehicleSim {
         .setLinearDamping(0) // air drag is worked out from the speed (pushThroughAir)
         .setAngularDamping(0.25),
     );
-    const solid = (hx: number, hy: number, hz: number, x: number, y: number, z: number): void => {
+    const solid = (points: number[]): void => {
       const collider = world.createCollider(
-        R.ColliderDesc.cuboid(hx, hy, hz)
-          .setTranslation(x, y, z)
+        (R.ColliderDesc.convexHull(new Float32Array(points)) ?? R.ColliderDesc.ball(0.5))
           .setDensity(0) // the mass is set on the body, above
-          .setFriction(0.5)
+          // Low, so the body slides over what it scrapes rather than digging in.
+          .setFriction(0.3)
           .setRestitution(0.05)
           .setCollisionGroups(groups(GROUP_VEHICLE, GROUP_GROUND | GROUP_OBSTACLE | GROUP_VEHICLE))
           // Hits and scrapes against the body are heard; light touches are not reported.
@@ -290,13 +306,36 @@ export class VehicleSim {
       this.chassis.add(collider.handle);
       this.colliders.push(collider);
     };
-    // Bodywork, and under it the frame between the axles: what grounds out on a crest.
-    solid(w / 2, h / 2, l / 2, box.center[0]!, box.center[1]!, box.center[2]!);
-    const bottom = box.center[1]! - h / 2;
+    /**
+     * A block `halfWidth` either side, from `low` to `high`, `back` to `front`, whose underside
+     * slopes up at both ends like a boat's bow: at the front from `bow` (z) on the underside to
+     * `rise` up the front face, at the back from `stern` to `lift` up the back. A ledge met at
+     * speed pushes the slope up and over instead of stopping a square corner dead.
+     */
+    const hull = (halfWidth: number, low: number, high: number, back: number, front: number, bow: number, rise: number, stern: number, lift: number): number[] => {
+      const points: number[] = [];
+      for (const x of [halfWidth, -halfWidth]) {
+        points.push(x, high, front, x, high, back);
+        points.push(x, low + rise, front, x, low, bow);
+        points.push(x, low + lift, back, x, low, stern);
+      }
+      return points;
+    };
+    const frontAxle = Math.max(...def.axles.map((a) => a.z));
+    const rearAxle = Math.min(...def.axles.map((a) => a.z));
+    // Bodywork: sloping from over the front axle to near half its height up the front.
+    const cy = box.center[1]!, cz = box.center[2]!;
+    const bottom = cy - h / 2, nose = cz + l / 2, tail = cz - l / 2;
+    const bow = Math.min(nose - 0.3, Math.max(frontAxle, nose - 1.2));
+    const stern = Math.max(tail + 0.3, Math.min(rearAxle, tail + 0.9));
+    solid(hull(w / 2, bottom, cy + h / 2, tail, nose, bow, h * 0.45, stern, h * 0.3));
+    // Under it the frame between the axles, what grounds out on a crest; a long wedge at each end.
     const clearance = def.chassis.groundClearance;
-    const front = Math.max(...def.axles.map((a) => a.z)) + 0.3;
-    const rear = Math.min(...def.axles.map((a) => a.z)) - 0.3;
-    if (bottom > clearance) solid(0.5, (bottom - clearance) / 2, (front - rear) / 2, 0, (bottom + clearance) / 2, (front + rear) / 2);
+    if (bottom > clearance) {
+      const front = frontAxle + 0.3, rear = rearAxle - 0.3;
+      const tall = bottom - clearance;
+      solid(hull(0.5, clearance, bottom, rear, front, Math.max((front + rear) / 2, frontAxle - 0.4), tall * 0.9, Math.min((front + rear) / 2, rearAxle + 0.3), tall * 0.9));
+    }
 
     this.controller = world.createVehicleController(this.body);
     this.controller.indexUpAxis = 1;
@@ -417,6 +456,52 @@ export class VehicleSim {
   wheelPosition(i: number): { x: number; y: number; z: number } {
     const axle = this.def.axles[i >> 1]!;
     return { x: ((i & 1 ? -1 : 1) * axle.track) / 2, y: this.connectionY[i]! - this.wheels[i]!.suspension, z: axle.z };
+  }
+
+  /** Call just before stepping the world (after `step`). */
+  beforeWorldStep(): void {
+    const v = this.body.linvel(), w = this.body.angvel();
+    this.before.x = v.x;
+    this.before.y = v.y;
+    this.before.z = v.z;
+    this.spinBefore.x = w.x;
+    this.spinBefore.y = w.y;
+    this.spinBefore.z = w.z;
+  }
+
+  /** Call just after stepping the world: glances the body off edges of ground it ran into. */
+  afterWorldStep(): void {
+    if (this.followed || this.righting) return;
+    const b = this.before, v = this.body.linvel();
+    const speed = Math.hypot(b.x, b.z);
+    if (speed < GLANCE_MIN) return;
+    const ux = b.x / speed, uz = b.z / speed;
+    const lost = speed - (v.x * ux + v.z * uz);
+    if (lost < GLANCE_LOST || !this.bodyOnGroundOnly()) return;
+    const back = lost * GLANCE_KEEP;
+    this.body.setLinvel({ x: v.x + ux * back, y: v.y, z: v.z + uz * back }, true);
+    // The blow below the middle would throw the nose up and over backwards; most of that spin is taken back.
+    const w = this.body.angvel(), w0 = this.spinBefore;
+    this.body.setAngvel({ x: w.x + (w0.x - w.x) * GLANCE_STEADY, y: w.y + (w0.y - w.y) * GLANCE_STEADY, z: w.z + (w0.z - w.z) * GLANCE_STEADY }, true);
+    this.glanced++;
+  }
+
+  /** Whether the body (not the wheels) touches the ground, and nothing else. */
+  private bodyOnGroundOnly(): boolean {
+    let ground = false, other = false;
+    for (const c of this.colliders) {
+      this.world.contactPairsWith(c, (o) => {
+        if (this.chassis.has(o.handle)) return;
+        let touching = false;
+        this.world.contactPair(c, o, (m) => {
+          if (m.numContacts() > 0) touching = true;
+        });
+        if (!touching) return;
+        if ((o.collisionGroups() >>> 16) & GROUP_GROUND) ground = true;
+        else other = true;
+      });
+    }
+    return ground && !other;
   }
 
   /** Works out this step's wheel forces from the driver's input. Call before stepping the world. */

@@ -1,5 +1,6 @@
 import type { ObjectDef } from '@spar/shared';
-import { objectRng, param, pick, shade, type FeatureMesh, type GroundFn, type Vec3 } from '../mesh';
+import type { Rng } from '@spar/shared';
+import { objectRng, param, pick, shade, type FeatureMesh, type GroundFn, type Solid, type Vec3 } from '../mesh';
 
 /** Points every `spacing` metres along a line, with the direction of travel there. */
 export function alongLine(points: number[][], spacing: number): { x: number; z: number; dx: number; dz: number }[] {
@@ -19,15 +20,32 @@ export function alongLine(points: number[][], spacing: number): { x: number; z: 
   return out;
 }
 
-/** Colliders along a fence: one box every few posts. */
-function fenceSolids(id: string, posts: { x: number; z: number }[], ground: GroundFn, height: number, half: number, out: FeatureMesh): void {
+/** Where each post's drawing starts in the mesh: vertices, and wire points. */
+interface Mark {
+  v: number;
+  l: number;
+}
+
+/**
+ * Colliders along a fence: one box every few posts. With `breaks`, each box also knows the
+ * stretch drawn for it (from `marks`, one per post and one after the last), to tip it over.
+ */
+function fenceSolids(
+  id: string,
+  posts: { x: number; z: number }[],
+  ground: GroundFn,
+  height: number,
+  half: number,
+  out: FeatureMesh,
+  breaks: { kind: string; energy: number; push: number; marks: Mark[] } | null = null,
+): void {
   const every = Math.max(1, Math.round(6 / Math.max(0.5, Math.hypot(posts[1] ? posts[1].x - posts[0]!.x : 1, posts[1] ? posts[1].z - posts[0]!.z : 0))));
   for (let k = 0; k + 1 < posts.length; k += every) {
     const a = posts[k]!, b = posts[Math.min(posts.length - 1, k + every)]!;
     const ya = ground(a.x, a.z), yb = ground(b.x, b.z);
     const len = Math.hypot(b.x - a.x, b.z - a.z);
     if (len < 0.2) continue;
-    out.solids.push({
+    const solid: Solid = {
       key: `f${id}:${k}`,
       x: (a.x + b.x) / 2,
       y: (ya + yb) / 2 + height / 2,
@@ -36,8 +54,20 @@ function fenceSolids(id: string, posts: { x: number; z: number }[], ground: Grou
       hy: height / 2 + Math.abs(ya - yb) / 2,
       hz: half,
       yaw: -Math.atan2(b.z - a.z, b.x - a.x),
-    });
+    };
+    if (breaks) {
+      // The last stretch takes the last post too, which starts no box of its own.
+      const first = breaks.marks[k]!, end = breaks.marks[k + every >= posts.length - 1 ? posts.length : k + every]!;
+      solid.breaks = { kind: breaks.kind, energy: breaks.energy, push: breaks.push, verts: [first.v, end.v], lines: [first.l, end.l], foot: [a.x, ya, a.z, b.x, yb, b.z] };
+    }
+    out.solids.push(solid);
   }
+}
+
+/** What it takes to knock a stretch of this fence over; null when nothing does. */
+function breaking(def: ObjectDef, rng: Rng): { energy: number; push: number } | null {
+  const energy = param(def, 'breakEnergy', 0, rng), push = param(def, 'breakPush', 0, rng);
+  return energy > 0 && push > 0 ? { energy, push } : null;
 }
 
 /**
@@ -52,6 +82,9 @@ export function fence(id: string, points: number[][], def: ObjectDef, seed: numb
   const height = param(def, 'height', 1.2, rng);
   const posts = alongLine(points, spacing);
   if (posts.length < 2) return;
+  const breaks = breaking(def, rng);
+  const marks: Mark[] = [];
+  const mark = (): void => void marks.push({ v: out.vertexCount, l: out.lines.length / 3 });
 
   if (style === 'roundpole') {
     const rails = Math.round(param(def, 'rails', 4, rng));
@@ -59,6 +92,7 @@ export function fence(id: string, points: number[][], def: ObjectDef, seed: numb
     const reach = height / Math.tan(lean);
     const band = pick(def, 'band', rng);
     for (const [k, p] of posts.entries()) {
+      mark();
       const y = ground(p.x, p.z);
       const ax = -p.dz, az = p.dx;
       const wood = pick(def, 'wood', rng);
@@ -82,7 +116,8 @@ export function fence(id: string, points: number[][], def: ObjectDef, seed: numb
         );
       }
     }
-    fenceSolids(id, posts, ground, height, 0.2, out);
+    mark();
+    fenceSolids(id, posts, ground, height, 0.2, out, breaks && { kind: def.name, ...breaks, marks });
     return;
   }
 
@@ -108,6 +143,7 @@ export function fence(id: string, points: number[][], def: ObjectDef, seed: numb
   const strands = Math.round(param(def, 'wires', 3, rng));
   let prev: Vec3[] | null = null;
   for (const p of posts) {
+    mark();
     const y = ground(p.x, p.z);
     const wood = pick(def, 'wood', rng);
     const lean = (rng.float() - 0.5) * 0.08;
@@ -117,5 +153,6 @@ export function fence(id: string, points: number[][], def: ObjectDef, seed: numb
     if (prev) for (let w = 0; w < strands; w++) out.line(prev[w]!, here[w]!);
     prev = here;
   }
-  fenceSolids(id, posts, ground, height, 0.1, out);
+  mark();
+  fenceSolids(id, posts, ground, height, 0.1, out, breaks && { kind: def.name, ...breaks, marks });
 }

@@ -15,17 +15,18 @@ beforeAll(() => RAPIER.init());
  * Drives north at `kmh` (cruise control on the throttle) into a trunk `diameter` metres
  * across standing 15 m ahead. With `push`, in low range.
  */
-function ram(diameter: number, kmh: number, opts: { push?: boolean } = {}) {
+function ram(diameter: number, kmh: number, opts: { push?: boolean; fence?: { energy: number; push: number } } = {}) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   world.createCollider(RAPIER.ColliderDesc.cuboid(400, 1, 400).setTranslation(0, -1, 0).setCollisionGroups(groups(GROUP_GROUND, 0xffff)));
   const car = new VehicleSim(RAPIER, world, def, { groundAt: () => 'gravel', wetness: () => 0, softness: () => 0, waterDepth: () => 0 });
   car.place(0, 0.05, 24, 0);
   const felling = new Felling(RAPIER, car.body);
-  const desc = felling.listen(RAPIER.ColliderDesc.cylinder(3, diameter / 2).setTranslation(0, 2.6, 15), RAPIER)
-    .setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE));
+  // A trunk, or a 6 m stretch of fence across the way.
+  const shape = opts.fence ? RAPIER.ColliderDesc.cuboid(3, 0.6, 0.15).setTranslation(0, 0.6, 15) : RAPIER.ColliderDesc.cylinder(3, diameter / 2).setTranslation(0, 2.6, 15);
+  const desc = felling.listen(shape, RAPIER).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE));
   const trunk = world.createCollider(desc);
-  felling.track(trunk, { key: 'tree', diameter });
+  felling.track(trunk, { key: 'tree', diameter, ...opts.fence });
   if (opts.push) car.toggleRange();
 
   const fell: Felled[] = [];
@@ -75,5 +76,17 @@ describe('trees in the way', () => {
     const r = ram(0.4, 50);
     expect(r.fell).toHaveLength(0);
     expect(r.z).toBeGreaterThan(15);
+  });
+});
+
+describe('fences in the way', () => {
+  const wire = JSON.parse(readFileSync(join(import.meta.dirname, '../../../defs/objects/wire.json'), 'utf8')) as { params: { breakEnergy: number; breakPush: number } };
+  const fence = { energy: wire.params.breakEnergy, push: wire.params.breakPush };
+
+  it('flattens a stretch of wire fence hit at speed and drives on', () => {
+    const r = ram(0.12, 30, { fence });
+    expect(r.fell).toHaveLength(1);
+    expect(r.z).toBeLessThan(5);
+    expect(r.after).toBeGreaterThan(r.before * 0.7);
   });
 });

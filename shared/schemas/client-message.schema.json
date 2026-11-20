@@ -493,7 +493,7 @@
     },
     "FelledTree": {
       "title": "FelledTree",
-      "description": "A tree knocked down: kept by the server for the session and passed on to everyone in the region.",
+      "description": "A tree, or a stretch of wooden fence, knocked down: kept by the server for the session and passed on to everyone in the region.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -506,10 +506,10 @@
       ],
       "properties": {
         "key": {
-          "description": "The tree's permanent key: layer, cell x, cell z.",
+          "description": "The tree's permanent key: layer, cell x, cell z; or a fence stretch's: f, fence id, # piece, : first post.",
           "type": "string",
-          "pattern": "^[0-9a-z_-]+:-?[0-9]+:-?[0-9]+$",
-          "maxLength": 48
+          "pattern": "^([0-9a-z_-]+:-?[0-9]+:-?[0-9]+|f[0-9A-Za-z_.-]+#[0-9]+:[0-9]+)$",
+          "maxLength": 80
         },
         "x": {
           "description": "Where it stood, metres east.",
@@ -528,7 +528,7 @@
           "type": "number"
         },
         "diameter": {
-          "description": "Trunk diameter, metres, for the sound of it.",
+          "description": "Trunk diameter, metres, for the sound of it (a fence gives about a pole's).",
           "type": "number",
           "minimum": 0,
           "maximum": 5

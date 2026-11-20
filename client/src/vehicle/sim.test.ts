@@ -456,3 +456,43 @@ describe('handing a vehicle between browsers', () => {
     expect(Math.abs(car.body.translation().y)).toBeLessThan(0.05);
   });
 });
+
+describe('edges of ground at speed', () => {
+  /** Runs at a bank rising `height` m over 1.2 m, at full throttle from 40 km/h; how slow it got crossing, and how far it went. */
+  function bank(name: string, height: number, glance: boolean) {
+    const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+    world.timestep = DT;
+    const ground = groups(GROUP_GROUND, 0xffff);
+    world.createCollider(RAPIER.ColliderDesc.cuboid(400, 1, 400).setTranslation(0, -1, 0).setCollisionGroups(ground));
+    const h = height;
+    world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array([-400, 0, 0, 400, 0, 0, -400, h, -1.2, 400, h, -1.2, -400, 0, -400, 400, 0, -400, -400, h, -400, 400, h, -400]))!.setCollisionGroups(ground));
+    const car = new VehicleSim(RAPIER, world, load(name), { groundAt: () => 'gravel', wetness: () => 0, softness: () => 0, waterDepth: () => 0 });
+    car.place(0, 0.05, 25, 0);
+    car.body.setLinvel({ x: 0, y: 0, z: -40 / 3.6 }, true);
+    let slowest = Infinity;
+    for (let s = 0; s < 60 * 8; s++) {
+      car.step({ ...idle, throttle: 1 }, DT);
+      if (glance) car.beforeWorldStep();
+      world.step();
+      if (glance) car.afterWorldStep();
+      const z = car.body.translation().z;
+      if (z < 2 && z > -6) slowest = Math.min(slowest, Math.hypot(car.body.linvel().x, car.body.linvel().z) * 3.6);
+    }
+    return { slowest, z: car.body.translation().z, glanced: car.glanced, upright: car.upright };
+  }
+
+  it('rides up over a steep bank the body hits instead of stopping dead', () => {
+    const plain = bank('tgb11', 1.4, false);
+    const glancing = bank('tgb11', 1.4, true);
+    expect(plain.slowest).toBeLessThan(2);
+    expect(glancing.glanced).toBeGreaterThan(0);
+    expect(glancing.slowest).toBeGreaterThan(10);
+    // Over the top, down on its wheels again and driving on.
+    expect(glancing.z).toBeLessThan(-20);
+    expect(glancing.upright).toBeGreaterThan(0.95);
+  });
+
+  it('still stops at a wall of ground', () => {
+    expect(bank('tgb11', 2.5, true).z).toBeGreaterThan(-4);
+  });
+});
