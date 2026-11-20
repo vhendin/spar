@@ -41,6 +41,11 @@ const EFFECTS = 400;
 /** Heard within HEAR metres; its sound is let go beyond FORGET. */
 const HEAR = 300;
 const FORGET = 380;
+/**
+ * At most this many others are heard, the nearest: each vehicle's sound is some thirty audio
+ * nodes and an engine of its own, running whether loud or not.
+ */
+const MOST_HEARD = 3;
 /** How far (m) the chase camera keeps from the others' bodywork. */
 const CAMERA_MARGIN = 0.5;
 /** A body further than this (m) from where it should be is put there at once instead of moved. */
@@ -525,8 +530,17 @@ export class Others {
   }
 
   /** Call every frame, after the camera has moved. `now` in ms; `dt` 0 while paused. */
+  /** What the others cost this frame, for the developer read-out. */
+  readonly stats = { drawn: 0, heard: 0, effects: 0 };
+
   update(now: number, dt: number, camera: THREE.Camera, show: boolean, around: Surroundings): void {
     const width = window.innerWidth, height = window.innerHeight;
+    // The nearest few may be heard, by where they were drawn last frame.
+    const near: [Other, number][] = [];
+    for (const o of this.others.values()) if (o.view?.group.visible) near.push([o, o.view.group.position.distanceTo(camera.position)]);
+    near.sort((a, b) => a[1] - b[1]);
+    const hearable = new Set(near.slice(0, MOST_HEARD).map(([o]) => o));
+    this.stats.drawn = this.stats.heard = this.stats.effects = 0;
     /** Others with their lights on, and how far away, for the beams. */
     const lit: { o: Other; distance: number }[] = [];
     for (const [id, o] of this.others) {
@@ -568,7 +582,10 @@ export class Others {
       const distance = view.group.position.distanceTo(camera.position);
       if (pose.lights) lit.push({ o, distance });
       this.effects(o, vehicle, view, s.jump, now, pose.paused ? 0 : dt, distance, camera, around);
-      this.sound(o, vehicle, view, pose.paused ? 0 : dt, distance, around.wetness);
+      this.sound(o, vehicle, view, pose.paused ? 0 : dt, hearable.has(o) ? distance : Infinity, around.wetness);
+      this.stats.drawn++;
+      if (o.sound) this.stats.heard++;
+      if (o.effects) this.stats.effects++;
 
       // The name, over the roof.
       this.at.set(0, def.body.height + 0.7, 0).applyMatrix4(view.group.matrixWorld);

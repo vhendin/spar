@@ -19,7 +19,12 @@ export interface LogEntry {
   metres: number;
   /** Real time of arrival, milliseconds since 1970. */
   at: number;
+  /** Other drivers who arrived at the same place within a minute of this arrival. */
+  with?: string[];
 }
+
+/** Arrivals at the same place this close in time count as arriving together. */
+export const TOGETHER_MS = 60_000;
 
 interface Trip {
   name: string;
@@ -100,12 +105,14 @@ export class Trips {
    * Arrived at the destination: the logbook entry, or null when the trip does not count
    * (the vehicle jumped on the way, or there was no trip).
    */
-  arrive(info: Pick<LogEntry, 'region' | 'vehicle' | 'date' | 'season'>, now = Date.now()): LogEntry | null {
+  arrive(info: Pick<LogEntry, 'region' | 'vehicle' | 'date' | 'season' | 'with'>, now = Date.now()): LogEntry | null {
     const trip = this.trip;
     this.begin(null);
     if (!trip || trip.jumped) return null;
+    const { with: others, ...rest } = info;
     const entry: LogEntry = {
-      ...info,
+      ...rest,
+      ...(others?.length ? { with: [...others] } : {}),
       destination: trip.name,
       ...(trip.kind ? { kind: trip.kind } : {}),
       seconds: Math.round(trip.seconds),
@@ -116,6 +123,19 @@ export class Trips {
     if (this.entries.length > LOG_MAX) this.entries.splice(0, this.entries.length - LOG_MAX);
     save(() => localStorage, LOG_KEY, this.entries);
     return entry;
+  }
+
+  /**
+   * Another driver arrived at a place: if this browser's last arrival was there within the
+   * minute, they arrived together, and the entry says so. True when the logbook changed.
+   */
+  together(region: string, destination: string, name: string, now = Date.now()): boolean {
+    const last = this.entries[this.entries.length - 1];
+    if (!last || last.region !== region || last.destination !== destination || now - last.at > TOGETHER_MS) return false;
+    if (last.with?.includes(name)) return false;
+    last.with = [...(last.with ?? []), name];
+    save(() => localStorage, LOG_KEY, this.entries);
+    return true;
   }
 
   /** The names of the places reached in a region. */

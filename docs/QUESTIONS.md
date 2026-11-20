@@ -5,6 +5,23 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Multiplayer stage 5, together
+
+- **A shared destination replaces your own at once**, and the trip clock starts from the
+  moment it was shared, so everyone sets off on equal terms. Your old destination is not
+  kept. Is that right, or should it only be offered ("Go there too") while you already have a
+  destination of your own? (Entering a region late, you only take it on if you have none.)
+- **Anyone can stop sharing**, not only the one who shared. Fine on a home network?
+- **Every arrival is announced in chat**, including others' arrivals at their own marked spots.
+  Too chatty? It could announce only arrivals at the shared destination.
+- **"Arrived together"** means within a minute of each other, before or after. Is a minute
+  right?
+- **Run in Docker, the server cannot see the host's network address**, so the start menu
+  shows none unless `ADDRESS` is set in `compose.yaml`. Fine, or should the start menu then
+  explain how to find the address?
+- **Sound:** only the three nearest other vehicles are heard (each costs some thirty audio
+  nodes and its own engine processor). Enough with five out together?
+
 ### Multiplayer stage 4, winching each other
 
 - **Your own vehicle is drawn about 100 ms late while you are on someone's cable**, the same

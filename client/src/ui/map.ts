@@ -33,6 +33,16 @@ export interface MapActions {
   setDestination(d: Destination | null): void;
   /** Names of the places already reached here, from the logbook. */
   reached(): Set<string>;
+  /**
+   * Sharing the destination with the other drivers in the region; left out when playing alone.
+   * `shared` is what is shared now, with who shared it (null for this driver).
+   */
+  sharing?: {
+    /** Whether anyone else is on the server to share with. */
+    available(): boolean;
+    shared(): { destination: Destination; by: string | null } | null;
+    share(d: Destination | null): void;
+  };
   /** Puts the vehicle down at a start point. */
   travel(spawn: Pick<Spawn, 'name' | 'x' | 'z' | 'heading'>): void;
   close(): void;
@@ -179,6 +189,11 @@ export class MapScreen {
     else this.centre();
     void this.load();
     this.renderSide();
+  }
+
+  /** Draws the side panel again, as when the shared destination changed. */
+  refresh(): void {
+    if (this.open) this.renderSide();
   }
 
   /** Height of the ground anywhere in the region, once the map has loaded; else null. */
@@ -571,6 +586,23 @@ export class MapScreen {
     add('span', '', row, 'distance');
     if (d) button('Clear', () => this.choose(null), row);
     this.updateDistance();
+    // Going there together: shared with everyone in the region, it becomes their destination too.
+    const sharing = this.actions.sharing;
+    if (sharing?.available()) {
+      const shared = sharing.shared();
+      const same = (a: Destination, b: Destination): boolean => a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
+      const line = add('div', '', box, 'shared');
+      if (shared && d && same(shared.destination, d)) {
+        add('span', shared.by ? `Shared by ${shared.by}` : 'Shared with everyone here', line, 'note');
+        button('Stop sharing', () => sharing.share(null), line, 'link');
+      } else {
+        if (shared) {
+          add('span', `${shared.by ?? 'You'} shared ${shared.destination.name}`, line, 'note');
+          button('Go there too', () => this.choose(shared.destination), line, 'link');
+        }
+        if (d) button('Share with everyone', () => sharing.share(d), line, 'link');
+      }
+    }
 
     // Places from the map data worth a trip, ticked off once reached.
     const reached = this.actions.reached();

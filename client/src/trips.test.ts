@@ -40,6 +40,22 @@ describe('trips', () => {
     expect(trips.best('valadalen', 'Testhut')?.seconds).toBe(400);
     expect(trips.best('valadalen', 'Elsewhere')).toBeNull();
   });
+
+  it('note who else arrived within a minute, before or after', () => {
+    const trips = new Trips();
+    trips.begin(hut);
+    // Bo was there first, half a minute before.
+    expect(trips.arrive({ ...info, with: ['Bo'] }, 100_000)?.with).toEqual(['Bo']);
+    // Cilla comes 40 s after; Dan two minutes after; Cilla again counts once; elsewhere does not count.
+    expect(trips.together('valadalen', 'Testhut', 'Cilla', 140_000)).toBe(true);
+    expect(trips.together('valadalen', 'Testhut', 'Cilla', 141_000)).toBe(false);
+    expect(trips.together('valadalen', 'Other hut', 'Eva', 141_000)).toBe(false);
+    expect(trips.together('valadalen', 'Testhut', 'Dan', 220_000)).toBe(false);
+    expect(trips.entries[0]!.with).toEqual(['Bo', 'Cilla']);
+    // Alone, the entry has no list.
+    trips.begin(hut);
+    expect(trips.arrive(info, 500_000)).not.toHaveProperty('with');
+  });
 });
 
 describe('logbook wording', () => {

@@ -31,23 +31,24 @@ import { VehicleView } from './vehicle/view';
 import { Winch, type WinchControls } from './vehicle/winch';
 import { WinchView } from './vehicle/winchView';
 import { Dashboard } from './ui/dashboard';
-import { Menu } from './ui/menu';
+import { listNames, Menu } from './ui/menu';
 import { Look, type Grade } from './sky/look';
 import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
 import { VehicleAudio, type Impact } from './audio/vehicleAudio';
 import { Guide } from './ui/guide';
-import { formatDistance, MapScreen, type MapState } from './ui/map';
+import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { saveLastPosition, StartMenu, storedProfile } from './ui/startMenu';
 import { Chat } from './ui/chat';
 import { Others } from './multiplayer/others';
 import { takeSnapshot } from './multiplayer/track';
+import { Ghosts } from './multiplayer/ghosts';
 import { Towing } from './multiplayer/towing';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
-import { dateOfYear, formatDuration, seasonName, Trips } from './trips';
+import { dateOfYear, formatDuration, seasonName, TOGETHER_MS, Trips } from './trips';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -225,6 +226,19 @@ async function start(): Promise<void> {
   /** Destinations on the map of the area being driven. */
   let placesToReach = 0;
   let tripFrom: { x: number; z: number } | null = null;
+  /** The destination shared with everyone in this region, and the id of who shared it (null: this driver). */
+  let shared: { destination: Destination; by: string | null } | null = null;
+  /** The other drivers' arrivals of the last minute: who, where, and when (Date.now()). */
+  const arrivals: { name: string; destination: Destination; at: number }[] = [];
+  const samePlace = (a: Destination, b: Destination): boolean => a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
+  /** As the protocol carries it: name, position, and kind for a place from the map data. */
+  const wireDestination = (d: Destination): Destination => ({ name: d.name.slice(0, 80), x: d.x, z: d.z, ...(d.kind ? { kind: d.kind } : {}) });
+  /** A shared destination becomes this driver's too; its trip starts now, unless already going there. */
+  const takeDestination = (d: Destination): void => {
+    if (guide.destination && samePlace(guide.destination, d)) return;
+    guide.destination = d;
+    trips.begin(d);
+  };
   guide.onArrive = (d) => {
     const w = world;
     chapter(d.name === 'Marked spot' ? 'The marked spot' : d.name, 'Arrived');
@@ -233,11 +247,14 @@ async function start(): Promise<void> {
       trips.begin(null);
       return '';
     }
+    connection?.send({ type: 'arrived', region: w.index.name, destination: wireDestination(d) });
+    const now = Date.now();
+    const along = [...new Set(arrivals.filter((a) => now - a.at <= TOGETHER_MS && samePlace(a.destination, d)).map((a) => a.name))];
     const day = w.environment.dayOfYear();
     const season = seasonAt(CALENDAR, day);
-    const entry = trips.arrive({ region: w.index.name, vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(season, day) });
+    const entry = trips.arrive({ region: w.index.name, vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(season, day), with: along }, now);
     if (!entry) return ' · not logged: the vehicle was moved on the way';
-    return ` · ${formatDuration(entry.seconds)} · ${formatDistance(entry.metres)} · written in the logbook`;
+    return ` · ${formatDuration(entry.seconds)} · ${formatDistance(entry.metres)}${along.length ? ` · with ${listNames(along)}` : ''} · written in the logbook`;
   };
   scene.add(guide.beacon);
   const minimap = new Minimap(document.body);
@@ -266,6 +283,14 @@ async function start(): Promise<void> {
       };
     },
   });
+
+  /** A driver's name, by their id. */
+  function playerName(id: string): string {
+    return others.players.find((p) => p.id === id)?.name ?? 'another driver';
+  }
+
+  // ?ghosts=4 brings made-up drivers along behind our vehicle, for trying the game with company.
+  const ghosts = params.has('ghosts') ? new Ghosts(Number(params.get('ghosts')) || 4, params.get('region') ?? stored(REGION_KEY) ?? '') : null;
 
   const resize = (): void => {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -368,6 +393,8 @@ async function start(): Promise<void> {
         const f = world.features.stats;
         lines.push(`buildings, lines and fences: ${f.tiles} tiles · ${(f.triangles / 1000).toFixed(0)}k triangles` + (f.loading ? ` · building ${f.loading}` : ''));
       }
+      const o = others.stats;
+      if (o.drawn) lines.push(`others: ${o.drawn} drawn · ${o.heard} heard · ${o.effects} with spray, smoke and tracks`);
       if (groundView > 0) lines.push(`view: ${GROUND_VIEWS[groundView]}`);
       lines.push('', world.unplaced ? `${sim.def.title} · waiting for the ground at ${world.spawn.name}…` : `${sim.def.title} · ${driveReadout(sim, detailed)}`);
     } else if (loadingRegion) {
@@ -526,6 +553,16 @@ async function start(): Promise<void> {
         trips.begin(d);
       },
       reached: () => trips.reached(index.name),
+      sharing: {
+        available: () => others.players.length > 1,
+        shared: () => shared && { destination: shared.destination, by: shared.by === null ? null : playerName(shared.by) },
+        share: (d) => {
+          connection?.send({ type: 'share', region: index.name, destination: d && wireDestination(d) });
+          shared = d ? { destination: d, by: null } : null;
+          chat.add(d ? `You shared ${d.name} with everyone here` : 'You stopped sharing the destination');
+          world?.map.refresh();
+        },
+      },
       travel: (s) => {
         const w = world;
         if (!w) return;
@@ -602,6 +639,7 @@ async function start(): Promise<void> {
       start.setMaker(info?.enabled ?? false);
     });
     start.setPlayers(others.list());
+    start.setAddresses(welcome.addresses ?? []);
     world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
@@ -1039,7 +1077,7 @@ async function start(): Promise<void> {
       world?.environment.setWorld(update, performance.now());
     },
     players: (msg) => {
-      others.setPlayers(msg.players);
+      others.setPlayers(ghosts ? [...msg.players, ...ghosts.players] : msg.players);
       playersChanged();
     },
     state: (msg) => {
@@ -1061,9 +1099,16 @@ async function start(): Promise<void> {
     drive: (msg) => towing.onDrive(msg, performance.now()),
     handover: (msg) => towing.onHandover(msg, performance.now()),
     room: (msg) => {
-      // Entering a region: the trees others knocked down there and the holes in its ice.
+      // Entering a region: the trees others knocked down there, the holes in its ice, and the
+      // destination shared there, which becomes ours if we have none.
       const w = world;
       if (!w || msg.region !== w.index.name) return;
+      shared = msg.shared ? { destination: msg.shared.destination, by: msg.shared.by === towing.me ? null : msg.shared.by } : null;
+      if (shared && !guide.destination) {
+        takeDestination(shared.destination);
+        chat.add(`${shared.by === null ? 'You' : playerName(shared.by)} shared ${shared.destination.name} with everyone here: it is your destination too`);
+      }
+      w.map.refresh();
       for (const tree of msg.felled) w.obstacles?.fellFromAfar(tree, null);
       for (const hole of msg.holes) w.ground.breakIce(hole.x, hole.z, true);
     },
@@ -1075,6 +1120,31 @@ async function start(): Promise<void> {
     iceHole: (msg) => {
       const w = world;
       if (w && msg.region === w.index.name) w.ground.breakIce(msg.hole.x, msg.hole.z, true);
+    },
+    share: (msg) => {
+      const w = world;
+      if (!w || msg.region !== w.index.name) return;
+      const name = playerName(msg.by);
+      if (msg.destination) {
+        shared = { destination: msg.destination, by: msg.by };
+        takeDestination(msg.destination);
+        chat.add(`${name} shared ${msg.destination.name} with everyone here: it is your destination too (M to change it)`);
+      } else if (shared) {
+        chat.add(`${name} stopped sharing ${shared.destination.name}`);
+        shared = null;
+      }
+      w.map.refresh();
+    },
+    arrived: (msg) => {
+      const w = world;
+      if (!w || msg.region !== w.index.name) return;
+      const name = playerName(msg.id);
+      const now = Date.now();
+      while (arrivals.length && now - arrivals[0]!.at > TOGETHER_MS) arrivals.shift();
+      arrivals.push({ name, destination: msg.destination, at: now });
+      // Arrived within the minute after us: together, in the logbook too.
+      const together = trips.together(w.index.name, msg.destination.name, name, now);
+      chat.add(`${name} arrived at ${msg.destination.name}${together ? ', a moment after you' : ''}`);
     },
     chat: (msg) => {
       const from = msg.from === undefined ? undefined : others.players.find((p) => p.id === msg.from);
@@ -1090,7 +1160,7 @@ async function start(): Promise<void> {
   const aim = new THREE.Vector3();
   /** What the winch keys do now, at the bottom of the screen while it is in use. */
   let winchShown = '';
-  const nameOf = (id: string): string => others.players.find((p) => p.id === id)?.name ?? 'another driver';
+  const nameOf = playerName;
   const drawWinchHelp = (w: World): void => {
     const pad = gamepad.pad !== null;
     const key = (k: string, action: Parameters<typeof gamepad.tapped>[0]): string => `<kbd>${pad ? buttonName(gamepad.bindings[action]) : k}</kbd>`;
@@ -1262,18 +1332,17 @@ async function start(): Promise<void> {
         sentAt = now;
         present = true;
         for (const push of others.takePushes()) connection?.send({ type: 'push', ...push });
-        connection?.send({
-          type: 'state',
-          vehicle: takeSnapshot(w.sim, {
-            region: w.index.name,
-            jump: jumps,
-            t: now,
-            paused,
-            lights: lamps ?? w.environment.dark,
-            braking: w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05,
-            winch: w.winch.info(),
-          }),
+        const snapshot = takeSnapshot(w.sim, {
+          region: w.index.name,
+          jump: jumps,
+          t: now,
+          paused,
+          lights: lamps ?? w.environment.dark,
+          braking: w.sim.drivetrain.gear > 0 ? controls.brake > 0.05 : controls.throttle > 0.05,
+          winch: w.winch.info(),
         });
+        connection?.send({ type: 'state', vehicle: snapshot });
+        if (ghosts) for (const g of ghosts.follow(snapshot, now)) others.receive(g.id, g.snapshot, now);
       } else if (!onRoad && present) {
         present = false;
         connection?.send({ type: 'away' });

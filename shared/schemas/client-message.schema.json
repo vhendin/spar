@@ -47,6 +47,12 @@
     },
     {
       "$ref": "#/definitions/Pause"
+    },
+    {
+      "$ref": "#/definitions/Share"
+    },
+    {
+      "$ref": "#/definitions/Arrived"
     }
   ],
   "definitions": {
@@ -1041,6 +1047,94 @@
         },
         "paused": {
           "type": "boolean"
+        }
+      }
+    },
+    "Destination": {
+      "title": "Destination",
+      "description": "A place to drive to: a point on the map with a name.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "x",
+        "z"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "x": {
+          "description": "Metres east.",
+          "type": "number"
+        },
+        "z": {
+          "description": "Metres south.",
+          "type": "number"
+        },
+        "kind": {
+          "description": "For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight.",
+          "type": "string",
+          "pattern": "^[a-z_]{1,20}$"
+        }
+      }
+    },
+    "Share": {
+      "title": "Share",
+      "description": "This driver shares a destination with everyone in the region (or stops sharing one, with null): it becomes their destination too.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "destination"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "share"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "destination": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Destination"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Arrived": {
+      "title": "Arrived",
+      "description": "This driver arrived at their destination, driving there.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "destination"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "arrived"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "destination": {
+          "$ref": "#/definitions/Destination"
         }
       }
     }

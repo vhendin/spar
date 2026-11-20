@@ -44,6 +44,12 @@
     },
     {
       "$ref": "#/definitions/HandoverTo"
+    },
+    {
+      "$ref": "#/definitions/DestinationShared"
+    },
+    {
+      "$ref": "#/definitions/ArrivedAt"
     }
   ],
   "definitions": {
@@ -80,6 +86,14 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 4294967295
+        },
+        "addresses": {
+          "description": "Addresses others on the network can open to join, as the server sees its own network; left out when it cannot tell (in a container).",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          }
         }
       }
     },
@@ -407,6 +421,24 @@
           "items": {
             "$ref": "client-message.schema.json#/definitions/IceHole"
           }
+        },
+        "shared": {
+          "description": "The destination shared in the region, and by whom; left out when there is none.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "destination",
+            "by"
+          ],
+          "properties": {
+            "destination": {
+              "$ref": "client-message.schema.json#/definitions/Destination"
+            },
+            "by": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
@@ -572,6 +604,73 @@
         },
         "state": {
           "$ref": "client-message.schema.json#/definitions/VehicleHandover"
+        }
+      }
+    },
+    "DestinationShared": {
+      "title": "DestinationShared",
+      "description": "Another driver shared a destination with everyone in the region, or stopped sharing it (null).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "destination",
+        "by"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "share"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "destination": {
+          "oneOf": [
+            {
+              "$ref": "client-message.schema.json#/definitions/Destination"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "by": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "ArrivedAt": {
+      "title": "ArrivedAt",
+      "description": "Another driver arrived at their destination.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "destination",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "arrived"
+        },
+        "region": {
+          "description": "The region it happened in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "destination": {
+          "$ref": "client-message.schema.json#/definitions/Destination"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }

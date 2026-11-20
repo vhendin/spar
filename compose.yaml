@@ -9,6 +9,8 @@ services:
       # START_TIME: "2026-08-15T09:00"   # in-game date and time the session starts at
       # DAY_LENGTH_MINUTES: "30"         # real minutes per in-game day; 0 stops the clock
       # WEATHER: rain                    # pin the weather to clear, overcast or rain
+      # The address friends open, shown in the start menu (a container cannot see the host's network):
+      # ADDRESS: "http://192.168.1.20:8080"
     volumes:
       - ./data/regions:/data/regions:ro
     restart: unless-stopped

@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { lanAddresses } from './lan';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { dayOfYear, PROTOCOL_VERSION, seasonAt, type Player, type SeasonCalendar, type ServerMessage } from '@spar/shared';
 import seasonDefs from '../../defs/seasons.json';
@@ -180,6 +181,8 @@ export function createGameServer(config: ServerConfig): GameServer {
   /** The token each socket joined with. */
   const tokens = new Map<WebSocket, string>();
   const rejoinMs = (config.rejoinSeconds ?? 60) * 1000;
+  /** Where others on the network can open the game, shown in the start menu; known once listening. */
+  let addresses: string[] = [];
   let ticks = 0;
   const timer = setInterval(() => {
     world.step();
@@ -277,7 +280,7 @@ export function createGameServer(config: ServerConfig): GameServer {
           if (msg.color) player.color = msg.color;
           else delete player.color;
         } else if (msg.color) player.color = msg.color;
-        send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId: player.id, region: config.region, seed: config.seed });
+        send(ws, { type: 'welcome', protocol: PROTOCOL_VERSION, playerId: player.id, region: config.region, seed: config.seed, ...(addresses.length ? { addresses } : {}) });
         send(ws, world.message());
         joined.set(ws, player);
         if (msg.token && !taken) tokens.set(ws, msg.token);
@@ -327,6 +330,15 @@ export function createGameServer(config: ServerConfig): GameServer {
           break;
         case 'ice_hole':
           if (rooms.breakIce(msg.region, msg.hole)) toRoom(msg.region, { type: 'ice_hole', region: msg.region, hole: msg.hole }, ws);
+          break;
+        case 'share':
+          // Everyone in the region gets it as their destination too; a late arrival gets it with the room.
+          if (rooms.share(msg.region, msg.destination, player.id)) {
+            toRoom(msg.region, { type: 'share', region: msg.region, destination: msg.destination, by: player.id }, ws);
+          }
+          break;
+        case 'arrived':
+          toRoom(msg.region, { type: 'arrived', region: msg.region, destination: msg.destination, id: player.id }, ws);
           break;
         case 'push': {
           // Only to the browser that runs the vehicle pushed: it alone moves it.
@@ -391,7 +403,9 @@ export function createGameServer(config: ServerConfig): GameServer {
         http.once('error', reject);
         http.listen(config.port, config.host, () => {
           http.off('error', reject);
-          resolve(http.address() as AddressInfo);
+          const addr = http.address() as AddressInfo;
+          addresses = config.address ? [config.address] : lanAddresses().slice(0, 8).map((ip) => `http://${ip}:${addr.port}`);
+          resolve(addr);
         });
       }),
     close: () =>

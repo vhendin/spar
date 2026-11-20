@@ -18,7 +18,9 @@ export type ClientMessage =
   | Free
   | Drive
   | Handover
-  | Pause;
+  | Pause
+  | Share
+  | Arrived;
 
 /**
  * First message on a new connection, with the driver's name and colour.
@@ -741,4 +743,44 @@ export interface WinchHandover {
 export interface Pause {
   type: 'pause';
   paused: boolean;
+}
+/**
+ * This driver shares a destination with everyone in the region (or stops sharing one, with null): it becomes their destination too.
+ */
+export interface Share {
+  type: 'share';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  destination: Destination | null;
+}
+/**
+ * A place to drive to: a point on the map with a name.
+ */
+export interface Destination {
+  name: string;
+  /**
+   * Metres east.
+   */
+  x: number;
+  /**
+   * Metres south.
+   */
+  z: number;
+  /**
+   * For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight.
+   */
+  kind?: string;
+}
+/**
+ * This driver arrived at their destination, driving there.
+ */
+export interface Arrived {
+  type: 'arrived';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  destination: Destination;
 }

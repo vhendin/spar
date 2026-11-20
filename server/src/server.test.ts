@@ -365,6 +365,49 @@ describe('websocket', () => {
     for (const p of [a, b, c]) p.ws.close();
   });
 
+  it('tells where others can open the game', async () => {
+    const a = await connect('Anna');
+    const welcome = a.seen('welcome')[0]!;
+    // The test server listens on 127.0.0.1 only, but tells the machine's network addresses.
+    for (const address of welcome.addresses ?? []) expect(address).toMatch(/^http:\/\/[\d.]+:\d+$/);
+    a.ws.close();
+  });
+
+  it('shares a destination with everyone in the region, and passes on arrivals', async () => {
+    const a = await connect('Anna');
+    const b = await connect('Bo');
+    const elsewhere = await connect('Cilla');
+    a.ws.send(JSON.stringify({ type: 'room', region: 'trip' }));
+    b.ws.send(JSON.stringify({ type: 'room', region: 'trip' }));
+    elsewhere.ws.send(JSON.stringify({ type: 'room', region: 'demo' }));
+    expect((await b.next('room')).shared).toBeUndefined();
+    await a.next('room');
+    await elsewhere.next('room');
+
+    const hut = { name: 'Blåhammaren', x: 4100.5, z: 2200, kind: 'hut' };
+    a.ws.send(JSON.stringify({ type: 'share', region: 'trip', destination: hut }));
+    expect(await b.next('share')).toEqual({ type: 'share', region: 'trip', destination: hut, by: a.id });
+    a.ws.send(JSON.stringify({ type: 'arrived', region: 'trip', destination: hut }));
+    expect(await b.next('arrived')).toEqual({ type: 'arrived', region: 'trip', destination: hut, id: a.id });
+
+    // Late to the region: the shared destination comes with the room.
+    const d = await connect('Dan');
+    d.ws.send(JSON.stringify({ type: 'room', region: 'trip' }));
+    expect((await d.next('room')).shared).toEqual({ destination: hut, by: a.id });
+
+    // Stopped sharing: gone for those after, and the others are told.
+    b.ws.send(JSON.stringify({ type: 'share', region: 'trip', destination: null }));
+    expect(await a.next('share')).toEqual({ type: 'share', region: 'trip', destination: null, by: b.id });
+    d.ws.send(JSON.stringify({ type: 'room', region: 'trip' }));
+    expect((await d.next('room')).shared).toBeUndefined();
+
+    await new Promise((r) => setTimeout(r, 100));
+    expect(elsewhere.seen('share')).toHaveLength(0);
+    expect(elsewhere.seen('arrived')).toHaveLength(0);
+    expect(a.seen('arrived')).toHaveLength(0);
+    for (const p of [a, b, elsewhere, d]) p.ws.close();
+  });
+
   it('winching each other: the puller runs the vehicle it hooks on to, and gives it back', async () => {
     const vehicle = (x: number) => ({
       region: 'demo', vehicle: 'tgb11', jump: 0, t: 1, paused: false,

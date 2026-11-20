@@ -111,6 +111,8 @@ export class StartMenu {
   private lines: PlayerLine[] = [];
   private regionCards: Map<string, { detail: HTMLElement; base: string }>;
   private playersLabel = document.createElement('div');
+  /** Where friends on the same network open the game, once the server has said. */
+  private readonly invite = document.createElement('p');
   private picture: HTMLCanvasElement | null = null;
   /** Whether this computer may make and remove areas (it runs the server). */
   private maker = false;
@@ -132,6 +134,8 @@ export class StartMenu {
     this.playersLabel.className = 'label';
     this.regionCards = new Map();
     this.playersLabel.textContent = 'On the road';
+    this.invite.className = 'invite';
+    this.invite.style.display = 'none';
     this.box = document.createElement('div');
     this.box.className = 'box';
     this.preview = document.createElement('canvas');
@@ -226,6 +230,7 @@ export class StartMenu {
 
     add('h1', 'Spår');
     add('p', 'A quiet off-road game about Swedish backroads, weather and slow light.', box, 'sub');
+    box.append(this.invite);
 
     const columns = add('div', '', box, 'columns');
     const left = add('div', '', columns, 'column');
@@ -340,6 +345,20 @@ export class StartMenu {
     const show = players.length > 1;
     this.players.style.display = this.playersLabel.style.display = show ? '' : 'none';
     this.countDrivers();
+  }
+
+  /** The server's addresses on the network: friends there open one of them to join. */
+  setAddresses(addresses: string[]): void {
+    this.invite.replaceChildren();
+    this.invite.style.display = addresses.length ? '' : 'none';
+    if (!addresses.length) return;
+    this.invite.append('Friends on the same network join at ');
+    addresses.forEach((a, i) => {
+      if (i) this.invite.append(i === addresses.length - 1 ? ' or ' : ', ');
+      const code = document.createElement('code');
+      code.textContent = a;
+      this.invite.append(code);
+    });
   }
 
   /** How many others drive in each region, on its card. */

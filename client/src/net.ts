@@ -22,6 +22,8 @@ export interface ConnectionHandlers {
   towing?(msg: Of<'towing'>): void;
   drive?(msg: Of<'drive'>): void;
   handover?(msg: Of<'handover'>): void;
+  share?(msg: Of<'share'>): void;
+  arrived?(msg: Of<'arrived'>): void;
 }
 
 /** The driver as others see them, sent on joining and whenever it changes. */
@@ -128,6 +130,12 @@ export class Connection {
           break;
         case 'handover':
           this.on.handover?.(msg);
+          break;
+        case 'share':
+          this.on.share?.(msg);
+          break;
+        case 'arrived':
+          this.on.arrived?.(msg);
           break;
         case 'error':
           // A version mismatch will not fix itself by retrying; a refused message is only that one.

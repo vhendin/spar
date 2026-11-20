@@ -31,6 +31,8 @@ export interface ServerConfig {
   importer: string[];
   /** Folder the importer command runs in. */
   importerCwd: string;
+  /** The address others open to join, shown in the start menu; worked out from the network when left out. */
+  address?: string;
   /** Seconds a dropped player keeps their place for, to come back as the same player; 60 if left out. */
   rejoinSeconds?: number;
 }
@@ -74,5 +76,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     // container there is no Docker, so it is off there unless IMPORTER says how.
     importer: (env.IMPORTER ?? (existsSync('/.dockerenv') ? '' : 'docker compose run --rm importer')).split(' ').filter(Boolean),
     importerCwd: resolve(env.IMPORTER_CWD ?? '..'),
+    ...(env.ADDRESS ? { address: env.ADDRESS.slice(0, 100) } : {}),
   };
 }

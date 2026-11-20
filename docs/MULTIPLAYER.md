@@ -136,8 +136,8 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
 
 ## Joining, names, chat
 
-- **Address:** friends open `http://<host-ip>:8080`. The host's start menu shows that address,
-  because the server knows its own network interfaces.
+- **Address:** friends open `http://<host-ip>:8080`. The start menu shows that address,
+  because the server knows its own network interfaces (built; in Docker set `ADDRESS`).
 - **Name and colour:** asked for the first time and remembered in the browser. No passwords; it
   is a home network. A player who reconnects within a minute keeps their slot (built).
 - **Chat:** Enter opens a line at the bottom; messages fade after a while. Arrivals, players
@@ -147,9 +147,9 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
 
 ## Trips together
 
-Kept simple to begin with. A destination can be shared: it shows on everyone's map and compass.
-Each player's arrival goes into their own logbook, noting who else arrived within a minute. A
-shared logbook on the server can come later.
+Kept simple to begin with. A destination can be shared: it becomes everyone's destination, on
+their map and compass. Each player's arrival goes into their own logbook, noting who else arrived
+within a minute. A shared logbook on the server can come later.
 
 ## Stages
 
@@ -231,8 +231,30 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
      hitting them at speed: tree breaking still measures our own vehicle's speed.
    - The diff lock lights on a towed driver's dash do not change until they drive their own
      vehicle again. Protocol 7.
-5. **Together.** Shared destinations, the host's address in the start menu, the
-   performance pass with 5 vehicles (draw calls, sound sources, particles).
+5. **Together.** *Built.* Protocol 9.
+   - **Sharing a destination:** the map's side panel offers "Share with everyone" when someone
+     else is on the server (`share { region, destination }`, null to stop). The server keeps
+     one per region (`rooms.ts`) and passes it on; a driver entering the region later gets it
+     with `room`. For the others it becomes their destination at once, and the trip clock
+     starts then; a driver already going there carries on. Entering late, it is taken only
+     without a destination of one's own. The panel shows who shared it, "Stop sharing", and
+     "Go there too" when one's own destination is another.
+   - **Arriving together:** a driven arrival sends `arrived { region, destination }`, passed to
+     the others in the region and said in chat. The logbook entry lists those who arrived at
+     the same place within a minute before (`with`), and an arrival within the minute after
+     is added to it (`Trips.together`). The logbook shows "with Bo and Cilla".
+   - **The host's address:** `welcome` carries `addresses`, the server's IPv4 addresses on its
+     networks with the port; the start menu shows "Friends on the same network join at …".
+     Inside a container there are none to tell, so `ADDRESS` in the environment says it.
+   - **Performance with five:** `?ghosts=4` brings made-up drivers along, each following
+     our own track 14 m apart, through the same path as real snapshots
+     (`multiplayer/ghosts.ts`). Measured in a headless Chrome on the host (WebGPU, 1400×800):
+     with four others in view, all with spray, smoke and tracks, the frame took 6.5–6.7 ms of
+     CPU against 6.5 ms alone, still 60 fps, with draw calls within the scene's own variation
+     (each vehicle is about ten merged meshes). Beams were already limited to the two nearest
+     lit vehicles. Sound was the one cost without a limit (some thirty audio nodes and an
+     engine processor per vehicle within 300 m): now only the three nearest are heard. The
+     developer read-out (F3) shows how many others are drawn, heard and with effects.
 
 ## Testing
 

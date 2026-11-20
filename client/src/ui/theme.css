@@ -241,6 +241,8 @@ kbd {
 #start .columns { display: flex; flex-wrap: wrap; gap: 28px; }
 #start .column { flex: 1 1 260px; min-width: 0; }
 #start .label { margin: 16px 0 7px; }
+#start p.invite { margin: -6px 0 10px; font-size: 12px; color: var(--ink-soft); }
+#start p.invite code { font: 12px ui-monospace, Menlo, monospace; color: var(--ink); user-select: all; }
 #start .column > .label:first-child { margin-top: 0; }
 #start .list { display: flex; flex-wrap: wrap; gap: 4px; }
 #start .cards { display: flex; flex-direction: column; gap: 6px; }
@@ -307,6 +309,8 @@ kbd {
 #map .dest .name { font: 22px/1.15 var(--serif); color: var(--falu); }
 #map .dest .none { color: var(--ink-soft); font-size: 13px; }
 #map .dest .distance { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+#map .shared { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; margin-top: 4px; font-size: 12px; }
+#map .shared .note { color: var(--ink-soft); }
 #map .list { display: flex; flex-wrap: wrap; gap: 4px; }
 #map .spawn { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 2px 0; gap: 6px; }
 #map .foot { display: flex; gap: 6px; margin-top: 20px; }

@@ -1,8 +1,8 @@
-// What players changed in each region this session: trees knocked down and holes broken in
-// the ice. Each region is a room; a driver entering one is sent its list, and every change is
+// What players changed in each region this session: trees knocked down, holes broken in
+// the ice, and the destination shared with everyone there. Each region is a room; a driver entering one is sent its list, and every change is
 // passed on to the others there. Nothing is written to disk: a new session starts afresh.
 
-import type { FelledTree, IceHole, ServerMessage } from '@spar/shared';
+import type { Destination, FelledTree, IceHole, ServerMessage } from '@spar/shared';
 
 type RoomState = Extract<ServerMessage, { type: 'room' }>;
 
@@ -16,6 +16,7 @@ export const MAX_FELLED = 5000;
 interface Room {
   felled: Map<string, FelledTree>;
   holes: IceHole[];
+  shared: { destination: Destination; by: string } | null;
 }
 
 export class Rooms {
@@ -24,7 +25,7 @@ export class Rooms {
   private room(region: string): Room {
     let room = this.rooms.get(region);
     if (!room) {
-      room = { felled: new Map(), holes: [] };
+      room = { felled: new Map(), holes: [], shared: null };
       this.rooms.set(region, room);
     }
     return room;
@@ -48,13 +49,29 @@ export class Rooms {
     return true;
   }
 
+  /** A destination shared with everyone in the region, or none; false if nothing changed. */
+  share(region: string, destination: Destination | null, by: string): boolean {
+    const room = this.room(region);
+    if (!destination) {
+      if (!room.shared) return false;
+      room.shared = null;
+      return true;
+    }
+    room.shared = { destination: { ...destination }, by };
+    return true;
+  }
+
   /** The ice has gone everywhere: next winter freezes over the old holes. */
   thaw(): void {
     for (const room of this.rooms.values()) room.holes.length = 0;
   }
 
-  state(region: string): Pick<RoomState, 'felled' | 'holes'> {
+  state(region: string): Pick<RoomState, 'felled' | 'holes' | 'shared'> {
     const room = this.rooms.get(region);
-    return { felled: room ? [...room.felled.values()] : [], holes: (room ? room.holes.map((h) => ({ ...h })) : []) as RoomState['holes'] };
+    return {
+      felled: room ? [...room.felled.values()] : [],
+      holes: (room ? room.holes.map((h) => ({ ...h })) : []) as RoomState['holes'],
+      ...(room?.shared ? { shared: { destination: { ...room.shared.destination }, by: room.shared.by } } : {}),
+    };
   }
 }

@@ -17,7 +17,9 @@ export type ServerMessage =
   | IceBroken
   | Towing
   | DriveFrom
-  | HandoverTo;
+  | HandoverTo
+  | DestinationShared
+  | ArrivedAt;
 
 /**
  * Reply to hello: who you are and which world to load.
@@ -28,6 +30,10 @@ export interface Welcome {
   playerId: string;
   region: string;
   seed: number;
+  /**
+   * Addresses others on the network can open to join, as the server sees its own network; left out when it cannot tell (in a container).
+   */
+  addresses?: string[];
 }
 /**
  * The game clock and the weather, which the server owns. Sent after welcome and every few seconds; clients run the clock on by themselves in between and ease towards new weather.
@@ -420,6 +426,13 @@ export interface RoomState {
     | [IceHole, IceHole, IceHole, IceHole, IceHole, IceHole]
     | [IceHole, IceHole, IceHole, IceHole, IceHole, IceHole, IceHole]
     | [IceHole, IceHole, IceHole, IceHole, IceHole, IceHole, IceHole, IceHole];
+  /**
+   * The destination shared in the region, and by whom; left out when there is none.
+   */
+  shared?: {
+    destination: Destination;
+    by: string;
+  };
 }
 /**
  * A tree knocked down: kept by the server for the session and passed on to everyone in the region.
@@ -462,6 +475,24 @@ export interface IceHole {
    * Metres south.
    */
   z: number;
+}
+/**
+ * A place to drive to: a point on the map with a name.
+ */
+export interface Destination {
+  name: string;
+  /**
+   * Metres east.
+   */
+  x: number;
+  /**
+   * Metres south.
+   */
+  z: number;
+  /**
+   * For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight.
+   */
+  kind?: string;
 }
 /**
  * Another driver knocked a tree down.
@@ -776,4 +807,28 @@ export interface WinchHandover {
    * @maxItems 3
    */
   reelStart: [number, number, number];
+}
+/**
+ * Another driver shared a destination with everyone in the region, or stopped sharing it (null).
+ */
+export interface DestinationShared {
+  type: 'share';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  destination: Destination | null;
+  by: string;
+}
+/**
+ * Another driver arrived at their destination.
+ */
+export interface ArrivedAt {
+  type: 'arrived';
+  /**
+   * The region it happened in.
+   */
+  region: string;
+  destination: Destination;
+  id: string;
 }

@@ -210,7 +210,7 @@ export class Menu {
         ? `${title}: ${names.size} place${names.size === 1 ? '' : 's'} reached of the ${places} on the map, in ${entries.length} trip${entries.length === 1 ? '' : 's'}.`
         : `${title}: ${entries.length} trip${entries.length === 1 ? '' : 's'}.`, box, 'sub');
       if (!entries.length) {
-        add('p', 'Choose a destination on the map (M) and drive there: every arrival is written down here, with the time it took, the season and the vehicle. Trips that jump to a start point on the way do not count.', box, 'hint');
+        add('p', 'Choose a destination on the map (M) and drive there: every arrival is written down here, with the time it took, the season and the vehicle. Trips that jump to a start point on the way do not count. Others arriving within a minute of you are noted.', box, 'hint');
       } else {
         // Newest first; the quickest arrival at each place marked.
         const quickest = new Map<string, LogEntry>();
@@ -220,7 +220,8 @@ export class Menu {
         for (const h of ['Place', 'When', 'Vehicle', 'Time', 'Distance']) add('th', h, head);
         for (const e of [...entries].reverse()) {
           const tr = add('tr', '', table);
-          add('td', e.destination, tr);
+          const place = add('td', e.destination, tr);
+          if (e.with?.length) add('span', ` with ${listNames(e.with)}`, place, 'note');
           add('td', `${e.date}, ${e.season}`, tr);
           add('td', e.vehicle, tr);
           add('td', formatDuration(e.seconds), tr, `num${quickest.get(e.destination) === e && entries.filter((o) => o.destination === e.destination).length > 1 ? ' best' : ''}`);
@@ -301,4 +302,9 @@ export class Menu {
     button('Back', () => go('main'), foot, 'back');
     if (pending) button('Rebuild now', () => this.actions.restart(), foot, 'primary');
   }
+}
+
+/** "Bo", "Bo and Cilla", "Bo, Cilla and Dan". */
+export function listNames(names: string[]): string {
+  return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
