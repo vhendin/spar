@@ -415,7 +415,7 @@ export function createGameServer(config: ServerConfig): GameServer {
         http.listen(config.port, config.host, () => {
           http.off('error', reject);
           const addr = http.address() as AddressInfo;
-          addresses = config.address ? [config.address] : lanAddresses().slice(0, 8).map((ip) => `http://${ip}:${addr.port}`);
+          addresses = config.addresses ?? lanAddresses().slice(0, 8).map((ip) => `http://${ip}:${addr.port}`);
           resolve(addr);
         });
       }),

@@ -5,14 +5,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Multiplayer stage 5, together
-
-- **Running the server in Docker** (`docker compose up game`), the server cannot see the
-  computer's own network address, only Docker's, so the start menu cannot show the address
-  friends should open, unless it is written into `ADDRESS` in `compose.yaml`. Started with
-  `pnpm start` (or `pnpm dev`) it is shown by itself. Do you run it in Docker? If so, should
-  the start menu say how to find the address instead?
-
 ### Multiplayer stage 4, winching each other
 
 - **Your own vehicle is drawn about 100 ms late while you are on someone's cable**, the same
@@ -223,6 +215,9 @@ same as the Terrängkombi.
 
 ## Answered
 
+- Hosting: the game runs in Docker on an Intel NUC at home, reached from outside through a
+  Cloudflare Tunnel. Added the `tunnel` service (profile `tunnel`, `TUNNEL_TOKEN` in `.env`),
+  and `ADDRESS` takes several addresses, comma separated, all shown in the start menu.
 - Multiplayer stage 5, after the first build: a shared destination does not replace your own;
   both show (the shared one in blue), and sharing never removes anyone's own. Chat tells
   arrivals at the shared destination and at places from the map data, not at marked spots.

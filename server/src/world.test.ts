@@ -71,6 +71,11 @@ describe('WorldState', () => {
     expect(states.size).toBeGreaterThan(1);
   });
 
+  it('reads the addresses to tell, comma separated', () => {
+    expect(loadConfig({ ADDRESS: ' https://spar.example.se ,, http://192.168.1.20:8080' }).addresses).toEqual(['https://spar.example.se', 'http://192.168.1.20:8080']);
+    expect(loadConfig({ ADDRESS: '' })).not.toHaveProperty('addresses');
+  });
+
   it('refuses nonsense settings', () => {
     expect(() => loadConfig({ START_TIME: 'noon' })).toThrow(/START_TIME/);
     expect(() => loadConfig({ WEATHER: 'snow' })).toThrow(/WEATHER/);

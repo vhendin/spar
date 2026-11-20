@@ -9,10 +9,25 @@ services:
       # START_TIME: "2026-08-15T09:00"   # in-game date and time the session starts at
       # DAY_LENGTH_MINUTES: "30"         # real minutes per in-game day; 0 stops the clock
       # WEATHER: rain                    # pin the weather to clear, overcast or rain
-      # The address friends open, shown in the start menu (a container cannot see the host's network):
-      # ADDRESS: "http://192.168.1.20:8080"
+      # The addresses friends open, shown in the start menu, comma separated (a container cannot
+      # see the host's network, so they are not found by themselves):
+      # ADDRESS: "https://spar.example.se, http://192.168.1.20:8080"
     volumes:
       - ./data/regions:/data/regions:ro
+    restart: unless-stopped
+
+  # Cloudflare Tunnel, for friends outside the home network. Runs only when asked for:
+  #   docker compose --profile tunnel up -d
+  # Make the tunnel in the Cloudflare dashboard (Zero Trust → Networks → Tunnels), point its
+  # public hostname at http://game:8080, and put its token in .env as TUNNEL_TOKEN.
+  tunnel:
+    image: cloudflare/cloudflared:2025.11.1
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - game
     restart: unless-stopped
 
   # Offline data import. Runs only on demand:

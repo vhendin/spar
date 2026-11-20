@@ -138,6 +138,13 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
 
 - **Address:** friends open `http://<host-ip>:8080`. The start menu shows that address,
   because the server knows its own network interfaces (built; in Docker set `ADDRESS`).
+- **From outside the home network:** a Cloudflare Tunnel, run as the `tunnel` service in
+  `compose.yaml` (`docker compose --profile tunnel up -d`, token in `.env` as
+  `TUNNEL_TOKEN`), reaches the game at `http://game:8080` from inside Docker, so no port is
+  opened in the router. The page is then https and the client uses `wss` by itself. Anyone
+  with the link can join, so Cloudflare Access (an allow list of emails) belongs in front.
+  Players at home keep using the home address, which skips the round trip to Cloudflare.
+  `ADDRESS` takes both, comma separated, and the start menu shows them all.
 - **Name and colour:** asked for the first time and remembered in the browser. No passwords; it
   is a home network. A player who reconnects within a minute keeps their slot (built).
 - **Chat:** Enter opens a line at the bottom; messages fade after a while. Arrivals, players
@@ -250,8 +257,9 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
      the server says so once: "Everyone has arrived at …", whenever that happens, also when
      the last one missing leaves the region.
    - **The host's address:** `welcome` carries `addresses`, the server's IPv4 addresses on its
-     networks with the port; the start menu shows "Friends on the same network join at …".
-     Inside a container there are none to tell, so `ADDRESS` in the environment says it.
+     networks with the port; the start menu shows "Friends join at …". Inside a container
+     there are none to tell, so `ADDRESS` in the environment says it: one address or several,
+     comma separated (the public one through the tunnel and the home one).
    - **Performance with five:** `?ghosts=4` brings made-up drivers along, each following
      our own track 14 m apart, through the same path as real snapshots
      (`multiplayer/ghosts.ts`). Measured in a headless Chrome on the host (WebGPU, 1400×800):

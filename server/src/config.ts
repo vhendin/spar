@@ -31,8 +31,8 @@ export interface ServerConfig {
   importer: string[];
   /** Folder the importer command runs in. */
   importerCwd: string;
-  /** The address others open to join, shown in the start menu; worked out from the network when left out. */
-  address?: string;
+  /** The addresses others open to join, shown in the start menu; worked out from the network when left out. */
+  addresses?: string[];
   /** Seconds a dropped player keeps their place for, to come back as the same player; 60 if left out. */
   rejoinSeconds?: number;
 }
@@ -58,6 +58,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   if (!Number.isFinite(dayLengthMinutes) || dayLengthMinutes < 0) throw new Error(`DAY_LENGTH_MINUTES must be zero or more, got "${env.DAY_LENGTH_MINUTES}"`);
   const weather = env.WEATHER ?? '';
   if (!['', 'clear', 'overcast', 'rain'].includes(weather)) throw new Error(`WEATHER must be clear, overcast or rain, got "${weather}"`);
+  // Comma separated, as "https://spar.example.se, http://192.168.1.20:8080".
+  const addresses = (env.ADDRESS ?? '').split(',').map((a) => a.trim().slice(0, 100)).filter(Boolean).slice(0, 8);
   return {
     startUtc,
     utcOffset: UTC_OFFSET,
@@ -76,6 +78,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     // container there is no Docker, so it is off there unless IMPORTER says how.
     importer: (env.IMPORTER ?? (existsSync('/.dockerenv') ? '' : 'docker compose run --rm importer')).split(' ').filter(Boolean),
     importerCwd: resolve(env.IMPORTER_CWD ?? '..'),
-    ...(env.ADDRESS ? { address: env.ADDRESS.slice(0, 100) } : {}),
+    ...(addresses.length ? { addresses } : {}),
   };
 }

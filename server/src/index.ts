@@ -10,7 +10,7 @@ server.listen().then(
   (addr) => {
     console.log(`Spår server: region "${config.region}", seed ${config.seed}`);
     console.log(`  this computer: http://localhost:${addr.port}`);
-    if (config.address) console.log(`  on the LAN:    ${config.address}`);
+    if (config.addresses) for (const a of config.addresses) console.log(`  friends join:  ${a}`);
     else if (existsSync('/.dockerenv')) {
       // Inside a container the interfaces are Docker's own, not the host's.
       console.log('  on the LAN:    http://<this computer\'s IP address>:<published port> (set ADDRESS to show it in the start menu)');

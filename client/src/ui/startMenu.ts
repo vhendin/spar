@@ -352,7 +352,7 @@ export class StartMenu {
     this.invite.replaceChildren();
     this.invite.style.display = addresses.length ? '' : 'none';
     if (!addresses.length) return;
-    this.invite.append('Friends on the same network join at ');
+    this.invite.append('Friends join at ');
     addresses.forEach((a, i) => {
       if (i) this.invite.append(i === addresses.length - 1 ? ' or ' : ', ');
       const code = document.createElement('code');
