@@ -7,20 +7,11 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Multiplayer stage 5, together
 
-- **A shared destination replaces your own at once**, and the trip clock starts from the
-  moment it was shared, so everyone sets off on equal terms. Your old destination is not
-  kept. Is that right, or should it only be offered ("Go there too") while you already have a
-  destination of your own? (Entering a region late, you only take it on if you have none.)
-- **Anyone can stop sharing**, not only the one who shared. Fine on a home network?
-- **Every arrival is announced in chat**, including others' arrivals at their own marked spots.
-  Too chatty? It could announce only arrivals at the shared destination.
-- **"Arrived together"** means within a minute of each other, before or after. Is a minute
-  right?
-- **Run in Docker, the server cannot see the host's network address**, so the start menu
-  shows none unless `ADDRESS` is set in `compose.yaml`. Fine, or should the start menu then
-  explain how to find the address?
-- **Sound:** only the three nearest other vehicles are heard (each costs some thirty audio
-  nodes and its own engine processor). Enough with five out together?
+- **Running the server in Docker** (`docker compose up game`), the server cannot see the
+  computer's own network address, only Docker's, so the start menu cannot show the address
+  friends should open, unless it is written into `ADDRESS` in `compose.yaml`. Started with
+  `pnpm start` (or `pnpm dev`) it is shown by itself. Do you run it in Docker? If so, should
+  the start menu say how to find the address instead?
 
 ### Multiplayer stage 4, winching each other
 
@@ -232,6 +223,12 @@ same as the Terrängkombi.
 
 ## Answered
 
+- Multiplayer stage 5, after the first build: a shared destination does not replace your own;
+  both show (the shared one in blue), and sharing never removes anyone's own. Chat tells
+  arrivals at the shared destination and at places from the map data, not at marked spots.
+  Each arrival is told, and once everyone in the region has arrived, that is told too. Three
+  heard engines are enough, and the other vehicles' slide sounds (squeal, hiss, scrape) are
+  dropped, keeping their engines.
 - Multiplayer winching, after trying stage 4: pausing no longer freezes the vehicles you run
   for others. The server gives them, and your own, to a browser in the group that is not
   paused (`pause { paused }`, protocol 8); your paused screen follows along. Holding the brake

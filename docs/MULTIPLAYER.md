@@ -147,8 +147,8 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
 
 ## Trips together
 
-Kept simple to begin with. A destination can be shared: it becomes everyone's destination, on
-their map and compass. Each player's arrival goes into their own logbook, noting who else arrived
+Kept simple to begin with. A destination can be shared: it shows on everyone's map and compass
+in blue, beside each driver's own destination, which it leaves alone. Each player's arrival goes into their own logbook, noting who else arrived
 within a minute. A shared logbook on the server can come later.
 
 ## Stages
@@ -232,17 +232,23 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
    - The diff lock lights on a towed driver's dash do not change until they drive their own
      vehicle again. Protocol 7.
 5. **Together.** *Built.* Protocol 9.
-   - **Sharing a destination:** the map's side panel offers "Share with everyone" when someone
-     else is on the server (`share { region, destination }`, null to stop). The server keeps
-     one per region (`rooms.ts`) and passes it on; a driver entering the region later gets it
-     with `room`. For the others it becomes their destination at once, and the trip clock
-     starts then; a driver already going there carries on. Entering late, it is taken only
-     without a destination of one's own. The panel shows who shared it, "Stop sharing", and
-     "Go there too" when one's own destination is another.
-   - **Arriving together:** a driven arrival sends `arrived { region, destination }`, passed to
-     the others in the region and said in chat. The logbook entry lists those who arrived at
-     the same place within a minute before (`with`), and an arrival within the minute after
-     is added to it (`Trips.together`). The logbook shows "with Bo and Cilla".
+   - **Sharing a destination:** the map's side panel offers "Share with everyone" for one's own
+     destination when someone else is on the server (`share { region, destination }`, null to
+     stop; anyone may stop it or share another instead). The server keeps one per region
+     (`rooms.ts`) and passes it on; a driver entering the region later gets it with `room`.
+     It is a destination of its own beside each driver's own, which it never touches: a blue
+     guide line (under the own one when both show), a blue beacon, a blue pin on the map and
+     minimap, and a trip of its own in the logbook (`Trips` keeps an `own` and a `shared`
+     trip). When both are the same place, only the shared one shows and the arrival is logged
+     once. Once reached, a reload does not guide there again.
+   - **Arriving together:** arriving at the shared destination, or at a place from the map
+     data (a hut, a summit…), sends `arrived { region, destination }`; the others in the region
+     see it in chat. Arrivals at marked spots and other places of one's own are not told. The
+     logbook entry lists those who arrived at the same place within a minute before (`with`),
+     and an arrival within the minute after is added to it (`Trips.together`): "with Bo and
+     Cilla". When everyone in the region (two at least) has reached the shared destination,
+     the server says so once: "Everyone has arrived at …", whenever that happens, also when
+     the last one missing leaves the region.
    - **The host's address:** `welcome` carries `addresses`, the server's IPv4 addresses on its
      networks with the port; the start menu shows "Friends on the same network join at …".
      Inside a container there are none to tell, so `ADDRESS` in the environment says it.
@@ -253,7 +259,10 @@ Each stage ends playable, with tests, and I stop after each for you to try it.
      CPU against 6.5 ms alone, still 60 fps, with draw calls within the scene's own variation
      (each vehicle is about ten merged meshes). Beams were already limited to the two nearest
      lit vehicles. Sound was the one cost without a limit (some thirty audio nodes and an
-     engine processor per vehicle within 300 m): now only the three nearest are heard. The
+     engine processor per vehicle within 300 m): now only the three nearest are heard, and
+     with a lean voice (`VehicleAudio` `lean`): engine, gears, knocks and splashes, but no
+     tyre squeal, wet hiss or body scrape, and a ground's tyre sound only once one of its
+     wheels has been on it. The
      developer read-out (F3) shows how many others are drawn, heard and with effects.
 
 ## Testing

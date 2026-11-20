@@ -658,7 +658,7 @@ export class Others {
     if (!this.audio) return;
     if (!o.sound) {
       if (distance > HEAR) return;
-      o.sound = new VehicleAudio(this.audio, this.audio.world);
+      o.sound = new VehicleAudio(this.audio, this.audio.world, true);
     } else if (distance > FORGET) {
       this.quiet(o);
       return;

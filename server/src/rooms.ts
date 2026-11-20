@@ -16,7 +16,20 @@ export const MAX_FELLED = 5000;
 interface Room {
   felled: Map<string, FelledTree>;
   holes: IceHole[];
-  shared: { destination: Destination; by: string } | null;
+  shared: Shared | null;
+}
+
+interface Shared {
+  destination: Destination;
+  by: string;
+  /** Who has arrived there since it was shared, and whether everyone has (told once). */
+  arrived: Set<string>;
+  everyone: boolean;
+}
+
+/** The same place: the same name, and where it was. */
+function samePlace(a: Destination, b: Destination): boolean {
+  return a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
 }
 
 export class Rooms {
@@ -57,8 +70,27 @@ export class Rooms {
       room.shared = null;
       return true;
     }
-    room.shared = { destination: { ...destination }, by };
+    room.shared = { destination: { ...destination }, by, arrived: new Set(), everyone: false };
     return true;
+  }
+
+  /** A driver arrived somewhere; true when it was the shared destination. */
+  arrive(region: string, destination: Destination, id: string): boolean {
+    const shared = this.rooms.get(region)?.shared;
+    if (!shared || !samePlace(shared.destination, destination)) return false;
+    shared.arrived.add(id);
+    return true;
+  }
+
+  /**
+   * The shared destination, the first time everyone now in the region (two at least) has
+   * arrived there; null otherwise. Asked after an arrival, and when someone leaves the region.
+   */
+  everyoneArrived(region: string, here: string[]): Destination | null {
+    const shared = this.rooms.get(region)?.shared;
+    if (!shared || shared.everyone || here.length < 2 || !here.every((id) => shared.arrived.has(id))) return null;
+    shared.everyone = true;
+    return shared.destination;
   }
 
   /** The ice has gone everywhere: next winter freezes over the old holes. */

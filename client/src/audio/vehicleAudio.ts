@@ -85,9 +85,15 @@ export class VehicleAudio {
   private readonly motor: ElectricMotorSound;
   private readonly whine: OscillatorNode;
   private readonly whineLevel: GainNode;
-  private readonly squealLevel: GainNode;
-  private readonly hissLevel: GainNode;
-  private readonly hissTone: BiquadFilterNode;
+  /** Squeal, wet hiss and body scrape: left out of a lean voice. */
+  private readonly slide: {
+    squealLevel: GainNode;
+    hissLevel: GainNode;
+    hissTone: BiquadFilterNode;
+    scrapeLevel: GainNode;
+    scrapeMetal: GainNode;
+    scrapeSource: AudioBufferSourceNode;
+  } | null = null;
   private readonly voices = new Map<string, { source: AudioBufferSourceNode; level: GainNode; voice: Voice }>();
   private gear = 1;
   private readonly lastSuspension: number[] = [];
@@ -102,9 +108,6 @@ export class VehicleAudio {
   /** Seconds with every wheel off the ground, and how fast it was falling a moment ago. */
   private airborne = 0;
   private falling = 0;
-  private readonly scrapeLevel: GainNode;
-  private readonly scrapeMetal: GainNode;
-  private readonly scrapeSource: AudioBufferSourceNode;
   private scrape = 0;
   /** A hard saturation curve for the blows of crashes. */
   private readonly hard = softClip(4);
@@ -119,10 +122,16 @@ export class VehicleAudio {
   /** The steady sources, stopped when this vehicle's sound goes. */
   private readonly sources: AudioScheduledSourceNode[] = [];
 
-  /** `to` is where it is heard: our own vehicle's bus, or the world's for another driver's. */
+  /**
+   * `to` is where it is heard: our own vehicle's bus, or the world's for another driver's.
+   * `lean` is for another driver's vehicle: its engine, gears, knocks and splashes, but no
+   * squeal, hiss or scrape, and a ground's tyre sound only once a wheel has been on it, so a
+   * few vehicles together do not fill the sound with loops nobody picks out.
+   */
   constructor(
     private readonly out: AudioOut,
     to: AudioNode = out.vehicle,
+    private readonly lean = false,
   ) {
     const ctx = out.ctx;
     this.at = out.panner(7, 1);
@@ -163,32 +172,35 @@ export class VehicleAudio {
     this.whine.connect(this.whineLevel);
     this.whine.start();
 
-    // Tyres squealing on hard ground.
-    this.squealLevel = ctx.createGain();
-    this.squealLevel.gain.value = 0;
-    this.squealLevel.connect(this.bed);
-    const squeal = out.filter('bandpass', 1050, 14);
-    squeal.connect(this.squealLevel);
-    this.keep(out.loop(out.buffers.white)).connect(squeal);
+    if (!lean) {
+      // Tyres squealing on hard ground.
+      const squealLevel = ctx.createGain();
+      squealLevel.gain.value = 0;
+      squealLevel.connect(this.bed);
+      const squeal = out.filter('bandpass', 1050, 14);
+      squeal.connect(squealLevel);
+      this.keep(out.loop(out.buffers.white)).connect(squeal);
 
-    // Spray hissing off the tyres on wet ground.
-    this.hissLevel = ctx.createGain();
-    this.hissLevel.gain.value = 0;
-    this.hissLevel.connect(this.bed);
-    this.hissTone = out.filter('highpass', 2500, 0.5);
-    this.hissTone.connect(this.hissLevel);
-    this.keep(out.loop(out.buffers.white)).connect(this.hissTone);
+      // Spray hissing off the tyres on wet ground.
+      const hissLevel = ctx.createGain();
+      hissLevel.gain.value = 0;
+      hissLevel.connect(this.bed);
+      const hissTone = out.filter('highpass', 2500, 0.5);
+      hissTone.connect(hissLevel);
+      this.keep(out.loop(out.buffers.white)).connect(hissTone);
 
-    // The body sliding on the ground: grinding grit, and a metal screech on top.
-    this.scrapeLevel = ctx.createGain();
-    this.scrapeLevel.gain.value = 0;
-    this.scrapeLevel.connect(this.at);
-    this.scrapeSource = this.keep(out.loop(out.buffers.gravel));
-    this.scrapeSource.connect(out.filter('bandpass', 1500, 1.1)).connect(this.scrapeLevel);
-    this.scrapeMetal = ctx.createGain();
-    this.scrapeMetal.gain.value = 0;
-    this.scrapeMetal.connect(this.at);
-    this.keep(out.loop(out.buffers.white)).connect(out.filter('bandpass', 3300, 7)).connect(this.scrapeMetal);
+      // The body sliding on the ground: grinding grit, and a metal screech on top.
+      const scrapeLevel = ctx.createGain();
+      scrapeLevel.gain.value = 0;
+      scrapeLevel.connect(this.at);
+      const scrapeSource = this.keep(out.loop(out.buffers.gravel));
+      scrapeSource.connect(out.filter('bandpass', 1500, 1.1)).connect(scrapeLevel);
+      const scrapeMetal = ctx.createGain();
+      scrapeMetal.gain.value = 0;
+      scrapeMetal.connect(this.at);
+      this.keep(out.loop(out.buffers.white)).connect(out.filter('bandpass', 3300, 7)).connect(scrapeMetal);
+      this.slide = { squealLevel, hissLevel, hissTone, scrapeLevel, scrapeMetal, scrapeSource };
+    }
 
     // The winch motor: a buzzing electric motor and its reduction gears.
     this.winchLevel = ctx.createGain();
@@ -207,14 +219,20 @@ export class VehicleAudio {
     this.winchGear.connect(gear).connect(this.winchTone);
     this.winchGear.start();
 
-    for (const [ground, voice] of Object.entries(VOICES)) {
-      const source = this.keep(out.loop(out.buffers[voice.buffer]));
-      const filter = out.filter(voice.filter, voice.frequency, voice.q);
-      const level = ctx.createGain();
-      level.gain.value = 0;
-      source.connect(filter).connect(level).connect(this.bed);
-      this.voices.set(ground, { source, level, voice });
-    }
+    if (!lean) for (const ground of Object.keys(VOICES)) this.voice(ground);
+  }
+
+  /** The tyres' sound on a ground, made when first needed. */
+  private voice(ground: string): void {
+    const voice = VOICES[ground];
+    if (!voice || this.voices.has(ground)) return;
+    const out = this.out;
+    const source = this.keep(out.loop(out.buffers[voice.buffer]));
+    const filter = out.filter(voice.filter, voice.frequency, voice.q);
+    const level = out.ctx.createGain();
+    level.gain.value = 0;
+    source.connect(filter).connect(level).connect(this.bed);
+    this.voices.set(ground, { source, level, voice });
   }
 
   /**
@@ -353,9 +371,13 @@ export class VehicleAudio {
     // Scraping: the body pressed on the ground while it moves.
     const scrape = quiet ? 0 : Math.min(1, rubbing / 1.5) * Math.min(1, speed / 5);
     this.scrape += (scrape - this.scrape) * Math.min(1, dt * (scrape > this.scrape ? 20 : 6));
-    ease(this.scrapeLevel.gain, this.scrape * 0.9, t, 0.03);
-    ease(this.scrapeMetal.gain, this.scrape * 0.12, t, 0.03);
-    ease(this.scrapeSource.playbackRate, 0.7 + Math.min(1.2, speed / 10), t, 0.05);
+    const slide = this.slide;
+    if (slide) {
+      ease(slide.scrapeLevel.gain, this.scrape * 0.9, t, 0.03);
+      ease(slide.scrapeMetal.gain, this.scrape * 0.12, t, 0.03);
+      ease(slide.scrapeSource.playbackRate, 0.7 + Math.min(1.2, speed / 10), t, 0.05);
+    }
+    if (this.lean && !quiet) for (const [ground, level] of levels) if (level > 0) this.voice(ground);
 
     for (const [ground, v] of this.voices) {
       const s = quiet ? 0 : (levels.get(ground) ?? 0) / v.voice.full;
@@ -363,9 +385,11 @@ export class VehicleAudio {
       ease(v.level.gain, level, t, 0.06);
       if (v.voice.rate > 0) ease(v.source.playbackRate, 0.55 + v.voice.rate * Math.min(1.5, rate / v.voice.full), t, 0.1);
     }
-    ease(this.squealLevel.gain, quiet ? 0 : squeal * Math.min(1, speed / 4) * 0.5, t);
-    ease(this.hissLevel.gain, quiet ? 0 : Math.min(0.25, wetRoll * 0.02), t);
-    ease(this.hissTone.frequency, 2000 + wetRoll * 120, t);
+    if (slide) {
+      ease(slide.squealLevel.gain, quiet ? 0 : squeal * Math.min(1, speed / 4) * 0.5, t);
+      ease(slide.hissLevel.gain, quiet ? 0 : Math.min(0.25, wetRoll * 0.02), t);
+      ease(slide.hissTone.frequency, 2000 + wetRoll * 120, t);
+    }
 
     for (const c of cracks) if (!quiet) this.crack(c);
   }

@@ -14,7 +14,7 @@ describe('trips', () => {
     expect(trips.entries).toHaveLength(1);
     expect(trips.reached('valadalen')).toEqual(new Set(['Testhut']));
     expect(trips.reached('are').size).toBe(0);
-    expect(trips.current).toBeNull();
+    expect(trips.current()).toBeNull();
   });
 
   it('do not count when the vehicle jumped on the way', () => {
@@ -22,12 +22,12 @@ describe('trips', () => {
     trips.begin(hut);
     trips.tick(30, 100, 0);
     trips.jumped();
-    expect(trips.current?.counts).toBe(false);
+    expect(trips.current()?.counts).toBe(false);
     expect(trips.arrive(info)).toBeNull();
     expect(trips.entries).toHaveLength(0);
     // A new destination starts a fresh trip that counts again.
     trips.begin(hut);
-    expect(trips.current).toEqual({ seconds: 0, metres: 0, counts: true });
+    expect(trips.current()).toEqual({ seconds: 0, metres: 0, counts: true });
   });
 
   it('remember the quickest arrival at each place', () => {
@@ -39,6 +39,25 @@ describe('trips', () => {
     }
     expect(trips.best('valadalen', 'Testhut')?.seconds).toBe(400);
     expect(trips.best('valadalen', 'Elsewhere')).toBeNull();
+  });
+
+  it('keep a trip to the shared destination beside the own one', () => {
+    const trips = new Trips();
+    const peak = { name: 'Peak', kind: 'peak', x: 900, z: 900 };
+    trips.begin(hut);
+    trips.tick(100, 500, 0);
+    trips.begin(peak, 'shared');
+    trips.tick(50, 200, 0);
+    expect(trips.going(peak, 'shared')).toBe(true);
+    expect(trips.going(peak)).toBe(false);
+    expect(trips.arrive(info, 1, 'shared')).toMatchObject({ destination: 'Peak', seconds: 50, metres: 200 });
+    expect(trips.current('shared')).toBeNull();
+    expect(trips.current()).toEqual({ seconds: 150, metres: 700, counts: true });
+    // A jump spoils both.
+    trips.begin(peak, 'shared');
+    trips.jumped();
+    expect(trips.current()?.counts).toBe(false);
+    expect(trips.current('shared')?.counts).toBe(false);
   });
 
   it('note who else arrived within a minute, before or after', () => {

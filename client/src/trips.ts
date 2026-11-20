@@ -38,7 +38,9 @@ interface Trip {
 }
 
 const LOG_KEY = 'spar.logbook';
-const TRIP_KEY = 'spar.trip';
+/** The trip to the driver's own destination, and to the one shared with everyone. */
+export type TripKind = 'own' | 'shared';
+const TRIP_KEYS: Record<TripKind, string> = { own: 'spar.trip', shared: 'spar.trip.shared' };
 /** Most entries kept; the oldest go first. */
 const LOG_MAX = 500;
 
@@ -63,51 +65,68 @@ function save(storage: () => Storage, key: string, value: unknown): void {
 
 export class Trips {
   readonly entries: LogEntry[];
-  private trip: Trip | null;
+  private readonly trips: Record<TripKind, Trip | null>;
   private savedAt = 0;
 
   constructor() {
     this.entries = load<LogEntry[]>(() => localStorage, LOG_KEY) ?? [];
     // A trip under way survives a rebuild of the world, as the destination does.
-    this.trip = load<Trip>(() => sessionStorage, TRIP_KEY);
+    this.trips = { own: load<Trip>(() => sessionStorage, TRIP_KEYS.own), shared: load<Trip>(() => sessionStorage, TRIP_KEYS.shared) };
+  }
+
+  private keep(kind: TripKind): void {
+    save(() => sessionStorage, TRIP_KEYS[kind], this.trips[kind]);
   }
 
   /** A new destination (or none): the clock starts again. */
-  begin(d: Destination | null): void {
-    this.trip = d ? { name: d.name, ...(d.kind ? { kind: d.kind } : {}), x: d.x, z: d.z, seconds: 0, metres: 0, jumped: false } : null;
-    save(() => sessionStorage, TRIP_KEY, this.trip);
+  begin(d: Destination | null, kind: TripKind = 'own'): void {
+    this.trips[kind] = d ? { name: d.name, ...(d.kind ? { kind: d.kind } : {}), x: d.x, z: d.z, seconds: 0, metres: 0, jumped: false } : null;
+    this.keep(kind);
   }
 
-  /** The vehicle was put down somewhere else: this trip no longer counts. */
+  /** Whether a trip is under way to this place. */
+  going(d: Destination, kind: TripKind = 'own'): boolean {
+    const t = this.trips[kind];
+    return !!t && t.name === d.name && Math.hypot(t.x - d.x, t.z - d.z) < 1;
+  }
+
+  /** The vehicle was put down somewhere else: the trips under way no longer count. */
   jumped(): void {
-    if (!this.trip || this.trip.jumped) return;
-    this.trip.jumped = true;
-    save(() => sessionStorage, TRIP_KEY, this.trip);
+    for (const kind of ['own', 'shared'] as const) {
+      const t = this.trips[kind];
+      if (!t || t.jumped) continue;
+      t.jumped = true;
+      this.keep(kind);
+    }
   }
 
   /** Driving time and distance; call while the vehicle is being driven. `now` in milliseconds. */
   tick(dt: number, metres: number, now: number): void {
-    if (!this.trip) return;
-    this.trip.seconds += dt;
-    this.trip.metres += metres;
+    for (const t of Object.values(this.trips)) {
+      if (!t) continue;
+      t.seconds += dt;
+      t.metres += metres;
+    }
     if (now - this.savedAt > 5000) {
       this.savedAt = now;
-      save(() => sessionStorage, TRIP_KEY, this.trip);
+      this.keep('own');
+      this.keep('shared');
     }
   }
 
   /** Seconds and metres of the trip under way. */
-  get current(): { seconds: number; metres: number; counts: boolean } | null {
-    return this.trip ? { seconds: this.trip.seconds, metres: this.trip.metres, counts: !this.trip.jumped } : null;
+  current(kind: TripKind = 'own'): { seconds: number; metres: number; counts: boolean } | null {
+    const t = this.trips[kind];
+    return t ? { seconds: t.seconds, metres: t.metres, counts: !t.jumped } : null;
   }
 
   /**
    * Arrived at the destination: the logbook entry, or null when the trip does not count
    * (the vehicle jumped on the way, or there was no trip).
    */
-  arrive(info: Pick<LogEntry, 'region' | 'vehicle' | 'date' | 'season' | 'with'>, now = Date.now()): LogEntry | null {
-    const trip = this.trip;
-    this.begin(null);
+  arrive(info: Pick<LogEntry, 'region' | 'vehicle' | 'date' | 'season' | 'with'>, now = Date.now(), kind: TripKind = 'own'): LogEntry | null {
+    const trip = this.trips[kind];
+    this.begin(null, kind);
     if (!trip || trip.jumped) return null;
     const { with: others, ...rest } = info;
     const entry: LogEntry = {

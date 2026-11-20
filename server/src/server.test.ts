@@ -389,6 +389,11 @@ describe('websocket', () => {
     expect(await b.next('share')).toEqual({ type: 'share', region: 'trip', destination: hut, by: a.id });
     a.ws.send(JSON.stringify({ type: 'arrived', region: 'trip', destination: hut }));
     expect(await b.next('arrived')).toEqual({ type: 'arrived', region: 'trip', destination: hut, id: a.id });
+    // Bo arrives too: everyone in the region is there, and both are told, once.
+    b.ws.send(JSON.stringify({ type: 'arrived', region: 'trip', destination: hut }));
+    expect((await a.waitFor('chat', (m) => m.text.startsWith('Everyone'))).text).toBe('Everyone has arrived at Blåhammaren');
+    await b.waitFor('chat', (m) => m.text.startsWith('Everyone'));
+    expect(elsewhere.seen('chat').filter((m) => m.text.startsWith('Everyone'))).toHaveLength(0);
 
     // Late to the region: the shared destination comes with the room.
     const d = await connect('Dan');
@@ -402,9 +407,11 @@ describe('websocket', () => {
     expect((await d.next('room')).shared).toBeUndefined();
 
     await new Promise((r) => setTimeout(r, 100));
+    expect(a.seen('chat').filter((m) => m.text.startsWith('Everyone'))).toHaveLength(1);
     expect(elsewhere.seen('share')).toHaveLength(0);
     expect(elsewhere.seen('arrived')).toHaveLength(0);
-    expect(a.seen('arrived')).toHaveLength(0);
+    // Only Bo's arrival, not her own.
+    expect(a.seen('arrived').map((m) => m.id)).toEqual([b.id]);
     for (const p of [a, b, elsewhere, d]) p.ws.close();
   });
 

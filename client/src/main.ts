@@ -36,7 +36,7 @@ import { Look, type Grade } from './sky/look';
 import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
 import { VehicleAudio, type Impact } from './audio/vehicleAudio';
-import { Guide } from './ui/guide';
+import { Guide, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
@@ -226,37 +226,77 @@ async function start(): Promise<void> {
   /** Destinations on the map of the area being driven. */
   let placesToReach = 0;
   let tripFrom: { x: number; z: number } | null = null;
-  /** The destination shared with everyone in this region, and the id of who shared it (null: this driver). */
+  /**
+   * The destination shared with everyone in this region, and the id of who shared it (null:
+   * this driver). It has a guide of its own beside the driver's own destination.
+   */
   let shared: { destination: Destination; by: string | null } | null = null;
+  const sharedGuide = new Guide(document.body, SHARED);
   /** The other drivers' arrivals of the last minute: who, where, and when (Date.now()). */
   const arrivals: { name: string; destination: Destination; at: number }[] = [];
   const samePlace = (a: Destination, b: Destination): boolean => a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
   /** As the protocol carries it: name, position, and kind for a place from the map data. */
   const wireDestination = (d: Destination): Destination => ({ name: d.name.slice(0, 80), x: d.x, z: d.z, ...(d.kind ? { kind: d.kind } : {}) });
-  /** A shared destination becomes this driver's too; its trip starts now, unless already going there. */
-  const takeDestination = (d: Destination): void => {
-    if (guide.destination && samePlace(guide.destination, d)) return;
-    guide.destination = d;
-    trips.begin(d);
+  /** The shared destination this driver has already reached, so a reload does not send them there again. */
+  const REACHED_KEY = 'spar.sharedReached';
+  const reachedShared = (d: Destination): boolean => {
+    try {
+      const r = sessionStorage.getItem(REACHED_KEY);
+      return !!r && samePlace(JSON.parse(r) as Destination, d);
+    } catch {
+      return false;
+    }
   };
-  guide.onArrive = (d) => {
+  /**
+   * The shared destination changed (or is told again on entering the region): its guide
+   * points there and its trip clock starts, unless already under way or reached.
+   */
+  const setShared = (next: typeof shared): boolean => {
+    shared = next;
+    world?.map.refresh();
+    if (!next) {
+      sharedGuide.destination = null;
+      trips.begin(null, 'shared');
+      return false;
+    }
+    if (reachedShared(next.destination)) {
+      sharedGuide.destination = null;
+      return false;
+    }
+    sharedGuide.destination = next.destination;
+    if (!trips.going(next.destination, 'shared')) trips.begin(next.destination, 'shared');
+    return true;
+  };
+  /** Arrived at the own or the shared destination: the logbook, and the others told. */
+  const arrive = (d: Destination, kind: 'own' | 'shared'): string => {
     const w = world;
     chapter(d.name === 'Marked spot' ? 'The marked spot' : d.name, 'Arrived');
+    if (kind === 'shared') {
+      try {
+        sessionStorage.setItem(REACHED_KEY, JSON.stringify(d));
+      } catch {
+        // Then a reload may guide there again.
+      }
+    }
     // Flying there is not a trip.
     if (!w || flying || w.unplaced) {
-      trips.begin(null);
+      trips.begin(null, kind);
       return '';
     }
-    connection?.send({ type: 'arrived', region: w.index.name, destination: wireDestination(d) });
+    // Only arrivals the others care about: at the shared destination, or at a place from the map data.
+    if (kind === 'shared' || d.kind) connection?.send({ type: 'arrived', region: w.index.name, destination: wireDestination(d) });
     const now = Date.now();
     const along = [...new Set(arrivals.filter((a) => now - a.at <= TOGETHER_MS && samePlace(a.destination, d)).map((a) => a.name))];
     const day = w.environment.dayOfYear();
     const season = seasonAt(CALENDAR, day);
-    const entry = trips.arrive({ region: w.index.name, vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(season, day), with: along }, now);
+    const entry = trips.arrive({ region: w.index.name, vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(season, day), with: along }, now, kind);
     if (!entry) return ' · not logged: the vehicle was moved on the way';
     return ` · ${formatDuration(entry.seconds)} · ${formatDistance(entry.metres)}${along.length ? ` · with ${listNames(along)}` : ''} · written in the logbook`;
   };
-  scene.add(guide.beacon);
+  sharedGuide.onArrive = (d) => arrive(d, 'shared');
+  // The own destination at the shared one's place is reached with it, and logged once, as shared.
+  guide.onArrive = (d) => (shared && samePlace(shared.destination, d) ? (trips.begin(null), '') : arrive(d, 'own'));
+  scene.add(guide.beacon, sharedGuide.beacon);
   const minimap = new Minimap(document.body);
   // The other drivers, and the chat with them.
   const others = new Others(scene, Object.values(VEHICLES));
@@ -558,9 +598,8 @@ async function start(): Promise<void> {
         shared: () => shared && { destination: shared.destination, by: shared.by === null ? null : playerName(shared.by) },
         share: (d) => {
           connection?.send({ type: 'share', region: index.name, destination: d && wireDestination(d) });
-          shared = d ? { destination: d, by: null } : null;
-          chat.add(d ? `You shared ${d.name} with everyone here` : 'You stopped sharing the destination');
-          world?.map.refresh();
+          chat.add(d ? `You shared ${d.name} with everyone here` : `You stopped sharing ${shared?.destination.name ?? 'the destination'}`);
+          setShared(d ? { destination: d, by: null } : null);
         },
       },
       travel: (s) => {
@@ -770,10 +809,10 @@ async function start(): Promise<void> {
   const mapState = (w: World): MapState => {
     if (flying) {
       const f = camera.getWorldDirection(new THREE.Vector3());
-      return { x: camera.position.x, z: camera.position.z, heading: THREE.MathUtils.radToDeg(Math.atan2(f.x, -f.z)), destination: guide.destination, others: others.markers() };
+      return { x: camera.position.x, z: camera.position.z, heading: THREE.MathUtils.radToDeg(Math.atan2(f.x, -f.z)), destination: guide.destination, shared: shared?.destination ?? null, others: others.markers() };
     }
     const p = w.sim.body.translation();
-    return { x: p.x, z: p.z, heading: headingOf(w), destination: guide.destination, others: others.markers() };
+    return { x: p.x, z: p.z, heading: headingOf(w), destination: guide.destination, shared: shared?.destination ?? null, others: others.markers() };
   };
   const toggleMap = (): void => {
     if (!world) return;
@@ -1100,15 +1139,14 @@ async function start(): Promise<void> {
     handover: (msg) => towing.onHandover(msg, performance.now()),
     room: (msg) => {
       // Entering a region: the trees others knocked down there, the holes in its ice, and the
-      // destination shared there, which becomes ours if we have none.
+      // destination shared there.
       const w = world;
       if (!w || msg.region !== w.index.name) return;
-      shared = msg.shared ? { destination: msg.shared.destination, by: msg.shared.by === towing.me ? null : msg.shared.by } : null;
-      if (shared && !guide.destination) {
-        takeDestination(shared.destination);
-        chat.add(`${shared.by === null ? 'You' : playerName(shared.by)} shared ${shared.destination.name} with everyone here: it is your destination too`);
+      const before = shared;
+      const next = msg.shared ? { destination: msg.shared.destination, by: msg.shared.by === towing.me ? null : msg.shared.by } : null;
+      if (setShared(next) && next && !(before && samePlace(before.destination, next.destination))) {
+        chat.add(`${next.by === null ? 'You' : playerName(next.by)} shared ${next.destination.name} with everyone here: it shows in blue on the map and at the top`);
       }
-      w.map.refresh();
       for (const tree of msg.felled) w.obstacles?.fellFromAfar(tree, null);
       for (const hole of msg.holes) w.ground.breakIce(hole.x, hole.z, true);
     },
@@ -1125,15 +1163,9 @@ async function start(): Promise<void> {
       const w = world;
       if (!w || msg.region !== w.index.name) return;
       const name = playerName(msg.by);
-      if (msg.destination) {
-        shared = { destination: msg.destination, by: msg.by };
-        takeDestination(msg.destination);
-        chat.add(`${name} shared ${msg.destination.name} with everyone here: it is your destination too (M to change it)`);
-      } else if (shared) {
-        chat.add(`${name} stopped sharing ${shared.destination.name}`);
-        shared = null;
-      }
-      w.map.refresh();
+      if (msg.destination) chat.add(`${name} shared ${msg.destination.name} with everyone here: it shows in blue on the map and at the top`);
+      else if (shared) chat.add(`${name} stopped sharing ${shared.destination.name}`);
+      setShared(msg.destination ? { destination: msg.destination, by: msg.by } : null);
     },
     arrived: (msg) => {
       const w = world;
@@ -1471,7 +1503,15 @@ async function start(): Promise<void> {
       }
       w.map.update(where, now);
       minimap.update(dt, w.map, where, !w.unplaced && !w.map.open);
-      guide.update(now, camera, flying ? camera.position : w.view.group.position, (x, z) => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z), !w.unplaced && !w.map.open);
+      // The shared destination first, so arriving at a place that is both is logged as shared.
+      const from = flying ? camera.position : w.view.group.position;
+      const groundAt = (x: number, z: number): number | null => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z);
+      const guiding = !w.unplaced && !w.map.open;
+      const both = sharedGuide.destination;
+      guide.hidden = !!both && !!guide.destination && samePlace(both, guide.destination);
+      sharedGuide.update(now, camera, from, groundAt, guiding);
+      guide.update(now, camera, from, groundAt, guiding);
+      sharedGuide.row = guide.showing ? 1 : 0;
 
       // On its side or roof and not going anywhere: say how to get back on the wheels.
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;

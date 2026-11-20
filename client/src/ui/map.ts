@@ -16,6 +16,9 @@ export interface Destination {
   kind?: string;
 }
 
+/** The pins: the driver's own destination, and the shared one (as its guide's blue). */
+const PIN = { own: { fill: '#8e3b2d', line: 'rgba(142,59,45,0.85)' }, shared: { fill: '#2c6fb0', line: 'rgba(44,111,176,0.85)' } };
+
 /** Colours of the destination markers by kind. */
 const DESTINATION_COLORS: Record<string, string> = {
   peak: '#5a3c26', hut: '#b0472c', shelter: '#8a5a2b', viewpoint: '#2c6fb0', lodge: '#7a3d8f', camp: '#2f6f4f', sight: '#c28a12',
@@ -54,6 +57,8 @@ export interface MapState {
   z: number;
   heading: number;
   destination: Destination | null;
+  /** The destination shared with everyone in the region, drawn in blue. */
+  shared?: Destination | null;
   /** Other drivers' vehicles in this region. */
   others?: OtherMarker[];
 }
@@ -356,13 +361,13 @@ export class MapScreen {
       c.fillText(p.name, px, py);
     }
 
-    // The destination: a pin when it is in view, otherwise an arrow on the rim pointing to it.
-    const d = state.destination;
-    if (d) {
+    // The destinations: a pin when in view, otherwise an arrow on the rim pointing there.
+    for (const [d, pin] of [[state.shared, PIN.shared], [state.destination, PIN.own]] as const) {
+      if (!d) continue;
       const [px, py] = at(d.x, d.z);
       const dx = px - half, dy = py - half;
       const out = Math.hypot(dx, dy);
-      c.fillStyle = '#8e3b2d';
+      c.fillStyle = pin.fill;
       c.strokeStyle = '#fff';
       c.lineWidth = 1.5;
       if (out < half - 10) {
@@ -586,22 +591,20 @@ export class MapScreen {
     add('span', '', row, 'distance');
     if (d) button('Clear', () => this.choose(null), row);
     this.updateDistance();
-    // Going there together: shared with everyone in the region, it becomes their destination too.
+    // Going there together: a destination shared with everyone in the region shows beside
+    // each driver's own, in blue. Sharing another replaces it; nobody's own is touched.
     const sharing = this.actions.sharing;
-    if (sharing?.available()) {
-      const shared = sharing.shared();
-      const same = (a: Destination, b: Destination): boolean => a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
-      const line = add('div', '', box, 'shared');
-      if (shared && d && same(shared.destination, d)) {
-        add('span', shared.by ? `Shared by ${shared.by}` : 'Shared with everyone here', line, 'note');
-        button('Stop sharing', () => sharing.share(null), line, 'link');
-      } else {
-        if (shared) {
-          add('span', `${shared.by ?? 'You'} shared ${shared.destination.name}`, line, 'note');
-          button('Go there too', () => this.choose(shared.destination), line, 'link');
-        }
-        if (d) button('Share with everyone', () => sharing.share(d), line, 'link');
-      }
+    const shared = sharing?.shared() ?? null;
+    const same = (a: Destination, b: Destination): boolean => a.name === b.name && Math.hypot(a.x - b.x, a.z - b.z) < 1;
+    if (sharing?.available() && d && !(shared && same(shared.destination, d))) {
+      button(shared ? 'Share this instead' : 'Share with everyone', () => sharing.share(d), add('div', '', box, 'shared'), 'link');
+    }
+    if (sharing && shared) {
+      add('div', 'Shared destination', box, 'label');
+      const row = add('div', '', box, 'dest shared-dest');
+      add('span', shared.destination.name, row, 'name');
+      add('span', shared.by ? `by ${shared.by}` : 'by you', row, 'note');
+      button('Stop sharing', () => sharing.share(null), row, 'link');
     }
 
     // Places from the map data worth a trip, ticked off once reached.
@@ -865,21 +868,21 @@ export class MapScreen {
       c.strokeRect(sx - 4, sy - 4, 8, 8);
     }
 
-    // The destination: a pin, and a line to it from the vehicle.
+    // The destinations: a pin, and a line to it from the vehicle.
     const st = this.state;
     const [vx, vy] = this.toScreen(st.x, st.z);
-    const d = st.destination;
-    if (d) {
+    for (const [d, pin] of [[st.shared, PIN.shared], [st.destination, PIN.own]] as const) {
+      if (!d) continue;
       const [dx, dy] = this.toScreen(d.x, d.z);
       c.setLineDash([6, 5]);
-      c.strokeStyle = 'rgba(142,59,45,0.85)';
+      c.strokeStyle = pin.line;
       c.lineWidth = 2;
       c.beginPath();
       c.moveTo(vx, vy);
       c.lineTo(dx, dy);
       c.stroke();
       c.setLineDash([]);
-      c.fillStyle = '#8e3b2d';
+      c.fillStyle = pin.fill;
       c.strokeStyle = '#fff';
       c.lineWidth = 2;
       c.beginPath();

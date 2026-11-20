@@ -200,7 +200,7 @@ export function createGameServer(config: ServerConfig): GameServer {
     for (const ws of joined.keys()) if (ws !== except && ws.readyState === ws.OPEN) ws.send(text);
   };
   /** To everyone else in a region. */
-  const toRoom = (region: string, msg: ServerMessage, except: WebSocket): void => {
+  const toRoom = (region: string, msg: ServerMessage, except?: WebSocket): void => {
     const text = JSON.stringify(msg);
     for (const [ws, p] of joined) if (ws !== except && p.region === region && ws.readyState === ws.OPEN) ws.send(text);
   };
@@ -215,6 +215,13 @@ export function createGameServer(config: ServerConfig): GameServer {
     return undefined;
   };
   const say = (text: string): void => broadcast({ type: 'chat', text });
+  /** Once everyone in a region has reached its shared destination, they are all told. */
+  const checkArrivals = (region: string | undefined): void => {
+    if (!region) return;
+    const here = [...joined.values()].filter((p) => p.region === region).map((p) => p.id);
+    const done = rooms.everyoneArrived(region, here);
+    if (done) toRoom(region, { type: 'chat', text: `Everyone has arrived at ${done.name}` });
+  };
   const gone = (player: Player): void => {
     broadcast({ type: 'away', id: player.id });
     announcePlayers();
@@ -230,6 +237,7 @@ export function createGameServer(config: ServerConfig): GameServer {
       if (!player) return;
       joined.delete(ws);
       acks.delete(ws);
+      checkArrivals(player.region);
       onRoad.delete(player.id);
       // Its cables come off at once, and the vehicles its browser ran go back to their drivers.
       if (towing.leave(player.id)) announceTowing();
@@ -319,7 +327,9 @@ export function createGameServer(config: ServerConfig): GameServer {
         case 'room':
           // Entering a region: what has changed there so far.
           if (player.region !== msg.region) {
+            const left = player.region;
             player.region = msg.region;
+            checkArrivals(left);
             announcePlayers();
             if (towing.free(player.id)) announceTowing();
           }
@@ -339,6 +349,7 @@ export function createGameServer(config: ServerConfig): GameServer {
           break;
         case 'arrived':
           toRoom(msg.region, { type: 'arrived', region: msg.region, destination: msg.destination, id: player.id }, ws);
+          if (rooms.arrive(msg.region, msg.destination, player.id)) checkArrivals(msg.region);
           break;
         case 'push': {
           // Only to the browser that runs the vehicle pushed: it alone moves it.
