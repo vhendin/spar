@@ -1,12 +1,12 @@
-// Finding the way to the destination chosen on the map: an arrow at the top of the screen
-// pointing towards it with the distance, and a tall beacon standing on the spot, visible
-// from far off and fading as you come close. Arriving says so and clears the destination.
+// Finding the way to the destination chosen on the map: a tall beacon standing on the spot,
+// visible from far off and fading as you come close (the compass marks the way and the
+// distance). Arriving says so, in a line at the top, and clears the destination.
 // There are two: the driver's own (gold), and the one shared with everyone in the region
 // (blue), in a line of its own under the first.
 
 import * as THREE from 'three/webgpu';
 import { float, positionLocal, smoothstep, uniform } from 'three/tsl';
-import { formatDistance, type Destination } from './map';
+import type { Destination } from './map';
 
 /** Metres from the destination that count as having arrived. */
 const ARRIVED = 30;
@@ -30,12 +30,10 @@ export const SHARED: GuideStyle = { id: 'guide-shared', color: 0x4f8fd0, key: nu
 export class Guide {
   readonly beacon: THREE.Mesh;
   private readonly el: HTMLDivElement;
-  private readonly arrow: HTMLSpanElement;
   private readonly text: HTMLSpanElement;
   private readonly near = uniform(1);
   private target: Destination | null = null;
   private arrivedUntil = 0;
-  private readonly forward = new THREE.Vector3();
   /** Called on arriving; what it returns is added to the arrival message. */
   onArrive: ((d: Destination) => string) | null = null;
   /** Kept and arrived at, but not shown: the same place as the other guide's. */
@@ -45,13 +43,8 @@ export class Guide {
     this.el = document.createElement('div');
     this.el.id = style.id;
     this.el.className = 'guide';
-    const hex = `#${style.color.toString(16).padStart(6, '0')}`;
-    this.arrow = document.createElement('span');
-    this.arrow.className = 'arrow';
-    // Points up, at what is straight ahead; turned to point the way.
-    this.arrow.innerHTML = `<svg viewBox="-10 -10 20 20" width="20" height="20"><path d="M0 -9.5 L7.5 -1.5 L2.6 -1.5 L2.6 9 L-2.6 9 L-2.6 -1.5 L-7.5 -1.5 Z" fill="${hex}" stroke="#2f3b33" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
     this.text = document.createElement('span');
-    this.el.append(this.arrow, this.text);
+    this.el.append(this.text);
     parent.append(this.el);
 
     const geometry = new THREE.CylinderGeometry(2.2, 2.2, BEACON_HEIGHT, 16, 1, true);
@@ -80,7 +73,7 @@ export class Guide {
 
   /** First or second line from the top. */
   set row(row: 0 | 1) {
-    this.el.style.top = row ? '90px' : '';
+    this.el.style.top = row ? '132px' : '';
   }
 
   get destination(): Destination | null {
@@ -108,7 +101,6 @@ export class Guide {
     if (!d) {
       this.beacon.visible = false;
       this.el.style.display = show && now < this.arrivedUntil ? 'flex' : 'none';
-      this.arrow.style.visibility = 'hidden';
       return;
     }
     const dx = d.x - from.x, dz = d.z - from.z;
@@ -135,14 +127,14 @@ export class Guide {
     const wide = Math.max(1, far / 450);
     this.beacon.scale.set(wide, Math.max(1, far / 2500), wide);
     this.near.value = THREE.MathUtils.smoothstep(distance, 40, 150) * 0.8 + 0.2;
+    // On the way, the compass says where and how far.
+    this.el.style.display = 'none';
+  }
 
-    // Which way, seen from the camera: straight ahead is up.
-    camera.getWorldDirection(this.forward);
-    const fx = this.forward.x, fz = this.forward.z;
-    const angle = Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz);
-    this.arrow.style.visibility = 'visible';
-    this.arrow.style.transform = `rotate(${angle.toFixed(3)}rad)`;
-    this.text.textContent = `${this.style.label ? `${this.style.label} · ` : ''}${d.name} · ${formatDistance(distance)}`;
-    this.el.style.display = show ? 'flex' : 'none';
+  /** Where it is, for the compass: name and colour; null when there is nothing to show. */
+  get mark(): { x: number; z: number; name: string; color: string } | null {
+    const d = this.target;
+    if (!d || this.hidden) return null;
+    return { x: d.x, z: d.z, name: this.style.label ? `${this.style.label}: ${d.name}` : d.name, color: `#${this.style.color.toString(16).padStart(6, '0')}` };
   }
 }

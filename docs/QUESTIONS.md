@@ -15,8 +15,9 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   the lost speed and 70 % of the nose-up spin back (`GLANCE_*` in `sim.ts`). A 1.4 m bank at
   55 km/h used to stop the 4×4 dead; now it hops over and drives on at about 15 km/h. Banks of
   2.5 m still stop you, and so do trees, rocks and buildings. Too bouncy, or not enough?
-- **Compass**: shown whenever the guide line is (not on the map or the start screen), also
-  while flying. Wanted in cab view, or as a setting?
+- **Compass**: shown on the road and while flying (not on the map or the start screen). The
+  destinations are dots on it with the name and distance under them; the line with the arrow
+  is gone, and the line at the top now only says "Arrived at …". Wanted as a setting?
 
 ### Multiplayer stage 4, winching each other
 

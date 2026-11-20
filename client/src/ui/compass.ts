@@ -1,6 +1,9 @@
 // The compass along the top of the screen: a strip of the directions round the way the camera
 // looks, turning as it turns, with the destinations marked on it (gold for the driver's own,
-// blue for the shared one), pinned to the edge when they are behind.
+// blue for the shared one) by a dot with the name and distance under it, pinned to the edge
+// when they are behind.
+
+import { formatDistance } from './map';
 
 /** Degrees of the horizon the strip shows across its width. */
 const SPAN = 150;
@@ -9,6 +12,7 @@ const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 export interface CompassMark {
   x: number;
   z: number;
+  name: string;
   /** The guide's colour, as CSS. */
   color: string;
 }
@@ -26,17 +30,21 @@ export function offset(angle: number, heading: number): number {
 export class Compass {
   private readonly el: HTMLDivElement;
   private readonly tape: HTMLDivElement;
-  private readonly marks: HTMLSpanElement[] = [];
+  private readonly marks: { dot: HTMLSpanElement; label: HTMLSpanElement }[] = [];
   private width = 0;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
     this.el.id = 'compass';
+    // The strip fades out at its ends; the labels hang below it, unfaded.
+    const strip = document.createElement('div');
+    strip.className = 'strip';
     this.tape = document.createElement('div');
     this.tape.className = 'tape';
     const pointer = document.createElement('div');
     pointer.className = 'pointer';
-    this.el.append(this.tape, pointer);
+    strip.append(this.tape, pointer);
+    this.el.append(strip);
     parent.append(this.el);
     // Three turns of tape, so any heading has a full strip either side.
     for (let deg = -360; deg < 720; deg += 15) {
@@ -64,21 +72,36 @@ export class Compass {
     const perDeg = width / SPAN;
     this.tape.style.transform = `translateX(${(width / 2 - heading * perDeg).toFixed(1)}px)`;
     while (this.marks.length < marks.length) {
-      const m = document.createElement('span');
-      m.className = 'mark';
-      this.el.append(m);
-      this.marks.push(m);
+      const dot = document.createElement('span');
+      dot.className = 'mark';
+      const label = document.createElement('span');
+      label.className = 'mark-label';
+      this.el.append(dot, label);
+      this.marks.push({ dot, label });
     }
-    this.marks.forEach((m, i) => {
+    const placed: { left: number; right: number; row: number }[] = [];
+    this.marks.forEach(({ dot, label }, i) => {
       const mark = marks[i];
-      m.style.display = mark ? '' : 'none';
+      dot.style.display = label.style.display = mark ? '' : 'none';
       if (!mark) return;
       const off = offset(bearing(from.x, from.z, mark.x, mark.z), heading);
       const edge = Math.abs(off) > SPAN / 2 - 4;
-      const at = Math.max(-SPAN / 2 + 4, Math.min(SPAN / 2 - 4, off));
-      m.style.left = `${(width / 2 + at * perDeg).toFixed(1)}px`;
-      m.style.background = mark.color;
-      m.classList.toggle('edge', edge);
+      const x = width / 2 + Math.max(-SPAN / 2 + 4, Math.min(SPAN / 2 - 4, off)) * perDeg;
+      dot.style.left = `${x.toFixed(1)}px`;
+      dot.style.background = mark.color;
+      const text = `${mark.name} · ${formatDistance(Math.hypot(mark.x - from.x, mark.z - from.z))}`;
+      if (label.textContent !== text) label.textContent = text;
+      label.style.borderColor = mark.color;
+      // Kept inside the strip's width, and under the one before when they would overlap.
+      const w = label.offsetWidth;
+      const left = Math.max(0, Math.min(width - w, x - w / 2));
+      let row = 0;
+      while (placed.some((p) => p.row === row && left < p.right + 6 && left + w > p.left - 6)) row++;
+      placed.push({ left, right: left + w, row });
+      label.style.left = `${left.toFixed(1)}px`;
+      label.style.top = `${40 + row * 24}px`;
+      dot.classList.toggle('edge', edge);
+      label.classList.toggle('edge', edge);
     });
   }
 

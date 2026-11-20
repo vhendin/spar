@@ -37,7 +37,7 @@ import { Ambience } from './audio/ambience';
 import { AudioOut } from './audio/output';
 import { VehicleAudio, type Impact } from './audio/vehicleAudio';
 import { bearing, Compass } from './ui/compass';
-import { Guide, OWN, SHARED } from './ui/guide';
+import { Guide, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
@@ -1521,16 +1521,7 @@ async function start(): Promise<void> {
       guide.update(now, camera, from, groundAt, guiding);
       sharedGuide.row = guide.showing ? 1 : 0;
       camera.getWorldDirection(compassLook);
-      const css = (c: number): string => `#${c.toString(16).padStart(6, '0')}`;
-      compass.update(
-        guiding,
-        bearing(0, 0, compassLook.x, compassLook.z),
-        from,
-        [
-          ...(guide.destination && !guide.hidden ? [{ ...guide.destination, color: css(OWN.color) }] : []),
-          ...(sharedGuide.destination ? [{ ...sharedGuide.destination, color: css(SHARED.color) }] : []),
-        ],
-      );
+      compass.update(guiding, bearing(0, 0, compassLook.x, compassLook.z), from, [guide.mark, sharedGuide.mark].filter((m) => m !== null));
 
       // On its side or roof and not going anywhere: say how to get back on the wheels.
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;
