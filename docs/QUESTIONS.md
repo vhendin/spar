@@ -215,6 +215,11 @@ same as the Terrängkombi.
 
 ## Answered
 
+- Logins: Cloudflare Access (email one-time code) in front of `spar.vhendin.se`, and the
+  game ties each driver to their login email. Kept per account on the server: name and
+  paint, the logbook, where they left off (region, vehicle, start, last position), and
+  settings with minimap zoom and gamepad bindings. Players on the home network stay guests,
+  keeping things in their own browser.
 - Hosting: the game runs in Docker on an Intel NUC at home, reached from outside through a
   Cloudflare Tunnel. Added the `tunnel` service (profile `tunnel`, `TUNNEL_TOKEN` in `.env`),
   and `ADDRESS` takes several addresses, comma separated, all shown in the start menu.

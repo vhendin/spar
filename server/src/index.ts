@@ -10,6 +10,7 @@ server.listen().then(
   (addr) => {
     console.log(`Spår server: region "${config.region}", seed ${config.seed}`);
     console.log(`  this computer: http://localhost:${addr.port}`);
+    console.log(config.access ? `  logins:        Cloudflare Access (${config.access.team}); accounts in ${config.accountsDir}` : '  logins:        none (ACCESS_TEAM and ACCESS_AUD not set), everyone is a guest');
     if (config.addresses) for (const a of config.addresses) console.log(`  friends join:  ${a}`);
     else if (existsSync('/.dockerenv')) {
       // Inside a container the interfaces are Docker's own, not the host's.

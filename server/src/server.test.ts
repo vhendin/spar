@@ -44,6 +44,7 @@ if (step === 'build') {
     defsDir: join(dir, 'defs'),
     rawDir: join(dir, 'raw'),
     startsDir: join(dir, 'starts'),
+    accountsDir: join(dir, 'accounts'),
     importer: [process.execPath, join(dir, 'importer.mjs')],
     importerCwd: dir,
     rejoinSeconds: 0.6,

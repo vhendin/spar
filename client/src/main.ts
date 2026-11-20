@@ -40,6 +40,7 @@ import { Guide, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
+import { signIn } from './account';
 import { saveLastPosition, StartMenu, storedProfile } from './ui/startMenu';
 import { Chat } from './ui/chat';
 import { Others } from './multiplayer/others';
@@ -172,8 +173,9 @@ async function start(): Promise<void> {
     antialias: true,
     forceWebGL: params.get('renderer') === 'webgl',
   });
-  // Falls back to WebGL 2 by itself when the browser has no WebGPU.
-  await Promise.all([renderer.init(), RAPIER.init()]);
+  // Falls back to WebGL 2 by itself when the browser has no WebGPU. A logged-in driver's
+  // kept values are in storage before anything below reads it.
+  const [, , account] = await Promise.all([renderer.init(), RAPIER.init(), signIn()]);
   const backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
   // Graphics settings from the menu (remembered on this computer); ?quality=low|medium|high
   // picks a preset for this visit. `built` is what the world was built with.
@@ -679,6 +681,7 @@ async function start(): Promise<void> {
     });
     start.setPlayers(others.list());
     start.setAddresses(welcome.addresses ?? []);
+    start.setAccount(account?.email ?? null);
     world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });

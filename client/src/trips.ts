@@ -1,7 +1,7 @@
 // Trips: from choosing a destination to arriving there, the time spent driving and the
 // distance covered; and the logbook of every arrival, kept in this browser.
 
-import type { SeasonState } from '@spar/shared';
+import { LOGBOOK_KEY, LOGBOOK_MAX, type SeasonState } from '@spar/shared';
 import type { Destination } from './ui/map';
 
 export interface LogEntry {
@@ -37,12 +37,10 @@ interface Trip {
   jumped: boolean;
 }
 
-const LOG_KEY = 'spar.logbook';
+const LOG_KEY = LOGBOOK_KEY;
 /** The trip to the driver's own destination, and to the one shared with everyone. */
 export type TripKind = 'own' | 'shared';
 const TRIP_KEYS: Record<TripKind, string> = { own: 'spar.trip', shared: 'spar.trip.shared' };
-/** Most entries kept; the oldest go first. */
-const LOG_MAX = 500;
 
 /** Storage that may be missing or refuse (private windows, blocked site data). */
 function load<T>(storage: () => Storage, key: string): T | null {
@@ -139,7 +137,7 @@ export class Trips {
       at: now,
     };
     this.entries.push(entry);
-    if (this.entries.length > LOG_MAX) this.entries.splice(0, this.entries.length - LOG_MAX);
+    if (this.entries.length > LOGBOOK_MAX) this.entries.splice(0, this.entries.length - LOGBOOK_MAX);
     save(() => localStorage, LOG_KEY, this.entries);
     return entry;
   }

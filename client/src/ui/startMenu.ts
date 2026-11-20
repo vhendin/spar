@@ -113,6 +113,8 @@ export class StartMenu {
   private playersLabel = document.createElement('div');
   /** Where friends on the same network open the game, once the server has said. */
   private readonly invite = document.createElement('p');
+  /** Who is logged in, when the game is reached through the login. */
+  private readonly account = document.createElement('p');
   private picture: HTMLCanvasElement | null = null;
   /** Whether this computer may make and remove areas (it runs the server). */
   private maker = false;
@@ -136,6 +138,8 @@ export class StartMenu {
     this.playersLabel.textContent = 'On the road';
     this.invite.className = 'invite';
     this.invite.style.display = 'none';
+    this.account.className = 'invite';
+    this.account.style.display = 'none';
     this.box = document.createElement('div');
     this.box.className = 'box';
     this.preview = document.createElement('canvas');
@@ -230,7 +234,7 @@ export class StartMenu {
 
     add('h1', 'Spår');
     add('p', 'A quiet off-road game about Swedish backroads, weather and slow light.', box, 'sub');
-    box.append(this.invite);
+    box.append(this.invite, this.account);
 
     const columns = add('div', '', box, 'columns');
     const left = add('div', '', columns, 'column');
@@ -359,6 +363,12 @@ export class StartMenu {
       code.textContent = a;
       this.invite.append(code);
     });
+  }
+
+  /** The logged-in driver, whose name, logbook, place and settings are kept on the server; null for a guest. */
+  setAccount(email: string | null): void {
+    this.account.style.display = email ? '' : 'none';
+    this.account.textContent = email ? `Signed in as ${email}: your name, logbook, settings and where you left off are kept for you` : '';
   }
 
   /** How many others drive in each region, on its card. */

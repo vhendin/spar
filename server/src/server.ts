@@ -6,6 +6,8 @@ import { dayOfYear, PROTOCOL_VERSION, seasonAt, type Player, type SeasonCalendar
 import seasonDefs from '../../defs/seasons.json';
 import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
+import { AccessVerifier } from './access';
+import { AccountStore, cleanChanges } from './accounts';
 import { AREA_SIZES, AreaMaker, checkRequest, cleanStarts, fromHost, readStarts, writeStarts, type AreaRequest } from './areas';
 import { cleanName, describeWorldChange, playerList } from './players';
 import { listRegions } from './regions';
@@ -106,7 +108,31 @@ async function handleStarts(req: IncomingMessage, res: ServerResponse, region: s
   json(res, 200, starts);
 }
 
-export function createGameServer(config: ServerConfig): GameServer {
+/**
+ * /api/me: who is logged in (through Cloudflare Access) and what is kept for them; PUT keeps
+ * changes. Guests get an empty answer and cannot keep anything.
+ */
+async function handleMe(req: IncomingMessage, res: ServerResponse, access: AccessVerifier | null, accounts: AccountStore): Promise<void> {
+  const email = access ? await access.email(req) : null;
+  if (req.method === 'GET') return json(res, 200, email ? { email, values: await accounts.get(email) } : {});
+  if (req.method !== 'PUT') return json(res, 405, { error: 'GET or PUT.' });
+  if (!email) return json(res, 403, { error: 'Not logged in.' });
+  // Only the game's own page: a form on another site cannot send JSON with this header.
+  const site = req.headers['sec-fetch-site'];
+  if (req.headers['x-spar'] !== '1' || (site !== undefined && site !== 'same-origin')) return json(res, 403, { error: 'Not from the game.' });
+  let changes;
+  try {
+    changes = cleanChanges(await readBody(req, 1 << 20));
+  } catch {
+    changes = null;
+  }
+  if (!changes) return json(res, 400, { error: 'Bad request.' });
+  json(res, 200, { values: await accounts.update(email, changes) });
+}
+
+export function createGameServer(config: ServerConfig, deps: { access?: AccessVerifier } = {}): GameServer {
+  const access = deps.access ?? (config.access ? new AccessVerifier(config.access) : null);
+  const accounts = new AccountStore(config.accountsDir);
   const maker = new AreaMaker({
     defsDir: config.defsDir,
     startsDir: config.startsDir,
@@ -120,6 +146,13 @@ export function createGameServer(config: ServerConfig): GameServer {
     const starts = /^\/api\/starts\/([a-z0-9_-]+)$/.exec(apiPath);
     if (starts) {
       handleStarts(req, res, starts[1]!, config).catch((err: unknown) => {
+        console.error('request failed', apiPath, err);
+        if (!res.headersSent) json(res, 500, { error: 'Server error.' });
+      });
+      return;
+    }
+    if (apiPath === '/api/me') {
+      handleMe(req, res, access, accounts).catch((err: unknown) => {
         console.error('request failed', apiPath, err);
         if (!res.headersSent) json(res, 500, { error: 'Server error.' });
       });

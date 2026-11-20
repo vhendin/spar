@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseLocalTime, type WeatherState } from '@spar/shared';
+import { teamDomain, type AccessConfig } from './access';
 
 export interface ServerConfig {
   host: string;
@@ -35,6 +36,10 @@ export interface ServerConfig {
   addresses?: string[];
   /** Seconds a dropped player keeps their place for, to come back as the same player; 60 if left out. */
   rejoinSeconds?: number;
+  /** Cloudflare Access in front of the server: logged-in drivers have accounts. Left out, everyone is a guest. */
+  access?: AccessConfig;
+  /** Folder of what is kept for each account. */
+  accountsDir: string;
 }
 
 /** Central European standard time; the game does not follow summer time. */
@@ -59,6 +64,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const weather = env.WEATHER ?? '';
   if (!['', 'clear', 'overcast', 'rain'].includes(weather)) throw new Error(`WEATHER must be clear, overcast or rain, got "${weather}"`);
   // Comma separated, as "https://spar.example.se, http://192.168.1.20:8080".
+  const team = (env.ACCESS_TEAM ?? '').trim(), aud = (env.ACCESS_AUD ?? '').trim();
+  if (!team !== !aud) throw new Error('ACCESS_TEAM and ACCESS_AUD go together: set both, or neither');
   const addresses = (env.ADDRESS ?? '').split(',').map((a) => a.trim().slice(0, 100)).filter(Boolean).slice(0, 8);
   return {
     startUtc,
@@ -74,10 +81,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     defsDir: resolve(env.DEFS_DIR ?? '../defs/regions'),
     rawDir: resolve(env.RAW_DIR ?? '../data/raw'),
     startsDir: resolve(env.STARTS_DIR ?? '../data/starts'),
+    accountsDir: resolve(env.ACCOUNTS_DIR ?? '../data/accounts'),
     // Making areas runs the importer through Docker from the repository; inside the game's own
     // container there is no Docker, so it is off there unless IMPORTER says how.
     importer: (env.IMPORTER ?? (existsSync('/.dockerenv') ? '' : 'docker compose run --rm importer')).split(' ').filter(Boolean),
     importerCwd: resolve(env.IMPORTER_CWD ?? '..'),
     ...(addresses.length ? { addresses } : {}),
+    ...(team ? { access: { team: teamDomain(team), aud } } : {}),
   };
 }

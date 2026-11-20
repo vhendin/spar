@@ -141,12 +141,21 @@ The same machinery would later allow towing with a strap, and pushing a stuck ve
 - **From outside the home network:** a Cloudflare Tunnel, run as the `tunnel` service in
   `compose.yaml` (`docker compose --profile tunnel up -d`, token in `.env` as
   `TUNNEL_TOKEN`), reaches the game at `http://game:8080` from inside Docker, so no port is
-  opened in the router. The page is then https and the client uses `wss` by itself. Anyone
-  with the link can join, so Cloudflare Access (an allow list of emails) belongs in front.
-  Players at home keep using the home address, which skips the round trip to Cloudflare.
-  `ADDRESS` takes both, comma separated, and the start menu shows them all.
-- **Name and colour:** asked for the first time and remembered in the browser. No passwords; it
-  is a home network. A player who reconnects within a minute keeps their slot (built).
+  opened in the router. The page is then https and the client uses `wss` by itself. Cloudflare
+  Access stands in front (an allow list of emails, a one-time code by email). Players at
+  home keep using the home address, which skips the round trip to Cloudflare. `ADDRESS`
+  takes both, comma separated, and the start menu shows them all.
+- **Accounts (built):** with `ACCESS_TEAM` and `ACCESS_AUD` set, the server checks the token
+  Access signs into every request (against the team's public keys, so a request from the
+  home network cannot pretend). `GET /api/me` tells the page who is logged in and what is
+  kept for them: the browser values under `ACCOUNT_KEYS` (name, paint, region, vehicle,
+  start, last position, logbook, settings, minimap zoom, gamepad). The page puts them in its
+  storage before reading it, and sends back what changed every 5 s and when it is hidden
+  (`PUT /api/me`, same-origin only). The logbook is merged, so arrivals from two devices are
+  all kept. One JSON file per account in the `accounts` volume. Home-network players are
+  guests and keep things in their browser, as before.
+- **Name and colour:** asked for the first time and remembered in the browser, and on the
+  server for a logged-in driver. No passwords of our own. A player who reconnects within a minute keeps their slot (built).
 - **Chat:** Enter opens a line at the bottom; messages fade after a while. Arrivals, players
   joining and leaving, and world changes are also shown there.
 - **Player list:** in the menu (Esc) and the start menu; the other players also show on the
