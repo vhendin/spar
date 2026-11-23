@@ -13,16 +13,9 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   (chair), 420 m (gondola) or 130 m (drag lift), and a tower wherever the rope would come
   closer than 6 / 8 / 4.2 m to the ground. Towers are 9–12.5 m (chair), 13–18 m (gondola),
   6–7.5 m (drag). Do they look right next to the real ones you know?
-- **Standing still.** Chairs, cabins and hangers hang on the rope but do not move. Make them
-  run (they would need to be the same for everyone)?
 - **Ski runs** (`piste:type=downhill`) are cleared of trees and turn to grass where there was
   forest. Runs drawn as a line are taken as 30 m wide unless a width is mapped. Too wide,
-  too narrow? Cross-country tracks are not cleared: wanted?
-- **The whole ski area is no longer grass.** `landuse=winter_sports` outlines the whole
-  resort, forest between the runs included, and used to turn all of it into grass. Now only
-  the runs and lift lines are open.
-- **Stations as destinations**: "Top of VM6:an" in the map's list of places, and in the
-  logbook when you get there?
+  too narrow?
 
 ### Fences, edges and the compass (this commit)
 
@@ -47,11 +40,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Multiplayer stage 3, one world (1a75282)
 
-- **Felled trees last for the session.** The server forgets them when it restarts, and playing
-  alone (no server) they are forgotten on reload, as before. Should the server keep them on
-  disk, so a forest stays knocked down from one evening to the next?
-- **Joining in another region** loads that region (the page reloads), then sets you off behind
-  them once their vehicle shows up. Fine, or should "Join" only be offered in your own region?
+(Both questions answered, see below.)
 
 ### Mud and water (f536609)
 
@@ -77,13 +66,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   3.52 m long, 2.06 m wheelbase, 155 Nm, three gears, governed at 4000 rpm (105 km/h),
   0.375 m wheels, 23 cm clearance. Quicker and twitchier than the Terrängbil; it turns
   sharply at low speed. Too tippy, too slow, about right?
-- **Differentials.** Open at the front, lockable at the back (Digit2 only), so it is clearly
-  weaker off road than the military ones. The real M38A1 had no locks at all. Keep the rear
-  lock, take it away, or make the front lockable too?
-- **Sinking.** How deep a tyre settles depends on its size and the ground, not on the weight, so
-  the light vehicle sinks about as far (relative to its wheels) as the heavy ones. Should ground
-  pressure count, so it floats better over bog?
-- **Colour.** Faded red. Another colour, or several to choose from?
 
 ### Terrängkombi V8 (lc200, this commit)
 
@@ -92,17 +74,9 @@ Terrängbil without Volvo's): 2700 kg, 650 Nm at 1600–2800 rpm, six-speed auto
 2.62, 0.40 m road-biased all-terrain tyres, 22.5 cm clearance, 0.7 m wading, an add-on 42 kN
 winch. 0–100 km/h in about 9 s, about 200 km/h flat out.
 
-- **Traction control instead of locks.** Both axles have open differentials with A-TRAC (new
-  differential type `braked`): a spinning wheel is braked so the other one pushes with its
-  half of the torque. Better than open, short of locked; there is nothing to switch. Some
-  markets had a rear locker: wanted (Digit2)?
 - **Feel.** On dry grass it climbs 25° in high range and 27.5° in low, grip-limited; it is
   quick and comfortable on roads but with the lower clearance and road tyres no better than
   the Terrängbil in a bog. Right balance?
-- **Look.** The body generator makes it boxy (closer to an older Land Cruiser): a sloping,
-  rounded bonnet and a slanted tailgate would need new body options. Worth it?
-- **Colour.** Dark grey. Another?
-- **Crawl control** (off-road cruise control at walking pace): wanted?
 
 ### Elpickup (elpickup, this commit)
 
@@ -121,10 +95,6 @@ same as the Terrängkombi.
   Too quiet next to the tyres, too sci-fi, the warning hum annoying?
 - **Regeneration.** Lifting off brakes at about 0.15 g down to a crawl, much harder than an
   engine. One-pedal driving feels like that in the real one; too strong in a game?
-- **Rear-wheel steering** turns the rear wheels up to 10° against the front at walking pace,
-  fading out by 60 km/h. The real one also steers them with the front at speed; wanted?
-- **Air suspension.** The real one raises itself to 44 cm in an "extract" mode and lowers on
-  the road. Fixed at 30 cm now. A key to raise and lower it?
 - **Locks.** Wikipedia names a front locker on the dual-motor; the rear is shown as traction
   control. Lockable rear too?
 - **Look.** The wedge comes from a new `body.profile` (a side outline) and light bars across
@@ -247,6 +217,26 @@ same as the Terrängkombi.
 - **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
 ## Answered
+
+- Decisions of 2026-11-23 (to do unless marked otherwise):
+  - Moving chairs, cabins and hangers on the lifts: later; they stand still for now.
+  - Cross-country tracks (`piste:type=nordic`): clear a narrow strip, about 4–6 m.
+  - Lift top stations become destinations ("Top of VM6:an"), every kind of lift.
+  - `landuse=winter_sports` stays as built: forest between the runs, only runs and lift lines
+    open. (Done.)
+  - Felled trees and broken fences stay session-only; the server does not save them. (As is.)
+  - Join in another region stays: it switches you to their region. (As is.)
+  - Light 4×4: no locks at all, like the real M38A1 (drop the rear lock).
+  - Sinking: count ground pressure (load per tyre area), so light vehicles and wide tyres
+    float better over bog and heavy ones sink deeper.
+  - Colours: keep the defaults (faded red light 4×4, dark grey Terrängkombi). (As is.)
+  - Terrängkombi: no rear locker, traction control only. (As is.)
+  - Terrängkombi body: add body options for a sloping, rounded bonnet and a slanted tailgate.
+  - Terrängkombi: crawl control, a key in low range with a few speeds of about 1–5 km/h.
+  - Elpickup rear-wheel steering like the real one: against the front at low speed, with it
+    (a few degrees) at high speed.
+  - Elpickup air suspension: a key to raise and lower it (road, normal, high, extract 44 cm),
+    high settings only at low speed.
 
 - Logins: Cloudflare Access (email one-time code) in front of `spar.vhendin.se`, and the
   game ties each driver to their login email. Kept per account on the server: name and
