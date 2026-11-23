@@ -250,6 +250,16 @@ function rotate(q: { x: number; y: number; z: number; w: number }, x: number, y:
   return [x + q.w * tx + (q.y * tz - q.z * ty), y + q.w * ty + (q.z * tx - q.x * tz), z + q.w * tz + (q.x * ty - q.y * tx)];
 }
 
+/** a turned by b afterwards in a's own frame (a·b). */
+function mul(a: Quat, b: Quat): Quat {
+  return {
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+  };
+}
+
 export class VehicleSim {
   readonly body: RAPIER.RigidBody;
   readonly drivetrain: DrivetrainState = newDrivetrainState();
@@ -434,6 +444,79 @@ export class VehicleSim {
     this.drowned = false;
     this.drowning = 0;
     for (const wheel of this.wheels) wheel.sink = wheel.water = 0;
+  }
+
+  /**
+   * Sets it down at (x, z) facing `heading`, tilted to the slope under its wheels and high
+   * enough that no wheel and no corner of the body is in the ground (set down level at the
+   * height under its middle, a long vehicle across a slope had one end inside the hill).
+   * False where the ground is unknown.
+   */
+  setDownOn(x: number, z: number, heading: number, groundAt: (x: number, z: number) => number | null): boolean {
+    const pose = this.restingPose(x, z, heading, groundAt);
+    if (!pose) return false;
+    this.place(x, pose.y, z, heading);
+    this.body.setRotation(pose.q, true);
+    return true;
+  }
+
+  /**
+   * Whether it would stand clear of rocks, trunks, buildings and other vehicles set down at
+   * (x, z) facing `heading`.
+   */
+  fitsAt(x: number, z: number, heading: number, groundAt: (x: number, z: number) => number | null): boolean {
+    const pose = this.restingPose(x, z, heading, groundAt);
+    if (!pose) return false;
+    let hit = false;
+    const filter = groups(GROUP_VEHICLE, GROUP_OBSTACLE | GROUP_VEHICLE);
+    for (const handle of this.chassis) {
+      const c = this.world.getCollider(handle);
+      if (!c) continue;
+      // The body's colliders sit at its origin, their shapes given in its frame.
+      this.world.intersectionsWithShape({ x, y: pose.y, z }, pose.q, c.shape, () => {
+        hit = true;
+        return false;
+      }, undefined, filter, undefined, this.body);
+      if (hit) return false;
+    }
+    return true;
+  }
+
+  private restingPose(x: number, z: number, heading: number, groundAt: (x: number, z: number) => number | null): { y: number; q: { x: number; y: number; z: number; w: number } } | null {
+    const yaw = ((180 - heading) * Math.PI) / 180;
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    const ground = (lx: number, lz: number): number | null => groundAt(x + c * lx + s * lz, z - s * lx + c * lz);
+    const middle = groundAt(x, z);
+    if (middle === null) return null;
+    const or = (h: number | null): number => h ?? middle;
+    const { axles } = this.def;
+    const front = Math.max(...axles.map((a) => a.z)), rear = Math.min(...axles.map((a) => a.z));
+    const track = Math.max(...axles.map((a) => a.track)) / 2;
+    const hf = (or(ground(track, front)) + or(ground(-track, front))) / 2;
+    const hr = (or(ground(track, rear)) + or(ground(-track, rear))) / 2;
+    const hl = (or(ground(track, front)) + or(ground(track, rear))) / 2;
+    const hrt = (or(ground(-track, front)) + or(ground(-track, rear))) / 2;
+    const limit = (a: number): number => Math.max(-0.6, Math.min(0.6, a));
+    // Nose up where the ground ahead is higher (about local x), the higher side up (about z).
+    const pitch = front > rear ? -limit(Math.atan((hf - hr) / (front - rear))) : 0;
+    const roll = track > 0 ? limit(Math.atan((hl - hrt) / (2 * track))) : 0;
+    const qy = { x: 0, y: Math.sin(yaw / 2), z: 0, w: Math.cos(yaw / 2) };
+    const qx = { x: Math.sin(pitch / 2), y: 0, z: 0, w: Math.cos(pitch / 2) };
+    const qz = { x: 0, y: 0, z: Math.sin(roll / 2), w: Math.cos(roll / 2) };
+    const q = mul(mul(qy, qx), qz);
+    // High enough over every wheel and every corner of the body.
+    const { box, groundClearance } = this.def.chassis;
+    const [w, , l] = box.size as [number, number, number];
+    const cz = box.center[2]!;
+    const points: [number, number, number, number][] = [];
+    for (const a of axles) for (const side of [1, -1]) points.push([side * a.track / 2, 0, a.z, 0.25]);
+    for (const side of [1, -1]) for (const end of [cz + l / 2, cz - l / 2]) points.push([side * w / 2, groundClearance, end, 0.1]);
+    let y = -Infinity;
+    for (const [px, py, pz, margin] of points) {
+      const [ox, oy, oz] = rotate(q, px, py, pz);
+      y = Math.max(y, or(groundAt(x + ox, z + oz)) + margin - oy);
+    }
+    return { y, q };
   }
 
   /** How upright the vehicle stands: 1 on its wheels, 0 on its side, -1 on its roof. */

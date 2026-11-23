@@ -620,14 +620,29 @@ async function start(): Promise<void> {
 
   const setDown = (w: World, x0: number, z0: number, heading: number, clear = false): boolean => {
     // At a start point, not on top of another driver who set off from the same one.
-    const { x, z } = clear ? others.clearSpot(x0, z0, heading) : { x: x0, z: z0 };
-    const y = w.ground.heightAt(x, z);
-    if (y === null) return false;
+    let { x, z } = clear ? others.clearSpot(x0, z0, heading) : { x: x0, z: z0 };
+    const groundAt = (gx: number, gz: number): number | null => w.ground.heightAt(gx, gz);
+    if (groundAt(x, z) === null) return false;
+    // Clear of rocks, trunks and buildings: the nearest free spot, back, ahead or to a side.
+    if (!w.sim.fitsAt(x, z, heading, groundAt)) {
+      const yaw = ((180 - heading) * Math.PI) / 180;
+      const fx = Math.sin(yaw), fz = Math.cos(yaw);
+      found: for (const d of [1.5, 3, 4.5, 6, 8, 10]) {
+        for (const [a, b] of [[-1, 0], [1, 0], [0, 1], [0, -1], [-1, 1], [-1, -1], [1, 1], [1, -1]] as const) {
+          const cx = x + (fx * a + fz * b) * d, cz = z + (fz * a - fx * b) * d;
+          if (groundAt(cx, cz) !== null && w.sim.fitsAt(cx, cz, heading, groundAt)) {
+            x = cx;
+            z = cz;
+            break found;
+          }
+        }
+      }
+    }
     towing.reclaim();
     w.tracks.break();
     w.winch.stow();
     jumps++;
-    w.sim.place(x, y + 0.25, z, heading);
+    w.sim.setDownOn(x, z, heading, groundAt);
     w.view.snap();
     chase.reset();
     return true;

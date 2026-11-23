@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { VehicleDef } from '@spar/shared';
-import { GROUP_GROUND, groups, VehicleSim, type GroundProbe, type VehicleInput } from './sim';
+import { GROUP_GROUND, GROUP_OBSTACLE, groups, VehicleSim, type GroundProbe, type VehicleInput } from './sim';
 
 const load = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, `../../../defs/vehicles/${name}.json`), 'utf8')) as VehicleDef;
 const DT = 1 / 60;
@@ -52,6 +52,29 @@ function setup(
 }
 
 describe.each(['tgb11', 'tgb13', 'ltb4'])('%s', (name) => {
+  it('is set down on a steep slope tilted to it, every wheel on the ground', () => {
+    const slope = 25;
+    const { car, run, tiltOf } = setup(name, { slope });
+    const groundAt = (_x: number, z: number): number => -Math.tan((slope * Math.PI) / 180) * z;
+    expect(car.setDownOn(0, 0, 0, groundAt)).toBe(true);
+    expect(Math.abs(tiltOf() - (slope * Math.PI) / 180)).toBeLessThan(0.02);
+    // Nose up the hill: its forward axis (local +z) points upwards.
+    const r = car.body.rotation();
+    expect(2 * (r.y * r.z - r.w * r.x)).toBeGreaterThan(0.3);
+    run(2, { handbrake: true });
+    expect(car.wheels.every((w) => w.contact)).toBe(true);
+    expect(Math.abs(tiltOf() - (slope * Math.PI) / 180)).toBeLessThan(0.05);
+  });
+
+  it('knows a rock where it would be set down', () => {
+    const { world, car } = setup(name);
+    world.createCollider(RAPIER.ColliderDesc.cuboid(0.6, 0.6, 0.6).setTranslation(0, 0.5, 0).setCollisionGroups(groups(GROUP_OBSTACLE, 0xffff)));
+    world.step();
+    const flat = (): number => 0;
+    expect(car.fitsAt(0, 0, 0, flat)).toBe(false);
+    expect(car.fitsAt(20, 0, 0, flat)).toBe(true);
+  });
+
   it('settles on its wheels at the height the definition says', () => {
     const { car, run, tiltOf } = setup(name);
     run(3);
