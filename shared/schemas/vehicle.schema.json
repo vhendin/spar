@@ -427,8 +427,23 @@
               "description": "Height of the bonnet's top at the front.",
               "type": "number",
               "exclusiveMinimum": 0
+            },
+            "rise": {
+              "description": "How much higher the bonnet's top is at the windscreen than at the front, metres; 0.06 when left out. A larger rise gives a sloping bonnet.",
+              "type": "number",
+              "minimum": 0
+            },
+            "nose": {
+              "description": "Radius of the rounded edge where the bonnet's top meets the front, metres; a sharp edge when left out.",
+              "type": "number",
+              "minimum": 0
             }
           }
+        },
+        "tailgateRake": {
+          "description": "On a hard top: how far the top of the back leans forward from the beltline, metres; upright when left out.",
+          "type": "number",
+          "minimum": 0
         },
         "profile": {
           "description": "The body's side outline as [z, y] points (z forward, y up), convex, in order round the outline. Replaces the bonnet, cab and rear shapes with one wedge or slab; the windscreen lies on the outline where it crosses the beltline at the front, and the side windows follow the outline above the beltline.",

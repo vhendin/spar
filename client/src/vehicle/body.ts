@@ -192,6 +192,32 @@ export function exhaustOutlet(def: VehicleDef): P3 {
   return [-(b.width / 2 - 0.2), Math.min(def.chassis.groundClearance + 0.12, b.floor - 0.11), -b.length / 2 - 0.2];
 }
 
+/**
+ * The bonnet's side outline, from its foot at the cab round the front and back along the top.
+ * The top rises from `height` at the front to `height + rise` at the windscreen; a `nose`
+ * radius rounds the edge between front and top with an arc touching both.
+ */
+export function bonnetOutline(bonnet: NonNullable<VehicleDef['body']['bonnet']>, front: number, half: number, floor: number): P2[] {
+  const h = bonnet.height, rise = bonnet.rise ?? 0.06, r = Math.min(bonnet.nose ?? 0, h - floor - 0.25, half - front - 0.1);
+  const slope = rise / Math.max(0.1, half - front);
+  const foot: P2[] = [[front, floor], [half - 0.05, floor], [half, floor + 0.2]];
+  if (r <= 0.005) return [...foot, [half, h], [front, h + rise]];
+  // The arc's centre lies r in from the front and r below the top line.
+  const cz = half - r, cy = h + slope * r - r * Math.hypot(1, slope);
+  const end = Math.PI - Math.atan(slope), steps = 6, arc: P2[] = [];
+  for (let k = 0; k <= steps; k++) {
+    const a = Math.PI / 2 + ((end - Math.PI / 2) * k) / steps;
+    arc.push([cz + r * Math.sin(a), cy - r * Math.cos(a)]);
+  }
+  return [...foot, ...arc, [front, h + rise]];
+}
+
+/** Where the rear's top meets the back, leaning forward from the beltline by `tailgateRake`. */
+function tailgateAt(def: VehicleDef, y: number): number {
+  const b = def.body, rake = b.rear === 'hardtop' && !b.profile ? (b.tailgateRake ?? 0) : 0;
+  return -b.length / 2 + rake * Math.max(0, Math.min(1, (y - b.beltline) / (b.height - 0.02 - b.beltline)));
+}
+
 /** Where the cab starts: the front of the body, the back of the bonnet, or where the outline crosses the beltline. */
 function cabFront(def: VehicleDef): number {
   const b = def.body;
@@ -292,11 +318,9 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
   // One outline for the whole body: a wedge, say.
   if (outline) m.prism(outline, -hw, hw, c.body);
 
-  // An engine bonnet ahead of the cab, sloping up a little towards the windscreen.
-  if (b.bonnet && !outline) {
-    const h = b.bonnet.height;
-    m.prism([[front, b.floor], [half - 0.05, b.floor], [half, b.floor + 0.2], [half, h], [half - 0.06, h + 0.02], [front, h + 0.06]], -hw + 0.04, hw - 0.04, c.body);
-  }
+  // An engine bonnet ahead of the cab, sloping up towards the windscreen, its front edge
+  // sharp or rounded.
+  if (b.bonnet && !outline) m.prism(bonnetOutline(b.bonnet, front, half, b.floor), -hw + 0.04, hw - 0.04, c.body);
 
   if (open) {
     // A tub of thin walls, so it can be seen into, and the windscreen in a frame.
@@ -340,10 +364,11 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
     }
     for (let z = -half + 0.35; z < cabBack - 0.2; z += 0.8) m.box(-cw - 0.012, b.beltline - 0.1, z - 0.02, cw + 0.012, top + 0.04, z + 0.02, c.trim);
   } else {
-    m.box(-hw, b.floor, -half, hw, top - 0.02, cabBack, c.body);
+    // A hard top, its back upright or leaning forward above the beltline.
+    m.prism([[-half, b.floor], [cabBack, b.floor], [cabBack, top - 0.02], [tailgateAt(def, top - 0.02), top - 0.02], [-half, b.beltline]], -hw, hw, c.body);
   }
   if (b.rear === 'canvas') m.box(-hw + 0.05, top - 0.02, cabBack, hw - 0.05, top + 0.015, front - lean - 0.2, c.roof);
-  else if (!open && !outline) m.box(-hw + 0.05, top - 0.02, -half + 0.05, hw - 0.05, top + 0.015, front - lean - 0.2, c.roof);
+  else if (!open && !outline) m.box(-hw + 0.05, top - 0.02, tailgateAt(def, top) + 0.05, hw - 0.05, top + 0.015, front - lean - 0.2, c.roof);
 
   // Glass, a mesh of its own: from inside the cab it would block the view.
   const glass = new FlatMesh();
@@ -371,7 +396,10 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
     if (b.rear === 'hardtop' && !outline) {
       const length = cabBack + half;
       for (const [f0, f1] of [[0.08, 0.46], [0.54, 0.92]] as const) {
-        glass.box(Math.min(x0, x1), b.beltline + 0.1, -half + length * f0, Math.max(x0, x1), top - 0.2, -half + length * f1, c.glass);
+        // The rear edge keeps clear of a leaning tailgate.
+        const y0 = b.beltline + 0.1, y1 = top - 0.2, z1 = -half + length * f1;
+        const back = (y: number): number => Math.max(-half + length * f0, tailgateAt(def, y) + 0.1);
+        glass.prism([[back(y0), y0], [z1, y0], [z1, y1], [back(y1), y1]], Math.min(x0, x1), Math.max(x0, x1), c.glass);
       }
     }
     // Wheel arches: dark panels over each wheel.
@@ -391,7 +419,12 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
       }
     }
   }
-  if (b.rear === 'hardtop' && !outline) glass.box(-hw + 0.25, b.beltline + 0.12, -half - g, hw - 0.25, top - 0.22, -half + 0.01, c.glass);
+  if (b.rear === 'hardtop' && !outline) {
+    // The rear window, lying on the tailgate just proud of it.
+    const y0 = b.beltline + 0.12, y1 = top - 0.22, z0 = tailgateAt(def, y0), z1 = tailgateAt(def, y1);
+    const len = Math.hypot(z1 - z0, y1 - y0) || 1, nz = (-(y1 - y0) / len) * g, ny = ((z1 - z0) / len) * g;
+    glass.prism([[z0 + nz, y0 + ny], [z1 + nz, y1 + ny], [z1 + 0.01, y1], [z0 + 0.01, y0]], -hw + 0.25, hw - 0.25, c.glass);
+  }
 
   if (b.spareWheel) {
     const y = Math.max(b.floor + radius, b.beltline - radius * 0.4);
@@ -419,7 +452,7 @@ export function buildVehicleMeshes(def: VehicleDef): VehicleMeshes {
   }
 
   if (b.roofRack && b.rear !== 'canvas' && !outline) {
-    const y = top + 0.09, x = hw - 0.12, z0 = -half + 0.15, z1 = cabBack + 0.3;
+    const y = top + 0.09, x = hw - 0.12, z0 = tailgateAt(def, top) + 0.15, z1 = cabBack + 0.3;
     for (const side of [x, -x]) m.box(side - 0.015, y, z0, side + 0.015, y + 0.03, z1, c.trim);
     for (let z = z0; z <= z1 + 0.01; z += (z1 - z0) / 4) {
       m.box(-x, y, z - 0.015, x, y + 0.03, z + 0.015, c.trim);

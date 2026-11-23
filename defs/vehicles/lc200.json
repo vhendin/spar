@@ -159,9 +159,12 @@
     "windscreenRake": 0.5,
     "bonnet": {
       "length": 1.3,
-      "height": 1.12
+      "height": 1.06,
+      "rise": 0.13,
+      "nose": 0.14
     },
     "rear": "hardtop",
+    "tailgateRake": 0.22,
     "roofRack": true,
     "spareWheel": false,
     "colors": {

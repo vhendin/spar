@@ -211,6 +211,10 @@ export interface Body {
   windscreenRake: number;
   bonnet?: Bonnet;
   /**
+   * On a hard top: how far the top of the back leans forward from the beltline, metres; upright when left out.
+   */
+  tailgateRake?: number;
+  /**
    * The body's side outline as [z, y] points (z forward, y up), convex, in order round the outline. Replaces the bonnet, cab and rear shapes with one wedge or slab; the windscreen lies on the outline where it crosses the beltline at the front, and the side windows follow the outline above the beltline.
    *
    * @minItems 3
@@ -242,6 +246,14 @@ export interface Bonnet {
    * Height of the bonnet's top at the front.
    */
   height: number;
+  /**
+   * How much higher the bonnet's top is at the windscreen than at the front, metres; 0.06 when left out. A larger rise gives a sloping bonnet.
+   */
+  rise?: number;
+  /**
+   * Radius of the rounded edge where the bonnet's top meets the front, metres; a sharp edge when left out.
+   */
+  nose?: number;
 }
 export interface BodyColors {
   body: VehicleColor;

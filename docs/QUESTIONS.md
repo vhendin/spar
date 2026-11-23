@@ -250,7 +250,7 @@ same as the Terrängkombi.
     against 24 kPa for the Terrängbil 11.)
   - Colours: keep the defaults (faded red light 4×4, dark grey Terrängkombi). (As is.)
   - Terrängkombi: no rear locker, traction control only. (As is.)
-  - Terrängkombi body: add body options for a sloping, rounded bonnet and a slanted tailgate.
+  - Terrängkombi body: add body options for a sloping, rounded bonnet and a slanted tailgate. (Done: bonnet `rise` and `nose`, `tailgateRake`.)
   - Terrängkombi: crawl control, a key in low range with a few speeds of about 1–5 km/h.
   - Elpickup rear-wheel steering like the real one: against the front at low speed, with it
     (a few degrees) at high speed.
