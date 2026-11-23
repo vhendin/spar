@@ -30,7 +30,8 @@ import { Tracks } from './vehicle/tracks';
 import { VehicleView } from './vehicle/view';
 import { Winch, type WinchControls } from './vehicle/winch';
 import { WinchView } from './vehicle/winchView';
-import { Drone, type DroneControls, type P3 } from './vehicle/drone';
+import { Drone, type DroneControls, type Obstacle, type P3 } from './vehicle/drone';
+import { DroneSound, thrustOf } from './audio/droneSound';
 import { DroneView } from './vehicle/droneView';
 import { Dashboard } from './ui/dashboard';
 import { listNames, Menu } from './ui/menu';
@@ -425,6 +426,23 @@ async function start(): Promise<void> {
   /** Why the drone key did nothing, shown for a moment. */
   let droneNote = { text: '', until: 0 };
   const NO_DRONE: DroneControls = { forward: 0, turn: 0, climb: 0 };
+  const droneSound = new DroneSound(audio);
+  const droneBefore = { x: 0, y: 0, z: 0 };
+  const droneNear: Obstacle[] = [];
+  /** Trunks (not leaves or needles), rocks and buildings round a point, as the drone runs into them. */
+  const droneSolids = (w: World) => (x: number, z: number): readonly Obstacle[] => {
+    droneNear.length = 0;
+    w.vegetation?.forEachSolid(x, z, 3, (_key, shape, px, py, pz, size, radiusPerHeight) => {
+      if (shape === 'rock') {
+        const r = radiusPerHeight * size;
+        droneNear.push({ kind: 'post', x: px, z: pz, r, bottom: py - 1, top: py + 0.25 * size + r });
+        return;
+      }
+      droneNear.push({ kind: 'post', x: px, z: pz, r: Math.max(0.07, radiusPerHeight * size), bottom: py - 1, top: py + size });
+    });
+    w.features?.forEachSolid(x, z, 2, (s) => droneNear.push({ kind: 'box', x: s.x, y: s.y, z: s.z, hx: s.hx, hy: s.hy, hz: s.hz, yaw: s.yaw }));
+    return droneNear;
+  };
   const insetCamera = new THREE.PerspectiveCamera(50, 1.6, 0.3, 4000);
   const droneReadout = document.createElement('div');
   droneReadout.id = 'drone-readout';
@@ -1480,7 +1498,8 @@ async function start(): Promise<void> {
       }
       const roof = roofOf(w);
       const piloting = drone.out && !flying && !w.map.open && !paused;
-      if (!paused) drone.step(dt, piloting ? input.drone() : NO_DRONE, roof, (x, z) => w.terrain.heightAt(x, z));
+      Object.assign(droneBefore, drone.v);
+      if (!paused) drone.step(dt, piloting ? input.drone() : NO_DRONE, roof, (x, z) => w.terrain.heightAt(x, z), droneSolids(w));
       if (piloting) tiltDrone(input.tilt() * dt * 1.2);
       droneView.group.visible = drone.out && !starting;
       droneView.update(paused ? 0 : dt, drone.p, drone.yaw, drone.v, true);
@@ -1652,6 +1671,8 @@ async function start(): Promise<void> {
       const inside = cab;
       audio.inside = inside;
       audio.listen(camera);
+      // The drone's rotors, softer heard from its own camera.
+      droneSound.update(drone.out && !starting, drone.p.x, drone.p.y, drone.p.z, thrustOf(drone.v, droneBefore, paused ? 0 : dt), drone.out && !flying ? 0.6 : 1);
       w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], impacts.splice(0), w.unplaced);
       const spec = w.sim.def.winch;
       w.sound.winch(paused ? 0 : dt, {

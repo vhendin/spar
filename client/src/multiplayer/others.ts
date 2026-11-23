@@ -21,6 +21,7 @@ import { WinchView, type CableView } from '../vehicle/winchView';
 import type { PlayerLine } from '../ui/players';
 import { snapshotPose, Track, type Pose } from './track';
 import { DroneView } from '../vehicle/droneView';
+import { DroneSound, thrustOf } from '../audio/droneSound';
 
 type Rapier = typeof RAPIER;
 
@@ -234,7 +235,7 @@ interface Other {
   /** Its winch cable, while out. */
   cable: { view: WinchView; state: RemoteCable } | null;
   /** Its scouting drone while out, eased towards where the snapshots put it, with its own name tag. */
-  drone: { view: DroneView; p: THREE.Vector3; v: THREE.Vector3; yaw: number; tag: HTMLDivElement } | null;
+  drone: { view: DroneView; p: THREE.Vector3; v: THREE.Vector3; before: THREE.Vector3; yaw: number; tag: HTMLDivElement; sound: DroneSound | null } | null;
 }
 
 export class Others {
@@ -628,15 +629,17 @@ export class Others {
       const tag = document.createElement('div');
       tag.className = 'tag drone';
       this.tags.append(tag);
-      o.drone = { view, p: new THREE.Vector3(x, y, z), v: new THREE.Vector3(), yaw, tag };
+      o.drone = { view, p: new THREE.Vector3(x, y, z), v: new THREE.Vector3(), before: new THREE.Vector3(), yaw, tag, sound: this.audio ? new DroneSound(this.audio) : null };
     }
     const d = o.drone;
     // Eased between snapshots; how fast it closes in is its speed, for the lean.
     const k = Math.min(1, dt * 8);
+    d.before.copy(d.v);
     d.v.set(x - d.p.x, y - d.p.y, z - d.p.z).multiplyScalar(8);
     d.p.lerp(this.lo.set(x, y, z), k);
     d.yaw += (Math.atan2(Math.sin(yaw - d.yaw), Math.cos(yaw - d.yaw))) * k;
     d.view.update(dt, d.p, d.yaw, d.v, true);
+    d.sound?.update(true, d.p.x, d.p.y, d.p.z, thrustOf(d.v, d.before, dt));
     // "Name's drone" over it, near enough.
     const width = window.innerWidth, height = window.innerHeight;
     this.at.copy(d.p).setY(d.p.y + 0.6);
@@ -658,6 +661,7 @@ export class Others {
     if (!o.drone) return;
     o.drone.view.dispose();
     o.drone.tag.remove();
+    o.drone.sound?.dispose();
     o.drone = null;
   }
 

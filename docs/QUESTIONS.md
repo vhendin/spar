@@ -7,12 +7,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ### Scouting drone (this commit)
 
-- **Left out for now, say if any should come:** it makes no sound; trees and buildings do not
-  stop it (only the ground); the gamepad has no button for it until one is set on the Controls
-  page (Q on the keyboard); while another browser runs your vehicle (on a cable) the others do
-  not see your drone; it does not show on the map or minimap.
+- **Left out for now, say if any should come:** the gamepad has no button for it until one is
+  set on the Controls page (Q on the keyboard); while another browser runs your vehicle (on a
+  cable) the others do not see your drone; it does not show on the map or minimap.
+- **Sound and solids (done):** a whirring buzz from four rotors, higher climbing or pushing
+  ahead, heard where it is (others' drones too). Trunks, rocks and buildings stop it; leaves
+  and needles do not (decided). Flying home it climbs over what is in the way.
 - **Play-test:** speed (16 m/s), turning, the camera tilt (mouse wheel, right stick) and the
-  size of the picture of the vehicle in the corner.
+  size of the picture of the vehicle in the corner; the loudness and pitch of the whirr.
 
 ### Vehicle menu (TODO 9)
 

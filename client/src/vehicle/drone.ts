@@ -1,6 +1,7 @@
 // The scouting drone: launched from the vehicle's roof while it stands still, flown by the
 // driver to look at the way ahead, and back home to the roof by itself when sent, at the end
-// of its range, or before its battery runs out. Only the terrain stops it; trees do not.
+// of its range, or before its battery runs out. The ground, trees, rocks and buildings stop it:
+// it slides along them, and flying home it climbs over what is in the way.
 
 export interface P3 {
   x: number;
@@ -53,6 +54,44 @@ export const DRONE = {
   still: 1,
 } as const;
 
+/**
+ * Something solid near the drone: an upright cylinder (a trunk, a tree's crown, a rock) from
+ * `bottom` to `top`, or a box turned `yaw` about the vertical (a building, a fence, a pylon).
+ */
+export type Obstacle =
+  | { kind: 'post'; x: number; z: number; r: number; bottom: number; top: number }
+  | { kind: 'box'; x: number; y: number; z: number; hx: number; hy: number; hz: number; yaw: number };
+
+/** How far the rotor tips reach from the middle, metres. */
+export const DRONE_RADIUS = 0.5;
+
+/**
+ * How far `p` must move to be clear of `o`, the shortest way out (sideways or up over it,
+ * never down into the ground), or null when it is clear already.
+ */
+export function pushOut(p: P3, o: Obstacle, radius = DRONE_RADIUS): P3 | null {
+  if (o.kind === 'post') {
+    if (p.y < o.bottom - radius || p.y > o.top + radius) return null;
+    const dx = p.x - o.x, dz = p.z - o.z;
+    const d = Math.hypot(dx, dz);
+    const side = o.r + radius - d;
+    if (side <= 0) return null;
+    const up = o.top + radius - p.y;
+    if (up < side) return { x: 0, y: up, z: 0 };
+    // Dead centre: out along +x, any way will do.
+    return d > 1e-6 ? { x: (dx / d) * side, y: 0, z: (dz / d) * side } : { x: side, y: 0, z: 0 };
+  }
+  const c = Math.cos(o.yaw), s = Math.sin(o.yaw);
+  const wx = p.x - o.x, wz = p.z - o.z;
+  // Into the box's own frame (three.js turns +x towards −z for a positive yaw).
+  const lx = wx * c - wz * s, lz = wx * s + wz * c, ly = p.y - o.y;
+  const ox = o.hx + radius - Math.abs(lx), oz = o.hz + radius - Math.abs(lz), oy = o.hy + radius - ly;
+  if (ox <= 0 || oz <= 0 || oy <= 0 || ly < -o.hy - radius) return null;
+  if (oy <= ox && oy <= oz) return { x: 0, y: oy, z: 0 };
+  const mx = ox < oz ? Math.sign(lx || 1) * ox : 0, mz = ox < oz ? 0 : Math.sign(lz || 1) * oz;
+  return { x: mx * c + mz * s, y: 0, z: -mx * s + mz * c };
+}
+
 export type DroneState = 'docked' | 'flying' | 'home';
 /** Why it is flying home. */
 export type HomeReason = 'sent' | 'range' | 'battery';
@@ -74,6 +113,8 @@ export class Drone {
   battery: number = DRONE.battery;
   /** Seconds since launch during which it rises clear of the roof by itself. */
   private rising = 0;
+  /** Seconds left of climbing after running into something on the way home. */
+  private bumped = 0;
 
   get out(): boolean {
     return this.state !== 'docked';
@@ -119,6 +160,7 @@ export class Drone {
       Object.assign(this.v, { x: 0, y: 0, z: 0 });
       this.yaw = yaw;
       this.rising = 0;
+      this.bumped = 0;
       return null;
     }
     if (this.state === 'flying') {
@@ -145,8 +187,11 @@ export class Drone {
     this.reason = reason;
   }
 
-  /** `roof` where it lands, live; `groundAt` the terrain height or null where unknown. */
-  step(dt: number, c: DroneControls, roof: P3, groundAt: (x: number, z: number) => number | null): void {
+  /**
+   * `roof` where it lands, live; `groundAt` the terrain height or null where unknown;
+   * `solids` what stands within a few metres of a point.
+   */
+  step(dt: number, c: DroneControls, roof: P3, groundAt: (x: number, z: number) => number | null, solids: (x: number, z: number) => readonly Obstacle[] = () => []): void {
     if (this.state === 'docked') {
       this.battery = Math.min(DRONE.battery, this.battery + (DRONE.battery / DRONE.charge) * dt);
       Object.assign(this.p, roof);
@@ -167,9 +212,30 @@ export class Drone {
     this.v.x = approach(this.v.x, want.x, k);
     this.v.y = approach(this.v.y, want.y, k);
     this.v.z = approach(this.v.z, want.z, k);
+    const was = { ...this.p };
     this.p.x += this.v.x * dt;
     this.p.y += this.v.y * dt;
     this.p.z += this.v.z * dt;
+    this.bumped = Math.max(0, this.bumped - dt);
+    // Trees and buildings: flying into one it stops against it and slides along. One it was
+    // already inside (launched under a crown) it leaves freely, and coming down onto the roof
+    // nothing counts: the vehicle stands there, so there is room.
+    const landingSoon = this.state === 'home' && this.distance(roof) < 2.5;
+    for (const o of landingSoon ? [] : solids(this.p.x, this.p.z)) {
+      const out = pushOut(this.p, o);
+      if (!out || pushOut(was, o)) continue;
+      this.p.x += out.x;
+      this.p.y += out.y;
+      this.p.z += out.z;
+      const n = Math.hypot(out.x, out.y, out.z);
+      const into = (this.v.x * out.x + this.v.y * out.y + this.v.z * out.z) / n;
+      if (into < 0) {
+        this.v.x -= (into * out.x) / n;
+        this.v.y -= (into * out.y) / n;
+        this.v.z -= (into * out.z) / n;
+      }
+      this.bumped = 1;
+    }
     // Never into the ground, never out of sight above it.
     const below = groundAt(this.p.x, this.p.z) ?? ground;
     const landing = this.state === 'home' && this.distance(roof) < 1;
@@ -196,6 +262,11 @@ export class Drone {
     if (d < 1) {
       // Over the roof: straight down, the last bit pulled in sideways.
       return { x: dx * 2, y: Math.max(-DRONE.landing, Math.min(DRONE.landing, (roof.y - this.p.y) * 2)), z: dz * 2 };
+    }
+    // Run into a tree or a house: up over it, edging on.
+    if (this.bumped > 0) {
+      const slow = Math.min(DRONE.homeSpeed, d * 0.8) * 0.25;
+      return { x: (dx / d) * slow, y: DRONE.climb, z: (dz / d) * slow };
     }
     const cruise = Math.max(roof.y + DRONE.homeHeight, ground + DRONE.homeHeight);
     // Far off, up first; nearer, down towards the roof as it closes in.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Drone, DRONE, type DroneControls } from './drone';
+import { Drone, DRONE, DRONE_RADIUS, pushOut, type DroneControls, type Obstacle } from './drone';
 
 const roof = { x: 100, y: 52.5, z: 200 };
 const flat = (): number => 50;
@@ -108,5 +108,40 @@ describe('scouting drone', () => {
     expect(left).toBeLessThan(DRONE.battery);
     fly(d, 1, none);
     expect(d.battery).toBeGreaterThan(left);
+  });
+
+  it('is pushed out of a trunk sideways, or up over a low one', () => {
+    const trunk: Obstacle = { kind: 'post', x: 0, z: 0, r: 0.3, bottom: 0, top: 20 };
+    expect(pushOut({ x: 2, y: 5, z: 0 }, trunk)).toBeNull();
+    const out = pushOut({ x: 0.5, y: 5, z: 0 }, trunk)!;
+    expect(out.x).toBeCloseTo(0.3 + DRONE_RADIUS - 0.5, 6);
+    expect(out.y).toBe(0);
+    expect(pushOut({ x: 0, y: 20.2, z: 0.2 }, trunk)!.y).toBeCloseTo(20 + DRONE_RADIUS - 20.2, 6);
+  });
+
+  it('is pushed out of a turned building the shortest way', () => {
+    // A long house turned a quarter: its long side runs along x in the world.
+    const house: Obstacle = { kind: 'box', x: 0, y: 3, z: 0, hx: 2, hy: 3, hz: 6, yaw: Math.PI / 2 };
+    expect(pushOut({ x: 0, y: 3, z: 3 }, house)).toBeNull();
+    const out = pushOut({ x: 4, y: 3, z: 1.5 }, house)!;
+    expect(out.z).toBeCloseTo(2 + DRONE_RADIUS - 1.5, 6);
+    expect(Math.abs(out.x)).toBeLessThan(1e-9);
+    expect(pushOut({ x: 0, y: 6.2, z: 0 }, house)!.y).toBeCloseTo(6 + DRONE_RADIUS - 6.2, 6);
+  });
+
+  it('stops against a trunk in its way, and climbs over it going home', () => {
+    const trunk: Obstacle = { kind: 'post', x: roof.x, z: roof.z + 30, r: 0.3, bottom: 49, top: 75 };
+    const solids = (): Obstacle[] => [trunk];
+    const d = new Drone();
+    d.key(roof, 0, 0);
+    for (let t = 0; t < 1.5; t += 1 / 60) d.step(1 / 60, none, roof, flat, solids);
+    for (let t = 0; t < 8; t += 1 / 60) d.step(1 / 60, ahead, roof, flat, solids);
+    expect(d.p.z).toBeLessThan(trunk.z - 0.3 - DRONE_RADIUS + 0.01);
+    // Out beyond it, then home: back over the trunk to the roof.
+    d.p.z = roof.z + 60;
+    d.p.y = 55;
+    d.key(roof, 0, 0);
+    for (let i = 0; i < 60 * 120 && d.out; i++) d.step(1 / 60, none, roof, flat, solids);
+    expect(d.state).toBe('docked');
   });
 });
