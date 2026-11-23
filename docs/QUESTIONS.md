@@ -22,6 +22,13 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   Real figures or bars to compare vehicles side by side?
 - **The view:** a turning model on a plain stage, or the vehicle where it stands in the world
   with an orbit camera? Choice of colour in the menu?
+- (Done, with my own answers until you say otherwise: "Look at them all…" under the vehicles
+  on the start screen and in the menu (Esc), where choosing one swaps it where it stands. A
+  turning model on a plain stage (drag to turn, ← → for the next), shown in the chosen paint;
+  paint is still picked on the start screen. Real figures with a bar against the strongest of
+  the vehicles: drive, weight, power, torque, top speed, climbing angle, gearbox, differentials,
+  ground clearance (the range with air suspension), wading, ground pressure, winch and extras.
+  Top speed and climbing are worked out from gearing, torque curve and drag, not real figures.)
 
 ### Ski lifts and runs (this commit)
 

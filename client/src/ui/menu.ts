@@ -20,6 +20,8 @@ export interface MenuActions {
   vehicles: { name: string; title: string }[];
   vehicle(): string;
   chooseVehicle(name: string): void;
+  /** The vehicle menu: each vehicle turning, with its figures. */
+  garage(): void;
   /** Called after a setting changed; the menu has already updated `settings`. */
   changed(key: keyof Settings): void;
   /** Builds the world again with the settings that need it, keeping the vehicle where it is. */
@@ -187,6 +189,7 @@ export class Menu {
         for (const v of this.actions.vehicles) {
           button(v.title, () => this.actions.chooseVehicle(v.name), row, v.name === this.actions.vehicle() ? 'on' : '');
         }
+        button('Look at them all…', () => this.actions.garage(), row, 'link');
       }
       const { list: players, region, titleOf } = this.actions.players();
       if (players.length > 1) {

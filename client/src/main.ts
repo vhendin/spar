@@ -43,6 +43,7 @@ import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { signIn } from './account';
 import { saveLastPosition, StartMenu, storedProfile } from './ui/startMenu';
+import { Garage } from './ui/garage';
 import { Chat } from './ui/chat';
 import { Others } from './multiplayer/others';
 import { takeSnapshot } from './multiplayer/track';
@@ -400,6 +401,8 @@ async function start(): Promise<void> {
   const startRoot = document.createElement('div');
   startRoot.id = 'start';
   document.body.append(startRoot);
+  // The vehicle menu, over the start screen or the menu.
+  const garage = new Garage(document.body, Object.values(VEHICLES).sort((a, b) => a.title.localeCompare(b.title)), params.get('renderer') === 'webgl');
   const dash = new Dashboard(document.body);
   dash.visible = false;
   let hintUntil = 0;
@@ -676,6 +679,7 @@ async function start(): Promise<void> {
         menu.showPage('controls', () => start.show());
       },
       credits: () => showCredits(true),
+      garage: (current, color, choose) => garage.show({ current, color, chooseLabel: 'Choose', choose, back: () => {} }),
     });
     // Only the computer running the server may make and remove areas.
     void areasInfo().then((info) => {
@@ -877,6 +881,18 @@ async function start(): Promise<void> {
     showCredits(false);
   };
 
+  /** Swaps the vehicle being driven for another, where it stands, and drives on. */
+  const chooseVehicle = (name: string): void => {
+    const w = world;
+    const def = Object.values(VEHICLES).find((d) => d.name === name);
+    // Swapped where it stands, set down on its wheels.
+    if (w && def && def !== w.sim.def) {
+      setVehicle(w, def);
+      if (!w.unplaced) setDownHere(w);
+    }
+    resume();
+  };
+
   const menu = new Menu(
     menuRoot,
     {
@@ -911,15 +927,13 @@ async function start(): Promise<void> {
       join: (id) => joinFriend(id),
       vehicles: Object.values(VEHICLES).map((d) => ({ name: d.name, title: d.title })).sort((a, b) => a.title.localeCompare(b.title)),
       vehicle: () => world?.sim.def.name ?? '',
-      chooseVehicle: (name) => {
+      garage: () => {
         const w = world;
-        const def = Object.values(VEHICLES).find((d) => d.name === name);
-        if (!w || !def || def === w.sim.def) return;
-        // Swapped where it stands, set down on its wheels.
-        setVehicle(w, def);
-        if (!w.unplaced) setDownHere(w);
-        resume();
+        if (!w) return;
+        menu.hide();
+        garage.show({ current: w.sim.def.name, color: w.color, chooseLabel: 'Drive this one', choose: chooseVehicle, back: () => menu.show() });
       },
+      chooseVehicle: (name) => chooseVehicle(name),
       changed: (key) => {
         saveSettings(settings);
         switch (key) {
@@ -1248,7 +1262,8 @@ async function start(): Promise<void> {
 
     // The gamepad's Start button opens and closes the menu.
     gamepad.poll();
-    if (gamepad.tapped('menu') && world) {
+    if (gamepad.tapped('menu') && garage.open) garage.choose();
+    else if (gamepad.tapped('menu') && world) {
       if (starting) {
         if (world.start.open) world.start.drive();
       } else if (paused) resume();

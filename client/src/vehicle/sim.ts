@@ -101,7 +101,7 @@ const DEPTH_RATE = 0.8;
 const DROWN_TIME = 0.4;
 const DRY_TIME = 3;
 /** Wading depth when the definition has none. */
-const WADING = 0.6;
+export const WADING = 0.6;
 /** Metres a second air suspension raises or lowers the body, when the definition does not say. */
 const RIDE_RATE = 0.05;
 

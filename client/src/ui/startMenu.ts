@@ -36,6 +36,8 @@ export interface StartActions {
   credits(): void;
   /** Set off just behind another driver, wherever they are. */
   join(id: string): void;
+  /** Opens the vehicle menu on `current`, painted `color`; `choose` gets the one picked there. */
+  garage(current: string, color: string, choose: (name: string) => void): void;
 }
 
 const NAME_KEY = 'spar.name';
@@ -298,6 +300,10 @@ export class StartMenu {
         this.render();
       });
     }
+    button('Look at them all…', () => this.actions.garage(this.vehicle, this.color, (name) => {
+      this.vehicle = name;
+      this.render();
+    }), vehicles, 'link-button');
 
     add('div', 'Driver', right, 'label');
     const name = add('input', '', right, 'name');
