@@ -47,6 +47,7 @@
       "track": 1.72,
       "driven": true,
       "steer": -10,
+      "steerWith": 3,
       "brakeShare": 0.4,
       "handbrake": true,
       "suspension": {

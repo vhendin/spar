@@ -30,8 +30,10 @@ const GLANCE_KEEP = 0.65;
 const GLANCE_STEADY = 0.7;
 /** Steering lock halves at this speed (m/s), so the vehicle stays steady on the road. */
 const STEER_HALF_SPEED = 13;
-/** Speed (m/s) by which rear-wheel steering has faded out. */
+/** Speed (m/s) by which rear-wheel steering against the front has faded out (about 60 km/h). */
 const REAR_STEER_FADE = 17;
+/** Speed (m/s) by which rear wheels turn fully with the front (about 90 km/h). */
+const REAR_STEER_WITH = 25;
 /** How fast the steered wheels turn, radians per second. */
 const STEER_RATE = 1.4;
 
@@ -644,8 +646,17 @@ export class VehicleSim {
     this.steerAngle = lock * (current + Math.max(-STEER_RATE * dt / Math.max(lock, 0.01), Math.min(STEER_RATE * dt / Math.max(lock, 0.01), target - current)));
 
     // Rear-wheel steering turns the other way from the front to tighten the turn at low speed,
-    // and lets go towards motorway speeds, where it would only make the vehicle twitchy.
-    const rearSteer = Math.max(0, 1 - Math.abs(this.speed) / REAR_STEER_FADE);
+    // and lets go towards motorway speeds, where it would only make the vehicle twitchy. Above
+    // that, an axle with steerWith turns a few degrees the same way as the front, so the rear
+    // follows the front through a lane change instead of swinging out. That share goes by the
+    // steering wheel, not the eased front angle, so steerWith is the angle at full lock.
+    const fast = Math.abs(this.speed);
+    const rearSteer = Math.max(0, 1 - fast / REAR_STEER_FADE);
+    const rearWith = Math.min(1, Math.max(0, (fast - REAR_STEER_FADE) / (REAR_STEER_WITH - REAR_STEER_FADE)));
+    const wheelTurn = lock > 0 ? this.steerAngle / lock / eased : 0;
+    const rearAngle = (axle: VehicleDef['axles'][number]): number =>
+      axle.steer * (Math.PI / 180) * (this.steerAngle / lock) * rearSteer
+      + (axle.steerWith ?? 0) * (Math.PI / 180) * wheelTurn * rearWith;
     let d = 0;
     def.axles.forEach((axle, a) => {
       for (let side = 0; side < 2; side++) {
@@ -679,7 +690,9 @@ export class VehicleSim {
         wheel.spin = axle.driven ? split.spin[d]! : 0;
         if (axle.driven) d++;
         c.setWheelFrictionSlip(i, Math.max(0.05, wheel.grip));
-        wheel.steer = axle.steer !== 0 && lock > 0 ? this.steerAngle * (axle.steer / (lock * (180 / Math.PI))) * (axle.steer < 0 ? rearSteer : 1) : 0;
+        wheel.steer = axle.steer === 0 || lock === 0 ? 0
+          : axle.steer < 0 ? rearAngle(axle)
+          : this.steerAngle * (axle.steer / (lock * (180 / Math.PI)));
         c.setWheelSteering(i, wheel.steer);
       }
     });

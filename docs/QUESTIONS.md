@@ -254,7 +254,8 @@ same as the Terrängkombi.
   - Terrängkombi: crawl control, a key in low range with a few speeds of about 1–5 km/h. (Done: X steps
     through 1–5 km/h and off, Shift+X off; a pedal takes over while held.)
   - Elpickup rear-wheel steering like the real one: against the front at low speed, with it
-    (a few degrees) at high speed.
+    (a few degrees) at high speed. (Done: against up to 10° at a standstill, straight at
+    60 km/h, with it up to 3° at full lock from 90 km/h; `steerWith` on the axle.)
   - Elpickup air suspension: a key to raise and lower it (road, normal, high, extract 44 cm),
     high settings only at low speed.
 

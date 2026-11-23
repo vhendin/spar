@@ -77,6 +77,10 @@ export interface Axle {
    */
   steer: number;
   /**
+   * For a rear-steering axle (negative steer): largest angle in degrees it turns the same way as the front at high speed, for steadier lane changes. It turns against the front at low speed, straight at about 60 km/h, and with it above, fully by about 90 km/h. 0 or left out: straight at speed.
+   */
+  steerWith?: number;
+  /**
    * Share of the total brake force this axle gets; shares add up to 1.
    */
   brakeShare: number;

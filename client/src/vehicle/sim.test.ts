@@ -423,6 +423,21 @@ describe('electric pickup', () => {
     car.toggleRange();
     expect(car.drivetrain.range).toBe('high');
   });
+
+  it('turns the rear wheels a few degrees with the front at high speed, and straight in between', () => {
+    const rear = (kmh: number): { front: number; rear: number } => {
+      const { car, run } = setup('elpickup', { ground: () => 'asphalt' });
+      run(1);
+      while (car.speed < kmh / 3.6) run(0.05, { throttle: 1 });
+      run(0.5, { steer: 1, throttle: 0.5 });
+      return { front: car.wheels[0]!.steer, rear: car.wheels[2]!.steer };
+    };
+    const mid = rear(60), fast = rear(100);
+    expect(Math.abs(mid.rear)).toBeLessThan(0.3 * Math.PI / 180);
+    expect(fast.front).toBeGreaterThan(0);
+    expect(fast.rear).toBeGreaterThan(2 * Math.PI / 180);
+    expect(fast.rear).toBeLessThanOrEqual(3 * Math.PI / 180 + 1e-9);
+  });
 });
 
 describe('handing a vehicle between browsers', () => {
