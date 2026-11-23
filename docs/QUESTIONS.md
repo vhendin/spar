@@ -13,8 +13,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Sound and solids (done):** a whirring buzz from four rotors, higher climbing or pushing
   ahead, heard where it is (others' drones too). Trunks, rocks and buildings stop it; leaves
   and needles do not (decided). Flying home it climbs over what is in the way.
-- **Play-test:** speed (16 m/s), turning, the camera tilt (mouse wheel, right stick) and the
-  size of the picture of the vehicle in the corner; the loudness and pitch of the whirr.
+- **Mouse and back to driving (done):** W S ahead and back, A D sideways, the mouse looks
+  round (pointer held on launch, or click the picture); the arrows still turn. On the pad the
+  left stick slides and climbs, the right stick looks. Q while flying hands the vehicle back at
+  once and the drone flies home by itself, following the vehicle as it drives; Q takes it back
+  while it is on its way, with the vehicle stopped. Running out of range or battery also hands
+  the vehicle back.
+- **Play-test:** speed (16 m/s), mouse sensitivity, the camera tilt and the size of the
+  picture of the vehicle in the corner; the loudness and pitch of the whirr; whether it keeps
+  up with a fast vehicle (it carries the vehicle's speed on top of its own).
 
 ### Vehicle menu (TODO 9)
 

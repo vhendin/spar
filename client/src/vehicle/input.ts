@@ -53,17 +53,21 @@ export class DriveInput {
   drone(): DroneControls {
     const keys = this.down;
     let forward = (held(keys, 'KeyW', 'ArrowUp') ? 1 : 0) - (held(keys, 'KeyS', 'ArrowDown') ? 1 : 0);
-    let turn = (held(keys, 'KeyA', 'ArrowLeft') ? 1 : 0) - (held(keys, 'KeyD', 'ArrowRight') ? 1 : 0);
+    // A and D slide sideways (the mouse turns it); the arrows still turn.
+    let strafe = (keys.has('KeyA') ? 1 : 0) - (keys.has('KeyD') ? 1 : 0);
+    let turn = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
     let climb = (keys.has('Space') ? 1 : 0) - (held(keys, 'ShiftLeft', 'ShiftRight') ? 1 : 0);
     const g = this.gamepad;
     if (g.pad) {
       const dead = (x: number): number => (Math.abs(x) < 0.12 ? 0 : Math.sign(x) * ((Math.abs(x) - 0.12) / 0.88));
       forward += g.value('throttle') - g.value('brake');
-      turn -= dead(g.pad.axes[0] ?? 0);
+      // Left stick slides and climbs, right stick looks (turns and tilts), as the mouse does.
+      strafe -= dead(g.pad.axes[0] ?? 0);
       climb -= dead(g.pad.axes[1] ?? 0);
+      turn -= dead(g.pad.axes[2] ?? 0);
     }
     const unit = (x: number): number => Math.max(-1, Math.min(1, x));
-    return { forward: unit(forward), turn: unit(turn), climb: unit(climb) };
+    return { forward: unit(forward), turn: unit(turn), strafe: unit(strafe), climb: unit(climb) };
   }
 
   /** The gamepad's right stick up and down, −1..1 (up negative), for tilting the drone's camera. */

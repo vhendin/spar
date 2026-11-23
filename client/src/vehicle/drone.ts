@@ -15,6 +15,8 @@ export interface DroneControls {
   forward: number;
   /** Turning left (+) and right (−). */
   turn: number;
+  /** Sideways, left (+) and right (−), still facing the same way. */
+  strafe?: number;
   /** Up (+) and down (−). */
   climb: number;
 }
@@ -115,9 +117,17 @@ export class Drone {
   private rising = 0;
   /** Seconds left of climbing after running into something on the way home. */
   private bumped = 0;
+  /** Where the roof was last step, and how fast it moves: flying home it catches a moving vehicle. */
+  private lastRoof: P3 | null = null;
+  private readonly roofV: P3 = { x: 0, y: 0, z: 0 };
 
   get out(): boolean {
     return this.state !== 'docked';
+  }
+
+  /** Flown by the driver (rather than docked or flying home by itself while they drive on). */
+  get flown(): boolean {
+    return this.state === 'flying';
   }
 
   /** Level distance to the roof, metres. */
@@ -168,6 +178,7 @@ export class Drone {
       return null;
     }
     if (this.reason === 'sent') {
+      if (Math.abs(speed) > DRONE.still) return 'Stop the vehicle to take the drone back';
       this.state = 'flying';
       this.reason = null;
       return null;
@@ -179,6 +190,8 @@ export class Drone {
   dock(): void {
     this.state = 'docked';
     this.reason = null;
+    this.lastRoof = null;
+    Object.assign(this.roofV, { x: 0, y: 0, z: 0 });
     Object.assign(this.v, { x: 0, y: 0, z: 0 });
   }
 
@@ -191,6 +204,11 @@ export class Drone {
    * `roof` where it lands, live; `groundAt` the terrain height or null where unknown;
    * `solids` what stands within a few metres of a point.
    */
+  /** Turns it by `by` radians (positive left): the mouse looking round while it flies. */
+  look(by: number): void {
+    if (this.state === 'flying') this.yaw = wrap(this.yaw + by);
+  }
+
   step(dt: number, c: DroneControls, roof: P3, groundAt: (x: number, z: number) => number | null, solids: (x: number, z: number) => readonly Obstacle[] = () => []): void {
     if (this.state === 'docked') {
       this.battery = Math.min(DRONE.battery, this.battery + (DRONE.battery / DRONE.charge) * dt);
@@ -198,15 +216,34 @@ export class Drone {
       return;
     }
     this.battery = Math.max(0, this.battery - dt);
+    // How the roof moves, kept to sensible speeds (a jump elsewhere docks it anyway).
+    const cap = (x: number): number => Math.max(-40, Math.min(40, x));
+    if (this.lastRoof && dt > 0) {
+      this.roofV.x = cap((roof.x - this.lastRoof.x) / dt);
+      this.roofV.y = cap((roof.y - this.lastRoof.y) / dt);
+      this.roofV.z = cap((roof.z - this.lastRoof.z) / dt);
+    }
+    this.lastRoof = { ...roof };
     const ground = groundAt(this.p.x, this.p.z) ?? this.p.y - DRONE.floor;
     let want: P3;
     if (this.state === 'flying') {
       this.rising += dt;
       this.yaw = wrap(this.yaw + c.turn * DRONE.turn * dt);
-      const f = Math.max(-1, Math.min(1, c.forward)) * DRONE.speed;
+      // Ahead and sideways together no faster than either alone.
+      let f = Math.max(-1, Math.min(1, c.forward));
+      let side = Math.max(-1, Math.min(1, c.strafe ?? 0));
+      const both = Math.hypot(f, side);
+      if (both > 1) {
+        f /= both;
+        side /= both;
+      }
+      f *= DRONE.speed;
+      side *= DRONE.speed;
+      const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       // Clear of the roof first, whatever the driver asks.
       const climb = this.rising < 1.2 ? Math.max(c.climb, 0.6) : c.climb;
-      want = { x: Math.sin(this.yaw) * f, y: Math.max(-1, Math.min(1, climb)) * DRONE.climb, z: Math.cos(this.yaw) * f };
+      // Left of the facing is (cos, −sin).
+      want = { x: sin * f + cos * side, y: Math.max(-1, Math.min(1, climb)) * DRONE.climb, z: cos * f - sin * side };
     } else want = this.homeward(roof, ground, dt);
     const k = DRONE.accel * dt;
     this.v.x = approach(this.v.x, want.x, k);
@@ -250,11 +287,17 @@ export class Drone {
     if (this.state === 'flying') {
       if (this.distance(roof) > DRONE.range) this.goHome('range');
       else if (this.battery <= this.needed(roof)) this.goHome('battery');
-    } else if (landing && Math.abs(this.p.y - roof.y) < 0.08) this.dock();
+    } else if ((landing && Math.abs(this.p.y - roof.y) < 0.12) || this.battery <= 0) this.dock();
   }
 
   /** The velocity flying home wants: up to a safe height, across, then down onto the roof. */
   private homeward(roof: P3, ground: number, dt: number): P3 {
+    // Flown relative to the vehicle: its own way home plus the way the vehicle is going.
+    const w = this.homewardStill(roof, ground, dt);
+    return { x: w.x + this.roofV.x, y: w.y + (this.distance(roof) < 1 ? this.roofV.y : 0), z: w.z + this.roofV.z };
+  }
+
+  private homewardStill(roof: P3, ground: number, dt: number): P3 {
     const dx = roof.x - this.p.x, dz = roof.z - this.p.z;
     const d = Math.hypot(dx, dz);
     // Facing the way it flies, and the vehicle's way once there.

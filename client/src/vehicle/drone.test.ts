@@ -40,6 +40,20 @@ describe('scouting drone', () => {
     expect(d.yaw).toBeGreaterThan(0.5);
   });
 
+  it('slides sideways without turning, and no faster on a diagonal', () => {
+    const d = new Drone();
+    d.key(roof, 0, 0);
+    fly(d, 1.5, none);
+    // Facing +z, left is +x (a positive turn heads that way too).
+    fly(d, 5, { forward: 0, turn: 0, strafe: 1, climb: 0 });
+    expect(d.yaw).toBe(0);
+    expect(d.p.x - roof.x).toBeGreaterThan(50);
+    expect(Math.hypot(d.v.x, d.v.z)).toBeCloseTo(DRONE.speed, 1);
+    fly(d, 5, { forward: 1, turn: 0, strafe: -1, climb: 0 });
+    expect(Math.hypot(d.v.x, d.v.z)).toBeCloseTo(DRONE.speed, 1);
+    expect(d.v.x).toBeLessThan(0);
+  });
+
   it('keeps above the ground and under the ceiling', () => {
     const d = new Drone();
     d.key(roof, 0, 0);
@@ -143,5 +157,33 @@ describe('scouting drone', () => {
     d.key(roof, 0, 0);
     for (let i = 0; i < 60 * 120 && d.out; i++) d.step(1 / 60, none, roof, flat, solids);
     expect(d.state).toBe('docked');
+  });
+
+  it('sent home, catches the vehicle driving on and lands on its roof', () => {
+    const d = new Drone();
+    d.key(roof, 0, 0);
+    fly(d, 10, ahead);
+    d.key(roof, 0, 0);
+    expect(d.flown).toBe(false);
+    expect(d.out).toBe(true);
+    // The vehicle drives off along +x at 10 m/s.
+    const moving = { ...roof };
+    for (let i = 0; i < 60 * 120 && d.out; i++) {
+      moving.x += 10 / 60;
+      d.step(1 / 60, none, moving, flat);
+    }
+    expect(d.state).toBe('docked');
+    expect(d.battery).toBeGreaterThan(0);
+  });
+
+  it('is taken back from flying home only with the vehicle stopped', () => {
+    const d = new Drone();
+    d.key(roof, 0, 0);
+    fly(d, 3, ahead);
+    d.key(roof, 0, 0);
+    expect(d.key(roof, 0, 5)).toMatch(/Stop/);
+    expect(d.state).toBe('home');
+    expect(d.key(roof, 0, 0)).toBeNull();
+    expect(d.flown).toBe(true);
   });
 });

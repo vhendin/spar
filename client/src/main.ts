@@ -200,7 +200,7 @@ async function start(): Promise<void> {
   // Driving is the default; ?fly=1 or the F key hands the camera over to free flight.
   let flying = params.get('fly') === '1' || params.has('pos');
   fly.enabled = flying;
-  const chase = new ChaseCamera(camera, canvas, () => !flying && !drone.out);
+  const chase = new ChaseCamera(camera, canvas, () => !flying && !drone.flown);
   // Trees, rocks and buildings between the camera and the vehicle turn see-through.
   const seeThrough = new SeeThrough();
   const vehicleSize = new THREE.Vector3();
@@ -453,8 +453,22 @@ async function start(): Promise<void> {
   droneInset.innerHTML = '<span>VEHICLE</span>';
   document.body.append(droneReadout, droneHelp, droneInset);
   canvas.addEventListener('wheel', (e) => {
-    if (drone.out && !flying) tiltDrone(e.deltaY > 0 ? 0.06 : -0.06);
+    if (drone.flown && !flying) tiltDrone(e.deltaY > 0 ? 0.06 : -0.06);
   }, { passive: true });
+  // The mouse looks round while flying the drone: the pointer is held (on launch, or a click on
+  // the picture) and moving it turns the drone and tilts its camera.
+  const droneLooking = (): boolean => drone.state === 'flying' && !flying && !paused && !starting;
+  const holdPointer = (): void => {
+    if (document.pointerLockElement !== canvas) Promise.resolve(canvas.requestPointerLock()).catch(() => {});
+  };
+  canvas.addEventListener('click', () => {
+    if (droneLooking()) holdPointer();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement !== canvas || !droneLooking()) return;
+    drone.look(-e.movementX * 0.0022);
+    tiltDrone(e.movementY * 0.0022);
+  });
   const roofLocal = new THREE.Vector3();
   const roofWorld = new THREE.Vector3();
   const vehicleForward = new THREE.Vector3();
@@ -473,6 +487,7 @@ async function start(): Promise<void> {
   const droneKey = (w: World): void => {
     const why = drone.key(roofOf(w), yawOf(w), w.sim.speed);
     droneNote = { text: why ?? '', until: why ? performance.now() + 2500 : 0 };
+    if (drone.state === 'flying') holdPointer();
   };
   let droneShown = '';
   /** The drone's read-out at the top and its keys at the bottom, while it is out. */
@@ -480,7 +495,15 @@ async function start(): Promise<void> {
     let readout = '';
     let help = '';
     const now = performance.now();
-    if (drone.out && !paused && !starting && !flying && !w.map.open) {
+    const pad = gamepad.pad !== null;
+    const key = pad ? buttonName(gamepad.bindings.drone) : 'Q';
+    if (drone.state === 'home' && !paused && !starting && !flying && !w.map.open) {
+      // Flying home by itself while the vehicle is driven: a short line at the top.
+      const why = drone.reason === 'range' ? 'out of range · ' : drone.reason === 'battery' ? 'battery low · ' : '';
+      readout = `<span class="tag-name">DRONE</span><span>${why}flying home · ${formatDistance(drone.distance(roof))} away</span>`
+        + (drone.reason === 'sent' ? `<span><kbd>${key}</kbd> take it back (stopped)</span>` : '');
+      if (now < droneNote.until) help = droneNote.text;
+    } else if (drone.flown && !paused && !starting && !flying && !w.map.open) {
       const warn = drone.warning(roof);
       const up = drone.p.y - (w.terrain.heightAt(drone.p.x, drone.p.z) ?? drone.p.y);
       const left = Math.max(0, Math.floor(drone.battery));
@@ -488,17 +511,10 @@ async function start(): Promise<void> {
       readout = `<span class="tag-name">DRONE</span><span>${Math.round(up)} m up</span>`
         + `<span class="${warn === 'range' || drone.reason === 'range' ? 'warn' : ''}">${formatDistance(drone.distance(roof))} away</span>`
         + `<span class="${warn === 'battery' || drone.reason === 'battery' ? 'warn' : ''}">battery ${clock}</span>`;
-      if (drone.state === 'home') {
-        readout += `<span class="warn">${drone.reason === 'range' ? 'out of range · ' : drone.reason === 'battery' ? 'battery low · ' : ''}flying home</span>`;
-      } else if (warn) readout += `<span class="warn">${warn === 'range' ? 'near the end of its range' : 'battery low soon'}</span>`;
-      const takeOver = drone.state === 'home' && drone.reason === 'sent';
-      const pad = gamepad.pad !== null;
-      const key = pad ? buttonName(gamepad.bindings.drone) : 'Q';
-      help = drone.state === 'home' && !takeOver
-        ? 'Drone · flying home by itself'
-        : pad
-          ? `Drone · triggers forward and back · left stick turn and climb · right stick tilts the camera · <kbd>${key}</kbd> ${takeOver ? 'take it back' : 'home'}`
-          : `Drone · <kbd>W</kbd> <kbd>S</kbd> forward and back · <kbd>A</kbd> <kbd>D</kbd> turn · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · wheel tilts the camera · <kbd>${key}</kbd> ${takeOver ? 'take it back' : 'home'}`;
+      if (warn) readout += `<span class="warn">${warn === 'range' ? 'near the end of its range' : 'battery low soon'}</span>`;
+      help = pad
+        ? `Drone · triggers forward and back · left stick sideways and climb · right stick looks round · <kbd>${key}</kbd> back to driving`
+        : `Drone · <kbd>W</kbd> <kbd>S</kbd> forward and back · <kbd>A</kbd> <kbd>D</kbd> sideways · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · ${document.pointerLockElement === canvas ? 'mouse looks round' : 'click to look round with the mouse'} · <kbd>${key}</kbd> back to driving (it flies home)`;
     } else if (!paused && !starting && now < droneNote.until) help = droneNote.text;
     const html = `${readout}|${help}`;
     if (html === droneShown) return;
@@ -1143,7 +1159,7 @@ async function start(): Promise<void> {
     // The developer's keys work only while the developer read-out shows (F3).
     if (!debug && ['KeyB', 'KeyF', 'KeyU', 'KeyG'].includes(e.code)) return;
     // With the drone out the vehicle waits: no camera views, winch, gears or resetting.
-    if (drone.out && ['KeyV', 'KeyE', 'KeyX', 'KeyZ', 'KeyL', 'KeyR', 'KeyF'].includes(e.code)) return;
+    if (drone.flown && ['KeyV', 'KeyE', 'KeyX', 'KeyZ', 'KeyL', 'KeyR', 'KeyF'].includes(e.code)) return;
     switch (e.code) {
       case 'KeyM':
         toggleMap();
@@ -1369,7 +1385,7 @@ async function start(): Promise<void> {
     const pad = gamepad.pad !== null;
     const key = (k: string, action: Parameters<typeof gamepad.tapped>[0]): string => `<kbd>${pad ? buttonName(gamepad.bindings[action]) : k}</kbd>`;
     let html = '';
-    if (!paused && !flying && !drone.out && !w.unplaced && !w.map.open) {
+    if (!paused && !flying && !drone.flown && !w.unplaced && !w.map.open) {
       if (w.winch.state === 'choosing') {
         const picked = w.winch.pickedAnchor;
         const on = picked?.kind === 'vehicle' && picked.vehicle ? `${nameOf(picked.vehicle)}'s ${(picked.local?.[2] ?? 0) >= 0 ? 'front' : 'rear'} · ` : '';
@@ -1411,7 +1427,7 @@ async function start(): Promise<void> {
       if (gamepad.tapped('map')) toggleMap();
       if (gamepad.tapped('minimap')) minimap.cycle();
       if (!flying && !w0.map.open && !w0.unplaced && gamepad.tapped('drone')) droneKey(w0);
-      if (!flying && !w0.map.open && !drone.out) {
+      if (!flying && !w0.map.open && !drone.flown) {
         if (gamepad.tapped('right')) resetVehicle(w0);
         if (gamepad.tapped('toStart')) toStart(w0);
         if (gamepad.tapped('camera')) chase.cycle();
@@ -1436,7 +1452,7 @@ async function start(): Promise<void> {
       // While paused nothing moves: no input, no physics, no flying mud.
       const still = flying || paused || starting || w.map.open;
       // With the drone out the driving controls fly it, and the vehicle waits on its handbrake.
-      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : drone.out ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : input.read(dt);
+      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : drone.flown ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : input.read(dt);
       const winching: WinchControls = still || w.unplaced ? { pull: false, slack: false } : input.winch();
       // Paused, the physics still runs while our vehicle follows another browser: it is not ours to stop.
       if (!paused || towing.following) owed += dt;
@@ -1497,15 +1513,17 @@ async function start(): Promise<void> {
         drone.dock();
       }
       const roof = roofOf(w);
-      const piloting = drone.out && !flying && !w.map.open && !paused;
+      const piloting = drone.flown && !flying && !w.map.open && !paused;
       Object.assign(droneBefore, drone.v);
       if (!paused) drone.step(dt, piloting ? input.drone() : NO_DRONE, roof, (x, z) => w.terrain.heightAt(x, z), droneSolids(w));
       if (piloting) tiltDrone(input.tilt() * dt * 1.2);
+      // The pointer let go once the drone flies home or lands (the free camera keeps its own).
+      if (!flying && document.pointerLockElement === canvas && (!droneLooking() || w.map.open)) document.exitPointerLock();
       droneView.group.visible = drone.out && !starting;
       droneView.update(paused ? 0 : dt, drone.p, drone.yaw, drone.v, true);
       // Back on the roof: the driving camera picks up where the vehicle is.
-      if (droneWasOut && !drone.out) chase.reset();
-      droneWasOut = drone.out;
+      if (droneWasOut && !drone.flown) chase.reset();
+      droneWasOut = drone.flown;
       drawDrone(w, roof);
       // While flying with the collider view on, colliders gather round the camera instead,
       // so they can be inspected anywhere.
@@ -1543,7 +1561,7 @@ async function start(): Promise<void> {
         camera.lookAt(mid, below + 150 * k, mid);
         w.start.setPicture(w.map.picture);
       } else if (flying) fly.update(dt);
-      else if (drone.out) {
+      else if (drone.flown) {
         // The drone's camera, under its nose, turned with it and tilted down.
         camera.position.set(drone.p.x, drone.p.y - 0.1, drone.p.z);
         camera.rotation.set(-droneTilt, drone.yaw + Math.PI, 0, 'YXZ');
@@ -1586,8 +1604,8 @@ async function start(): Promise<void> {
       // Snapshots of the vehicles run here for others, and their pushes.
       if (onRoad) towing.send(now, paused);
       // From the drone's camera the vehicle is seen from outside, and nothing turns see-through.
-      const cab = !flying && !drone.out && !starting && chase.mode === 'cab';
-      seeThrough.strength.value = flying || drone.out || chase.mode === 'cab' ? 0 : 1;
+      const cab = !flying && !drone.flown && !starting && chase.mode === 'cab';
+      seeThrough.strength.value = flying || drone.flown || chase.mode === 'cab' ? 0 : 1;
       seeThrough.cab.value = cab ? 1 : 0;
       // The vehicle's own space, from just above the ground to the roof: plants there are not drawn.
       const body = w.sim.def.body;
@@ -1610,7 +1628,7 @@ async function start(): Promise<void> {
       // ?snow=<metres> instead puts the lingering snow line there, with no winter snow.
       const snowDepth = snowOverride === null ? season.snow : 0;
       env.snowing = snowDepth > 0.02;
-      env.update(now, dt, camera.position, flying || drone.out ? camera.position : w.view.group.position);
+      env.update(now, dt, camera.position, flying || drone.flown ? camera.position : w.view.group.position);
       w.shading.wet.value = env.weather.wetness;
       w.shading.sky.value.set(env.skyColor.r, env.skyColor.g, env.skyColor.b);
       w.shading.sunColor.value.set(env.sunLight.r, env.sunLight.g, env.sunLight.b);
@@ -1672,7 +1690,7 @@ async function start(): Promise<void> {
       audio.inside = inside;
       audio.listen(camera);
       // The drone's rotors, softer heard from its own camera.
-      droneSound.update(drone.out && !starting, drone.p.x, drone.p.y, drone.p.z, thrustOf(drone.v, droneBefore, paused ? 0 : dt), drone.out && !flying ? 0.6 : 1);
+      droneSound.update(drone.out && !starting, drone.p.x, drone.p.y, drone.p.z, thrustOf(drone.v, droneBefore, paused ? 0 : dt), drone.flown && !flying ? 0.6 : 1);
       w.sound.update(paused ? 0 : dt, w.sim, w.view.group, w.unplaced ? 0 : w.sim.pedal, env.weather.wetness, w.obstacles?.cracks.splice(0) ?? [], impacts.splice(0), w.unplaced);
       const spec = w.sim.def.winch;
       w.sound.winch(paused ? 0 : dt, {
@@ -1713,7 +1731,7 @@ async function start(): Promise<void> {
       minimap.update(dt, w.map, where, !w.unplaced && !w.map.open);
       // The shared destination first, so arriving at a place that is both is logged as shared.
       // From the drone, the compass and the way to the destination count from it.
-      const from = flying || drone.out ? camera.position : w.view.group.position;
+      const from = flying || drone.flown ? camera.position : w.view.group.position;
       const groundAt = (x: number, z: number): number | null => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z);
       const guiding = !w.unplaced && !w.map.open;
       const both = sharedGuide.destination;
@@ -1732,7 +1750,7 @@ async function start(): Promise<void> {
       if (say) prompted = say;
       prompt.style.opacity = say ? '1' : '0';
 
-      dash.visible = !flying && !drone.out && !w.unplaced;
+      dash.visible = !flying && !drone.flown && !w.unplaced;
       const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || (!towing.following && w.sim.holding) }, gauge);
       hint.style.opacity = now < hintUntil && !paused && winchShown === '' ? '1' : '0';
@@ -1740,7 +1758,7 @@ async function start(): Promise<void> {
     // ?look=0 draws the plain picture, without the grade and glow.
     if (plain) renderer.render(scene, camera);
     else look.render(world?.environment.grade ?? NEUTRAL);
-    if (world && drone.out && !flying && !starting && !world.unplaced && !world.map.open && !paused) drawInset(world);
+    if (world && drone.flown && !flying && !starting && !world.unplaced && !world.map.open && !paused) drawInset(world);
     else droneInset.style.display = 'none';
     frameMs += (performance.now() - began - frameMs) * 0.05;
 
