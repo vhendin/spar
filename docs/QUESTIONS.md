@@ -13,6 +13,16 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   view full screen or as a picture in the corner? Do others in the session see it? Can it
   fly in rain, wind and snow, and does it fit every vehicle or only some?
 
+### Vehicle menu (TODO 9)
+
+- **Where does it open?** On the start screen when picking a vehicle, from a key while
+  driving (then switching vehicle there too?), or both?
+- **Which stats?** Suggested: mass, power and torque, gears and ranges, locks, ground
+  clearance, wading depth, ground pressure, winch pull, top speed, and climbing angle.
+  Real figures or bars to compare vehicles side by side?
+- **The view:** a turning model on a plain stage, or the vehicle where it stands in the world
+  with an orbit camera? Choice of colour in the menu?
+
 ### Ski lifts and runs (this commit)
 
 - **Lifts from the map**: chair lifts, gondolas, cable cars, T-bars, button lifts, rope tows
