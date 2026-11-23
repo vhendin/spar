@@ -323,6 +323,13 @@ export interface VehicleSnapshot {
    */
   wading: number;
   winch?: SnapshotWinch;
+  /**
+   * The driver's scouting drone while it is out: position (metres) and facing (radians, 0 along +z). Left out while it sits on the roof.
+   *
+   * @minItems 4
+   * @maxItems 4
+   */
+  drone?: [number, number, number, number];
 }
 /**
  * The winch's cable while it is out, so others can draw it. Left out while it is on the drum.

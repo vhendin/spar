@@ -51,6 +51,9 @@ export class Ghosts {
       // Our winch cable stays ours.
       const snapshot: VehicleSnapshot = { ...found.s, t: now };
       delete snapshot.winch;
+      // Our drone, though, they copy, flying beside it, so others' drones can be tried alone.
+      if (s.drone) snapshot.drone = [s.drone[0]! + 4 * (i + 1), s.drone[1]! + 1, s.drone[2]!, s.drone[3]!];
+      else delete snapshot.drone;
       out.push({ id: p.id, snapshot });
     });
     return out;

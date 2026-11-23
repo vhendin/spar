@@ -18,6 +18,7 @@ export const PAD_ACTIONS = [
   { id: 'winch', label: 'Winch: choose an anchor, hook on, unhook' },
   { id: 'winchIn', label: 'Winch in' },
   { id: 'winchOut', label: 'Winch: pay out; while choosing, cancel' },
+  { id: 'drone', label: 'Drone: launch, send home' },
   { id: 'map', label: 'Map' },
   { id: 'minimap', label: 'Minimap' },
   { id: 'toStart', label: 'Back to the start' },
@@ -35,7 +36,7 @@ export const buttonName = (i: number): string => (i < 0 ? '–' : (BUTTON_NAMES[
 
 const DEFAULTS: Record<PadAction, number> = {
   throttle: 7, brake: 6, handbrake: 0, right: 3, camera: 2, lights: 1, range: 4, crawl: 11, rideUp: 10, rideDown: -1, locks: 5,
-  winch: 15, winchIn: 13, winchOut: 14, map: 8, minimap: 12, toStart: -1, menu: 9,
+  winch: 15, winchIn: 13, winchOut: 14, drone: -1, map: 8, minimap: 12, toStart: -1, menu: 9,
 };
 
 const KEY = 'spar.gamepad';

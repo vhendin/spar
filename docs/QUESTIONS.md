@@ -5,6 +5,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Scouting drone (this commit)
+
+- **Left out for now, say if any should come:** it makes no sound; trees and buildings do not
+  stop it (only the ground); the gamepad has no button for it until one is set on the Controls
+  page (Q on the keyboard); while another browser runs your vehicle (on a cable) the others do
+  not see your drone; it does not show on the map or minimap.
+- **Play-test:** speed (16 m/s), turning, the camera tilt (mouse wheel, right stick) and the
+  size of the picture of the vehicle in the corner.
+
 ### Vehicle menu (TODO 9)
 
 - **Where does it open?** On the start screen when picking a vehicle, from a key while
@@ -235,7 +244,7 @@ same as the Terrängkombi.
 
 ## Answered
 
-- Scouting drone, decided 2026-11-23 (to do):
+- Scouting drone, decided 2026-11-23 (done):
   - The driver flies it, launched from the roof with the vehicle stopped; the driving keys or
     stick fly it (forward and back, turn, up and down).
   - About 1 km from the vehicle and 5 minutes of battery; a warning near either limit, then it

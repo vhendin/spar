@@ -14,4 +14,4 @@ From the decisions of 2026-11-23 in `QUESTIONS.md`. Each one is its own step and
 
 ## Later
 
-- [ ] Scouting drone: the driver flies a drone from the roof to look at the way ahead (decided in `QUESTIONS.md`).
+- [x] Scouting drone: the driver flies a drone from the roof to look at the way ahead (decided in `QUESTIONS.md`).

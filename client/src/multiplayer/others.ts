@@ -20,6 +20,7 @@ import type { Anchor } from '../vehicle/obstacles';
 import { WinchView, type CableView } from '../vehicle/winchView';
 import type { PlayerLine } from '../ui/players';
 import { snapshotPose, Track, type Pose } from './track';
+import { DroneView } from '../vehicle/droneView';
 
 type Rapier = typeof RAPIER;
 
@@ -232,6 +233,8 @@ interface Other {
   hosted: HostedView | null;
   /** Its winch cable, while out. */
   cable: { view: WinchView; state: RemoteCable } | null;
+  /** Its scouting drone while out, eased towards where the snapshots put it, with its own name tag. */
+  drone: { view: DroneView; p: THREE.Vector3; v: THREE.Vector3; yaw: number; tag: HTMLDivElement } | null;
 }
 
 export class Others {
@@ -310,7 +313,7 @@ export class Others {
       this.tags.append(tag);
       o = {
         player, track: new Track(), vehicle: null, view: null, built: '', tag, away: false, effects: null, sound: null,
-        solid: null, solidFor: '', push: new THREE.Vector3(), pushAt: new THREE.Vector3(), pushWeight: 0, hosted: null, cable: null,
+        solid: null, solidFor: '', push: new THREE.Vector3(), pushAt: new THREE.Vector3(), pushWeight: 0, hosted: null, cable: null, drone: null,
       };
       this.others.set(id, o);
     }
@@ -554,6 +557,7 @@ export class Others {
       const visible = show && !o.away && !!def && !!pose && s.region === this.region;
       if (!visible) {
         this.drawCable(o, null, def, camera, around);
+        this.putDroneAway(o);
         if (o.view) o.view.group.visible = false;
         if (o.effects) o.effects.tracks.break();
         this.quiet(o);
@@ -579,6 +583,7 @@ export class Others {
       view.render(1);
       view.setLights(pose.lights, pose.braking);
       this.drawCable(o, pose, def, camera, around);
+      this.drawDrone(o, s.drone, dt, camera);
       const distance = view.group.position.distanceTo(camera.position);
       if (pose.lights) lit.push({ o, distance });
       this.effects(o, vehicle, view, s.jump, now, pose.paused ? 0 : dt, distance, camera, around);
@@ -611,6 +616,49 @@ export class Others {
       o.tag.style.transform = `translate(${((this.at.x + 1) / 2) * width}px, ${((1 - this.at.y) / 2) * height}px) translate(-50%, -100%)`;
     }
     this.lendBeams(lit);
+  }
+
+  /** Its drone where `at` (x, y, z, yaw) puts it, or put away when that is left out. */
+  private drawDrone(o: Other, at: number[] | undefined, dt: number, camera: THREE.Camera): void {
+    if (!at || at.length < 4) return this.putDroneAway(o);
+    const [x, y, z, yaw] = at as [number, number, number, number];
+    if (!o.drone) {
+      const view = new DroneView();
+      this.scene.add(view.group);
+      const tag = document.createElement('div');
+      tag.className = 'tag drone';
+      this.tags.append(tag);
+      o.drone = { view, p: new THREE.Vector3(x, y, z), v: new THREE.Vector3(), yaw, tag };
+    }
+    const d = o.drone;
+    // Eased between snapshots; how fast it closes in is its speed, for the lean.
+    const k = Math.min(1, dt * 8);
+    d.v.set(x - d.p.x, y - d.p.y, z - d.p.z).multiplyScalar(8);
+    d.p.lerp(this.lo.set(x, y, z), k);
+    d.yaw += (Math.atan2(Math.sin(yaw - d.yaw), Math.cos(yaw - d.yaw))) * k;
+    d.view.update(dt, d.p, d.yaw, d.v, true);
+    // "Name's drone" over it, near enough.
+    const width = window.innerWidth, height = window.innerHeight;
+    this.at.copy(d.p).setY(d.p.y + 0.6);
+    const far = this.at.distanceTo(camera.position);
+    this.at.project(camera);
+    const fade = 1 - (far - FADE_FROM) / (FADE_TO - FADE_FROM);
+    if (this.at.z > 1 || fade <= 0) {
+      d.tag.style.display = 'none';
+      return;
+    }
+    const text = `${o.player.name}'s drone`;
+    if (d.tag.textContent !== text) d.tag.textContent = text;
+    d.tag.style.display = 'flex';
+    d.tag.style.opacity = String(Math.min(1, fade));
+    d.tag.style.transform = `translate(${((this.at.x + 1) / 2) * width}px, ${((1 - this.at.y) / 2) * height}px) translate(-50%, -100%)`;
+  }
+
+  private putDroneAway(o: Other): void {
+    if (!o.drone) return;
+    o.drone.view.dispose();
+    o.drone.tag.remove();
+    o.drone = null;
   }
 
   /** Its winch cable, while it is out; `pose` null hides it. */
@@ -747,6 +795,7 @@ export class Others {
     this.quiet(o);
     this.dropSolid(o);
     o.cable?.view.dispose();
+    this.putDroneAway(o);
     o.tag.remove();
     this.others.delete(id);
   }

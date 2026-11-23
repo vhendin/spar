@@ -48,6 +48,8 @@ const CONTROLS: [string, string][] = [
   ['E', 'Winch: choose an anchor (aim with the mouse), hook on, unhook'],
   ['Tab', 'Winch: next anchor (while choosing)'],
   ['I / K', 'Winch in, pay out; K also cancels choosing'],
+  ['Q', 'Drone: launch from the roof (standing still), send home, take back'],
+  ['Space / Shift', 'Drone: up and down; W S A D fly it, the wheel tilts its camera'],
   ['R', 'Back on the wheels'],
   ['Shift R', 'Back to the start'],
   ['M', 'Map: choose a destination, or another start point'],
