@@ -251,7 +251,8 @@ same as the Terrängkombi.
   - Colours: keep the defaults (faded red light 4×4, dark grey Terrängkombi). (As is.)
   - Terrängkombi: no rear locker, traction control only. (As is.)
   - Terrängkombi body: add body options for a sloping, rounded bonnet and a slanted tailgate. (Done: bonnet `rise` and `nose`, `tailgateRake`.)
-  - Terrängkombi: crawl control, a key in low range with a few speeds of about 1–5 km/h.
+  - Terrängkombi: crawl control, a key in low range with a few speeds of about 1–5 km/h. (Done: X steps
+    through 1–5 km/h and off, Shift+X off; a pedal takes over while held.)
   - Elpickup rear-wheel steering like the real one: against the front at low speed, with it
     (a few degrees) at high speed.
   - Elpickup air suspension: a key to raise and lower it (road, normal, high, extract 44 cm),

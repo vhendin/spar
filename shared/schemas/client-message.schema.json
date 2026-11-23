@@ -792,6 +792,11 @@
           "description": "Change between high and low range, once.",
           "type": "boolean"
         },
+        "crawl": {
+          "description": "Crawl control's key, once: the next speed, or off.",
+          "type": "string",
+          "enum": ["next", "off"]
+        },
         "lock": {
           "description": "Lock or free this axle's differential, once.",
           "type": "integer",
@@ -987,6 +992,12 @@
         },
         "holding": {
           "type": "boolean"
+        },
+        "crawl": {
+          "description": "Crawl control's speed, 1 the slowest; 0 or left out when it is off.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9
         },
         "drowned": {
           "type": "boolean"

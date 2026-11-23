@@ -511,3 +511,63 @@ describe('edges of ground at speed', () => {
     expect(bank('tgb11', 2.5, true).z).toBeGreaterThan(-4);
   });
 });
+
+describe('crawl control', () => {
+  const crawlAt = (level: number, slope = 0) => {
+    const { car, run } = setup('lc200', { slope });
+    run(1);
+    car.toggleRange();
+    for (let i = 0; i < level; i++) car.crawlKey();
+    run(8);
+    // The average speed over the next few seconds, from the distance gone.
+    const z0 = car.body.translation().z;
+    run(4);
+    return { car, run, kmh: ((z0 - car.body.translation().z) / 4) * 3.6 };
+  };
+
+  it('works only in low range, steps through its speeds and then off', () => {
+    const { car } = setup('lc200');
+    car.crawlKey();
+    expect(car.crawl).toBe(0);
+    car.toggleRange();
+    for (let i = 1; i <= 5; i++) {
+      car.crawlKey();
+      expect(car.crawl).toBe(i);
+    }
+    car.crawlKey();
+    expect(car.crawl).toBe(0);
+    car.crawlKey();
+    car.toggleRange();
+    expect(car.crawl).toBe(0);
+    const plain = setup('tgb11').car;
+    plain.toggleRange();
+    plain.crawlKey();
+    expect(plain.crawl).toBe(0);
+  });
+
+  it('holds its speeds on the flat, up a hill and down one with nobody on the pedals', () => {
+    for (const slope of [0, 15, -15]) {
+      const slow = crawlAt(1, slope), fast = crawlAt(5, slope);
+      expect(slow.kmh).toBeCloseTo(1, 0);
+      expect(fast.kmh).toBeGreaterThan(4.5);
+      expect(fast.kmh).toBeLessThan(5.5);
+      expect(slow.car.crawling).toBe(true);
+    }
+  });
+
+  it('lets a pressed pedal take over, and crawls backwards once the brake has put it in reverse', () => {
+    const { car, run } = crawlAt(2);
+    run(0.3, { brake: 1 });
+    expect(car.crawling).toBe(false);
+    expect(car.speed * 3.6).toBeLessThan(1);
+    // A tap only pauses it, even though it nearly stopped: it does not go into reverse.
+    expect(car.drivetrain.gear).toBe(1);
+    run(6);
+    expect(car.speed * 3.6).toBeCloseTo(2, 0);
+    // Held on a second at a standstill the brake pedal selects reverse; let go, it crawls back.
+    run(2, { brake: 1 });
+    expect(car.drivetrain.gear).toBe(-1);
+    run(8);
+    expect(car.speed * 3.6).toBeCloseTo(-2, 0);
+  });
+});

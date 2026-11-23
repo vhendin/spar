@@ -88,7 +88,7 @@ export class Dashboard {
   private gear!: SVGTextElement;
   private range!: SVGTextElement;
   private speed!: SVGTextElement;
-  private lamps: { range: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement } | null = null;
+  private lamps: { range: HTMLSpanElement; crawl: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement } | null = null;
   private def: VehicleDef | null = null;
   private tachMax = 5000;
   /** Electric: the left dial shows the power drawn, kW, up to this. */
@@ -151,11 +151,13 @@ export class Dashboard {
     };
     const range = lamp('LOW', 'Low range (L)');
     if (d.ranges.low === undefined) range.style.display = 'none';
+    const crawl = lamp('CRAWL', 'Crawl control in low range (X; Shift+X off)');
+    if (!d.crawl) crawl.style.display = 'none';
     const locks = def.axles.map((axle, a) => (axle.differential === 'lockable' ? lamp(`DIFF ${a + 1}`, `Differential lock, axle ${a + 1} (${a + 1})`) : null)).filter((s): s is HTMLSpanElement => s !== null);
     const lights = lamp('LIGHTS', 'Headlights (H)');
     const parked = lamp('P', 'Parking brake');
     parked.classList.add('brake');
-    this.lamps = { range, locks, lights, parked };
+    this.lamps = { range, crawl, locks, lights, parked };
     this.winch.root.before(row);
   }
 
@@ -182,6 +184,10 @@ export class Dashboard {
 
     const l = this.lamps!;
     l.range.classList.toggle('on', d.range === 'low');
+    const speeds = sim.def.drivetrain.crawl;
+    const crawl = sim.crawl > 0 && speeds ? `CRAWL ${speeds[sim.crawl - 1]} km/h` : 'CRAWL';
+    if (l.crawl.textContent !== crawl) l.crawl.textContent = crawl;
+    l.crawl.classList.toggle('on', sim.crawl > 0);
     let i = 0;
     sim.def.axles.forEach((axle, a) => {
       if (axle.differential === 'lockable') l.locks[i++]!.classList.toggle('on', sim.locks[a]!);

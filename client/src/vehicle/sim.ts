@@ -115,6 +115,16 @@ export interface VehicleInput {
   digital?: boolean;
 }
 
+/**
+ * Crawl control works throttle and brake as one lever, u > 0 throttle and u < 0 brake, from
+ * the speed it misses by (m/s): this much lever per m/s at once, and this much more per m/s
+ * for every second it goes on missing, which finds the lever a slope or a rut needs.
+ */
+const CRAWL_P = 0.4;
+const CRAWL_I = 0.6;
+/** Seconds the pedal against the way it crawls is held at a standstill before it changes direction. */
+const CRAWL_TURN = 1;
+
 /** Seconds a key-pressed pedal takes to come fully in on firm ground, and on the slipperiest. */
 const EASE_FIRM = 0.15;
 const EASE_SLIPPERY = 1.8;
@@ -256,6 +266,14 @@ export class VehicleSim {
   drowned = false;
   /** Deepest water around the vehicle, metres above the bottom of its tyres. */
   wading = 0;
+  /** Crawl control: 0 off, otherwise which of the definition's crawl speeds it holds (1 the slowest). */
+  crawl = 0;
+  /** True this step while crawl control drives (it is on and no pedal is pressed). */
+  crawling = false;
+  /** Crawl control's lasting share of the lever, what the slope and the ground ask for. */
+  private crawlLever = 0;
+  /** Seconds the pedal against the direction of travel has been held at a standstill. */
+  private againstHeld = 0;
 
   private readonly controller: RAPIER.DynamicRayCastVehicleController;
   private readonly restLength: number[] = [];
@@ -398,6 +416,8 @@ export class VehicleSim {
     this.steerAngle = 0;
     this.drivetrain.gear = 1;
     this.holding = true;
+    this.crawl = 0;
+    this.crawlLever = 0;
     this.righting = null;
     this.drowned = false;
     this.drowning = 0;
@@ -460,6 +480,17 @@ export class VehicleSim {
   toggleRange(): void {
     if (this.def.drivetrain.ranges.low === undefined) return;
     this.drivetrain.range = this.drivetrain.range === 'high' ? 'low' : 'high';
+    if (this.drivetrain.range === 'high') this.crawl = 0;
+  }
+
+  /**
+   * Crawl control's key, on a vehicle that has it and only in low range: each press steps to
+   * the next speed and from the fastest back off; `off` turns it off at once.
+   */
+  crawlKey(off = false): void {
+    const speeds = this.def.drivetrain.crawl;
+    if (!speeds || this.drivetrain.range !== 'low') return;
+    this.crawl = off || this.crawl >= speeds.length ? 0 : this.crawl + 1;
   }
 
   /** Locks or frees an axle's differential, if it is a lockable one. */
@@ -536,12 +567,32 @@ export class VehicleSim {
     this.speed = v.x * fx + v.y * fy + v.z * fz;
 
     // Pedals: from a standstill the brake pedal selects reverse and then drives backwards.
+    // With crawl control on, that pedal only pauses the crawl, stopping it, and changes the
+    // direction once it has been held a while at a standstill.
     const state = this.drivetrain;
-    if (state.gear > 0 && input.brake > 0.1 && input.throttle < 0.1 && this.speed < 0.5) selectDirection(state, true);
-    else if (state.gear < 0 && input.throttle > 0.1 && input.brake < 0.1 && this.speed > -0.5) selectDirection(state, false);
+    const against = state.gear > 0 ? input.brake > 0.1 && input.throttle < 0.1 : input.throttle > 0.1 && input.brake < 0.1;
+    this.againstHeld = against && Math.abs(this.speed) < 0.1 ? this.againstHeld + dt : 0;
+    const turn = this.crawl > 0 ? this.againstHeld >= CRAWL_TURN : state.gear > 0 ? this.speed < 0.5 : this.speed > -0.5;
+    if (against && turn) {
+      selectDirection(state, state.gear > 0);
+      this.crawlLever = 0;
+    }
     const pedal = this.drowned ? 0 : state.gear > 0 ? input.throttle : input.brake;
-    const drive = input.digital ? this.ease(pedal, dt) : pedal;
-    const brake = state.gear > 0 ? input.brake : input.throttle;
+    let drive = input.digital ? this.ease(pedal, dt) : pedal;
+    let brake = state.gear > 0 ? input.brake : input.throttle;
+    // Crawl control holds its speed, in the gear's direction, while no pedal is pressed.
+    const speeds = def.drivetrain.crawl;
+    this.crawling = this.crawl > 0 && !!speeds && state.range === 'low' && !this.drowned && !this.righting
+      && input.throttle < 0.05 && input.brake < 0.05 && !input.handbrake;
+    if (this.crawling) {
+      const want = speeds![this.crawl - 1]! / 3.6;
+      const miss = want - (state.gear < 0 ? -this.speed : this.speed);
+      this.crawlLever = Math.max(-1, Math.min(1, this.crawlLever + CRAWL_I * miss * dt));
+      const lever = Math.max(-1, Math.min(1, this.crawlLever + CRAWL_P * miss));
+      drive = Math.max(0, lever);
+      brake = Math.max(0, -lever);
+      this.eased = drive;
+    }
     this.pedal = drive;
 
     const wet = this.ground.wetness();
@@ -581,7 +632,7 @@ export class VehicleSim {
     // downhill; a pedal lets go again.
     const pulled = this.pulled || this.towed;
     this.towed = false;
-    if (drive >= 0.02 || brake >= 0.02 || pulled) this.holding = false;
+    if (drive >= 0.02 || brake >= 0.02 || pulled || this.crawling) this.holding = false;
     else if (Math.abs(this.speed) < 0.6) this.holding = true;
     const weight = def.chassis.mass * GRAVITY;
     const handbraked = def.axles.filter((a) => a.handbrake).length * 2 || this.wheels.length;
@@ -824,6 +875,7 @@ export class VehicleSim {
       rpm: d.rpm,
       locks: [...this.locks] as VehicleHandover['locks'],
       holding: this.holding,
+      crawl: this.crawl,
       drowned: this.drowned,
       steer: this.steerAngle,
     };
@@ -848,6 +900,8 @@ export class VehicleSim {
     d.shifting = 0;
     if (s.locks.length === this.locks.length) s.locks.forEach((l, i) => (this.locks[i] = l));
     this.holding = s.holding;
+    this.crawl = d.range === 'low' ? Math.min(s.crawl ?? 0, this.def.drivetrain.crawl?.length ?? 0) : 0;
+    this.crawlLever = 0;
     this.drowned = s.drowned;
     this.drowning = 0;
     this.steerAngle = s.steer;

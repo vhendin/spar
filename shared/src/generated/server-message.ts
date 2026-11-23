@@ -577,6 +577,10 @@ export interface DriveControls {
    */
   range?: boolean;
   /**
+   * Crawl control's key, once: the next speed, or off.
+   */
+  crawl?: 'next' | 'off';
+  /**
    * Lock or free this axle's differential, once.
    */
   lock?: number;
@@ -776,6 +780,10 @@ export interface VehicleHandover {
     | [boolean, boolean, boolean, boolean, boolean]
     | [boolean, boolean, boolean, boolean, boolean, boolean];
   holding: boolean;
+  /**
+   * Crawl control's speed, 1 the slowest; 0 or left out when it is off.
+   */
+  crawl?: number;
   drowned: boolean;
   /**
    * Angle of the steered wheels, radians.

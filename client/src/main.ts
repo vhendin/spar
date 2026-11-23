@@ -1046,6 +1046,9 @@ async function start(): Promise<void> {
       case 'KeyL':
         if (!flying && w) toggleRange(w);
         break;
+      case 'KeyX':
+        if (!flying && w) crawlKey(w, e.shiftKey);
+        break;
       case 'KeyE':
         // The winch: choose an anchor, hook on, unhook.
         if (w && !flying && !w.unplaced) winchKey(w);
@@ -1075,6 +1078,10 @@ async function start(): Promise<void> {
   const toggleRange = (w: World): void => {
     if (towing.following) towing.event({ range: true });
     else w.sim.toggleRange();
+  };
+  const crawlKey = (w: World, off: boolean): void => {
+    if (towing.following) towing.event({ crawl: off ? 'off' : 'next' });
+    else w.sim.crawlKey(off);
   };
   const toggleLock = (w: World, axle: number): void => {
     if (towing.following) {
@@ -1249,6 +1256,7 @@ async function start(): Promise<void> {
         if (gamepad.tapped('camera')) chase.cycle();
         if (gamepad.tapped('lights')) lamps = lamps === null ? true : lamps ? false : null;
         if (gamepad.tapped('range')) toggleRange(w0);
+        if (gamepad.tapped('crawl')) crawlKey(w0, false);
         if (gamepad.tapped('winch') && !w0.unplaced) winchKey(w0);
         if (gamepad.tapped('winchOut') && w0.winch.state === 'choosing') w0.winch.cancel();
         if (gamepad.tapped('locks')) {

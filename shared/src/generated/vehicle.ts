@@ -133,6 +133,22 @@ export interface Drivetrain {
   reverse: number;
   ranges: Ranges;
   /**
+   * Crawl control: speeds in km/h, slowest first, that the vehicle holds by itself in low range with the driver only steering, working throttle and brakes; a pedal pressed takes over while it is held. Without it there is none.
+   *
+   * @minItems 1
+   * @maxItems 9
+   */
+  crawl?:
+    | [number]
+    | [number, number]
+    | [number, number, number]
+    | [number, number, number, number]
+    | [number, number, number, number, number]
+    | [number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number, number];
+  /**
    * Axle ratio including any hub reduction.
    */
   finalDrive: number;

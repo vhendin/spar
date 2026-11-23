@@ -268,6 +268,17 @@
             }
           }
         },
+        "crawl": {
+          "description": "Crawl control: speeds in km/h, slowest first, that the vehicle holds by itself in low range with the driver only steering, working throttle and brakes; a pedal pressed takes over while it is held. Without it there is none.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 9,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 15
+          }
+        },
         "finalDrive": {
           "description": "Axle ratio including any hub reduction.",
           "type": "number",

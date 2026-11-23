@@ -7,7 +7,7 @@ From the decisions of 2026-11-23 in `QUESTIONS.md`. Each one is its own step and
 - [x] 3. Light 4×4 without locks: drop the rear lock.
 - [x] 4. Sinking by ground pressure: load per tyre area, so light vehicles and wide tyres float on bog.
 - [x] 5. Terrängkombi body: options for a sloping, rounded bonnet and a slanted tailgate.
-- [ ] 6. Terrängkombi crawl control: a key in low range, a few speeds of about 1–5 km/h.
+- [x] 6. Terrängkombi crawl control: a key in low range, a few speeds of about 1–5 km/h.
 - [ ] 7. Elpickup rear-wheel steering: against the front at low speed, with it (a few degrees) at high speed.
 - [ ] 8. Elpickup air suspension: a key for road, normal, high and extract (44 cm); high settings only at low speed.
 - [ ] 9. Vehicle menu: view each vehicle (turning 3D model) and its stats (questions in `QUESTIONS.md`).
