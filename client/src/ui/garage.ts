@@ -23,6 +23,8 @@ export interface GarageOptions {
 
 /** Turns a second while nobody drags, radians. */
 const TURN_RATE = 0.3;
+/** How far out towards the picture's edges the body may reach, 1 being the edge. */
+const MARGIN = 0.9;
 /** The steepest slope the climbing bar reaches, degrees. */
 const CLIMB_FULL = 60;
 
@@ -125,15 +127,21 @@ export class Garage {
   }
 
   private buildStage(): void {
-    this.scene.background = new THREE.Color(0xe4e2d9);
-    this.scene.fog = new THREE.Fog(0xe4e2d9, 14, 30);
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshStandardMaterial({ color: 0xd6d2c4, roughness: 1 }));
+    // A mid-toned stage, so light paint shows its shading as well as dark paint does.
+    this.scene.background = new THREE.Color(0x9fa497);
+    this.scene.fog = new THREE.Fog(0x9fa497, 12, 28);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshStandardMaterial({ color: 0x8f9386, roughness: 1 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.scene.add(floor);
-    this.scene.add(new THREE.HemisphereLight(0xf4f1e8, 0x8c8a7c, 1.6));
-    const sun = new THREE.DirectionalLight(0xfff6e4, 2.6);
-    sun.position.set(5, 9, 6);
+    // Soft fill from above, a strong warm key from one side and a cool rim from behind, so each
+    // face of the body gets its own shade.
+    this.scene.add(new THREE.HemisphereLight(0xe8ecf0, 0x5d5a50, 0.9));
+    const rim = new THREE.DirectionalLight(0xc8d8ec, 1.4);
+    rim.position.set(-6, 5, -7);
+    this.scene.add(rim);
+    const sun = new THREE.DirectionalLight(0xfff1dc, 3.4);
+    sun.position.set(7, 8, 3);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
     const s = sun.shadow.camera;
@@ -214,13 +222,35 @@ export class Garage {
 
   private aim(): void {
     if (!this.aimed) return;
-    // Far enough back for the whole length to fit as it turns, looking a little down.
+    // Looking a little down, as close as lets every corner of the body stay in the picture
+    // whichever way it has turned: tried at closer and closer distances.
     const b = this.aimed.body;
-    const reach = Math.hypot(b.length, b.width) / 2;
-    const fit = (reach * 0.82) / Math.tan(((this.camera.fov / 2) * Math.PI) / 180) / Math.min(1, this.camera.aspect);
     const elevation = 0.28;
-    this.camera.position.set(0, b.height / 2 + fit * Math.sin(elevation), fit * Math.cos(elevation));
-    this.camera.lookAt(0, b.height * 0.42, 0);
+    const target = new THREE.Vector3(0, b.height * 0.45, 0);
+    const corners: THREE.Vector3[] = [];
+    for (let a = 0; a < 16; a++) {
+      const turn = (a / 16) * Math.PI * 2, c = Math.cos(turn), sn = Math.sin(turn);
+      for (const x of [-b.width / 2, b.width / 2]) for (const z of [-b.length / 2, b.length / 2]) for (const y of [0, b.height]) {
+        corners.push(new THREE.Vector3(x * c + z * sn, y, -x * sn + z * c));
+      }
+    }
+    const p = new THREE.Vector3();
+    const fits = (d: number): boolean => {
+      this.camera.position.set(0, target.y + d * Math.sin(elevation), d * Math.cos(elevation));
+      this.camera.lookAt(target);
+      this.camera.updateMatrixWorld();
+      return corners.every((v) => {
+        p.copy(v).project(this.camera);
+        return Math.abs(p.x) < MARGIN && Math.abs(p.y) < MARGIN;
+      });
+    };
+    let near = 1, far = 40;
+    for (let i = 0; i < 24; i++) {
+      const mid = (near + far) / 2;
+      if (fits(mid)) far = mid;
+      else near = mid;
+    }
+    fits(far);
   }
 
   private render(): void {
@@ -248,8 +278,9 @@ export class Garage {
       return b;
     };
 
-    add('h2', 'Vehicles');
-    const tabs = add('div', '', box, 'tabs');
+    const head = add('div', '', box, 'head');
+    add('h2', 'Vehicles', head);
+    const tabs = add('div', '', head, 'tabs');
     this.vehicles.forEach((d, i) => button(d.title, () => {
       this.shown = i;
       this.render();
@@ -267,25 +298,25 @@ export class Garage {
       const tr = add('tr', '', table);
       add('th', label, tr);
       const td = add('td', '', tr);
-      add('div', value, td, 'value');
+      const line = add('div', value, td, 'value');
+      if (note) add('span', note, line, 'note');
       if (share !== undefined) {
         const bar = add('div', '', td, 'bar');
         add('div', '', bar, 'fill').style.width = `${Math.round(Math.max(0.02, Math.min(1, share)) * 100)}%`;
       }
-      if (note) add('div', note, td, 'note');
     };
     const cm = (m: number): string => `${Math.round(m * 100)} cm`;
     row('Drive', `${s.wheels}×${s.driven}`);
     row('Weight', `${(s.mass / 1000).toFixed(1)} t`, s.mass / most((o) => o.mass));
     row('Power', `${Math.round(s.power / 1000)} kW`, s.power / most((o) => o.power));
     row('Torque', `${s.torque} Nm`, s.torque / most((o) => o.torque), def.drivetrain.motor === 'electric' ? 'at the motor' : undefined);
-    row('Top speed', `${Math.round(s.topSpeed)} km/h`, s.topSpeed / most((o) => o.topSpeed), 'on asphalt, from gearing and drag');
-    row('Climbs', s.climb >= CLIMB_FULL ? `${CLIMB_FULL}°+` : `${Math.round(s.climb)}°`, s.climb / CLIMB_FULL, 'in its lowest gear, if the ground grips');
+    row('Top speed', `${Math.round(s.topSpeed)} km/h`, s.topSpeed / most((o) => o.topSpeed), 'on asphalt');
+    row('Climbs', s.climb >= CLIMB_FULL ? `${CLIMB_FULL}°+` : `${Math.round(s.climb)}°`, s.climb / CLIMB_FULL, 'lowest gear, if it grips');
     row('Gearbox', gearsText(def));
     row('Differentials', locksText(def));
     row('Ground clearance', s.clearance[0] === s.clearance[1] ? cm(s.clearance[0]) : `${cm(s.clearance[0])} – ${cm(s.clearance[1])}`, s.clearance[1] / most((o) => o.clearance[1]));
     row('Wading', cm(s.wading), s.wading / most((o) => o.wading), s.clearance[0] === s.clearance[1] ? undefined : 'at its highest');
-    row('Ground pressure', `${Math.round(s.pressure / 1000)} kPa`, s.pressure / most((o) => o.pressure), 'lower floats better on bog and snow');
+    row('Ground pressure', `${Math.round(s.pressure / 1000)} kPa`, s.pressure / most((o) => o.pressure), 'lower floats better');
     row('Winch', s.winch ? `${Math.round(s.winch.pull / 1000)} kN, ${s.winch.cable} m cable` : 'None', s.winch ? s.winch.pull / most((o) => o.winch?.pull ?? 0) : undefined);
     const extras = extrasText(def);
     if (extras.length) row('Also', extras.join(' · '));
