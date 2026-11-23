@@ -26,7 +26,7 @@ export interface RegionVectors {
   lakes: Lake[];
   places: Place[];
   /**
-   * Places worth driving to: summits, huts, shelters, viewpoints, lodges, camp sites and sights from OpenStreetMap. Unnamed ones are named by kind and position. Optional: older regions have none.
+   * Places worth driving to: summits, huts, shelters, viewpoints, lodges, camp sites and sights from OpenStreetMap, and the top station of every lift. Unnamed ones are named by kind and position. Optional: older regions have none.
    */
   destinations?: DestinationPoint[];
   /**
@@ -105,15 +105,15 @@ export interface Place {
 }
 export interface DestinationPoint {
   /**
-   * OpenStreetMap id, such as n123 or w456.
+   * OpenStreetMap id, such as n123 or w456; for a lift top, the lift's.
    */
   id: string;
-  kind: 'peak' | 'hut' | 'shelter' | 'viewpoint' | 'lodge' | 'camp' | 'sight';
+  kind: 'peak' | 'hut' | 'shelter' | 'viewpoint' | 'lodge' | 'camp' | 'sight' | 'lift';
   name: string;
   x: number;
   z: number;
   /**
-   * Height above sea level from the map, metres.
+   * Height above sea level from the map (for a lift top, from the ground), metres.
    */
   ele?: number;
 }

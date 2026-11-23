@@ -256,7 +256,12 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
         spacing=HORIZON_BIOME_SPACING,
     ).tofile(out / HORIZON_BIOME_PATH)
 
-    vectors = build_vectors(osm, region, lake_levels, clearcuts)
+    last = heights2.shape[0] - 1
+
+    def ground(x: float, z: float) -> float:
+        return float(heights2[min(last, max(0, round(z / MASK_SPACING))), min(last, max(0, round(x / MASK_SPACING)))])
+
+    vectors = build_vectors(osm, region, lake_levels, clearcuts, ground)
     jsonschema.validate(vectors, load_schema("region-vectors"))
     (out / VECTORS_PATH).write_text(json.dumps(vectors, ensure_ascii=False, separators=(",", ":")) + "\n")
     print(f"  {len(vectors['roads'])} road part(s), {len(vectors['lakes'])} lake(s), {len(vectors['spawns'])} spawn point(s), treeline {treeline:.0f} m")

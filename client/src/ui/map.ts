@@ -12,7 +12,7 @@ export interface Destination {
   name: string;
   x: number;
   z: number;
-  /** For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight. */
+  /** For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp, sight or lift. */
   kind?: string;
 }
 
@@ -21,13 +21,14 @@ const PIN = { own: { fill: '#8e3b2d', line: 'rgba(142,59,45,0.85)' }, shared: { 
 
 /** Colours of the destination markers by kind. */
 const DESTINATION_COLORS: Record<string, string> = {
-  peak: '#5a3c26', hut: '#b0472c', shelter: '#8a5a2b', viewpoint: '#2c6fb0', lodge: '#7a3d8f', camp: '#2f6f4f', sight: '#c28a12',
+  peak: '#5a3c26', hut: '#b0472c', shelter: '#8a5a2b', viewpoint: '#2c6fb0', lodge: '#7a3d8f', camp: '#2f6f4f', sight: '#c28a12', lift: '#3a3f47',
 };
 const DESTINATION_GROUPS: [string, string[]][] = [
   ['Summits', ['peak']],
   ['Huts, lodges and camp sites', ['hut', 'lodge', 'camp']],
   ['Viewpoints and sights', ['viewpoint', 'sight']],
   ['Shelters', ['shelter']],
+  ['Lift tops', ['lift']],
 ];
 
 type Spawn = RegionVectors['spawns'][number];

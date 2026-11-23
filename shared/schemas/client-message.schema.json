@@ -1075,7 +1075,7 @@
           "type": "number"
         },
         "kind": {
-          "description": "For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight.",
+          "description": "For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp, sight or lift.",
           "type": "string",
           "pattern": "^[a-z_]{1,20}$"
         }

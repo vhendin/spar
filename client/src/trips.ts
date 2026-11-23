@@ -7,7 +7,7 @@ import type { Destination } from './ui/map';
 export interface LogEntry {
   region: string;
   destination: string;
-  /** What kind of place: peak, hut, shelter, viewpoint, lodge, camp, sight; absent for places and marked spots. */
+  /** What kind of place: peak, hut, shelter, viewpoint, lodge, camp, sight, lift; absent for places and marked spots. */
   kind?: string;
   /** The vehicle's title, as the player saw it. */
   vehicle: string;

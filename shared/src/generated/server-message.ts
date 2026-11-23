@@ -490,7 +490,7 @@ export interface Destination {
    */
   z: number;
   /**
-   * For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp or sight.
+   * For a destination from the map data: peak, hut, shelter, viewpoint, lodge, camp, sight or lift.
    */
   kind?: string;
 }

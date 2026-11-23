@@ -150,7 +150,7 @@
       }
     },
     "destinations": {
-      "description": "Places worth driving to: summits, huts, shelters, viewpoints, lodges, camp sites and sights from OpenStreetMap. Unnamed ones are named by kind and position. Optional: older regions have none.",
+      "description": "Places worth driving to: summits, huts, shelters, viewpoints, lodges, camp sites and sights from OpenStreetMap, and the top station of every lift. Unnamed ones are named by kind and position. Optional: older regions have none.",
       "type": "array",
       "items": {
         "title": "DestinationPoint",
@@ -165,7 +165,7 @@
         ],
         "properties": {
           "id": {
-            "description": "OpenStreetMap id, such as n123 or w456.",
+            "description": "OpenStreetMap id, such as n123 or w456; for a lift top, the lift's.",
             "type": "string"
           },
           "kind": {
@@ -177,7 +177,8 @@
               "viewpoint",
               "lodge",
               "camp",
-              "sight"
+              "sight",
+              "lift"
             ]
           },
           "name": {
@@ -190,7 +191,7 @@
             "type": "number"
           },
           "ele": {
-            "description": "Height above sea level from the map, metres.",
+            "description": "Height above sea level from the map (for a lift top, from the ground), metres.",
             "type": "number"
           }
         }

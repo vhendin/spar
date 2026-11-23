@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 import zlib
 
+from collections.abc import Callable
+
 from osgeo import ogr
 
 from .clearcuts import Clearcut
@@ -232,7 +234,15 @@ def log_piles(cuts: list[Clearcut], region: Region, segments: list[tuple]) -> li
     return out
 
 
-def build_vectors(osm: OsmData, region: Region, levels: dict[str, float], clearcuts: list[Clearcut] | None = None) -> dict:
+def build_vectors(
+    osm: OsmData,
+    region: Region,
+    levels: dict[str, float],
+    clearcuts: list[Clearcut] | None = None,
+    ground: Callable[[float, float], float] | None = None,
+) -> dict:
+    """`ground(x, z)` gives the height at a point of the area; without it lifts are taken to be
+    drawn from the bottom up, as OpenStreetMap asks."""
     box = _box(region)
     roads, drivable_points = [], []
     for road in osm.roads:
@@ -297,7 +307,7 @@ def build_vectors(osm: OsmData, region: Region, levels: dict[str, float], clearc
         "waterways": waterways,
         "lakes": lakes,
         "places": places,
-        "destinations": destinations(osm, region, places),
+        "destinations": destinations(osm, region, places) + lift_tops(osm, region, places, ground),
         "spawns": _spawns(places, drivable_points, region),
         "buildings": buildings(osm, region),
         "powerLines": power_lines(osm, region, box),
@@ -338,7 +348,16 @@ def _spawns(places: list[dict], segments: list[tuple], region: Region) -> list[d
     return spawns
 
 
-KIND_NAMES = {"peak": "Summit", "hut": "Hut", "shelter": "Shelter", "viewpoint": "Viewpoint", "lodge": "Lodge", "camp": "Camp site", "sight": "Sight"}
+KIND_NAMES = {
+    "peak": "Summit",
+    "hut": "Hut",
+    "shelter": "Shelter",
+    "viewpoint": "Viewpoint",
+    "lodge": "Lodge",
+    "camp": "Camp site",
+    "sight": "Sight",
+    "lift": "Lift top",
+}
 COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 
@@ -361,6 +380,55 @@ def destinations(osm: OsmData, region: Region, places: list[dict]) -> list[dict]
             entry["ele"] = round(poi.ele)
         out.append(entry)
     out.sort(key=lambda d: (list(KIND_NAMES).index(d["kind"]), d["name"]))
+    return out
+
+
+# Which lift names a top shared by several: the big ones first.
+LIFT_RANK = ("cable_car", "gondola", "mixed_lift", "chair_lift")
+# Lift tops closer than this are one place: several lifts ending on the same shoulder.
+LIFT_TOP_MERGE = 40.0
+
+
+def lift_tops(osm: OsmData, region: Region, places: list[dict], ground: Callable[[float, float], float] | None) -> list[dict]:
+    """The upper station of every lift inside the area: "Top of VM6:an", or "Lift top at Åre"
+    for one with neither name nor number."""
+    tops = []
+    for lift in osm.lifts:
+        for n, part in enumerate(_lines(lift.geom)):
+            points = _local(region, part)
+            ends = [e for e in (points[0], points[-1]) if 0 <= e[0] <= region.size and 0 <= e[1] <= region.size]
+            if len(ends) == 2 and ground is not None:
+                top = max(ends, key=lambda e: ground(e[0], e[1]))
+            elif ends and ends[-1] is points[-1]:
+                # Only one end inside, or no heights: lifts are drawn from the bottom up.
+                top = points[-1]
+            else:
+                continue
+            x, z = round(top[0], 1), round(top[1], 1)
+            kind = lift.tags["aerialway"]
+            rank = LIFT_RANK.index(kind) if kind in LIFT_RANK else len(LIFT_RANK)
+            # A lift known only by its number or letter on the piste map: "Top of lift 6".
+            label = lift.tags.get("name") or (f"lift {lift.tags['ref']}" if lift.tags.get("ref") else None)
+            entry = {"id": lift.id if n == 0 else f"{lift.id}.{n}", "kind": "lift", "name": f"Top of {label}" if label else "", "x": x, "z": z}
+            if ground is not None:
+                entry["ele"] = round(ground(x, z))
+            tops.append((rank, not label, entry))
+    out: list[dict] = []
+    for _, _, entry in sorted(tops, key=lambda t: (t[0], t[1], t[2]["id"])):
+        if any(math.hypot(d["x"] - entry["x"], d["z"] - entry["z"]) < LIFT_TOP_MERGE for d in out):
+            continue
+        if not entry["name"]:
+            entry["name"] = _unnamed("lift", None, entry["x"], entry["z"], places)
+        out.append(entry)
+    # Two lifts of the same name (each resort has its Barnliften): told apart by height, as the
+    # logbook knows places by name.
+    counts: dict[str, int] = {}
+    for d in out:
+        counts[d["name"]] = counts.get(d["name"], 0) + 1
+    for d in out:
+        if counts[d["name"]] > 1 and "ele" in d:
+            d["name"] = f"{d['name']} ({d['ele']} m)"
+    out.sort(key=lambda d: d["name"])
     return out
 
 

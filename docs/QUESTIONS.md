@@ -5,6 +5,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Scouting drone (later)
+
+- **How should it work?** Launched from the vehicle with a key and flown by the driver while
+  the vehicle stands still, or flying ahead on its own along the way you look? How far may
+  it go (range, battery time), and does it come back on its own? Does it show the camera
+  view full screen or as a picture in the corner? Do others in the session see it? Can it
+  fly in rain, wind and snow, and does it fit every vehicle or only some?
+
 ### Ski lifts and runs (this commit)
 
 - **Lifts from the map**: chair lifts, gondolas, cable cars, T-bars, button lifts, rope tows
@@ -221,7 +229,7 @@ same as the Terrängkombi.
 - Decisions of 2026-11-23 (to do unless marked otherwise):
   - Moving chairs, cabins and hangers on the lifts: later; they stand still for now.
   - Cross-country tracks (`piste:type=nordic`): clear a narrow strip, about 4–6 m. (Done: 5 m.)
-  - Lift top stations become destinations ("Top of VM6:an"), every kind of lift.
+  - Lift top stations become destinations ("Top of VM6:an"), every kind of lift. (Done.)
   - `landuse=winter_sports` stays as built: forest between the runs, only runs and lift lines
     open. (Done.)
   - Felled trees and broken fences stay session-only; the server does not save them. (As is.)
