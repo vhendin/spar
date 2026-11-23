@@ -50,6 +50,15 @@ const CLIMB_DISTANCE = 2.5;
 /** Drag of the rut: this times (depth / radius)² times the load. */
 const RUT_DRAG = 0.6;
 /**
+ * Ground pressure: a tyre's load over its width times its diameter (a stand-in for the
+ * contact patch), in pascals. At this pressure a tyre settles by SETTLE; settling goes with
+ * the pressure, so light vehicles and wide tyres float and heavy ones go deeper. About the
+ * Terrängbil 11 standing on level ground.
+ */
+const PRESSURE_REF = 24000;
+/** The most the pressure deepens settling, as a multiple. */
+const PRESSURE_MAX = 1.6;
+/**
  * Snow: a tyre packs it down by this share of its depth before it bears, but never deeper
  * than SNOW_SINK of its radius; spinning digs on, at most to SNOW_DIG_LIMIT of the radius.
  * Packed snow gives way under the tyre, so its rut drags less than mud's (SNOW_RUT).
@@ -193,6 +202,15 @@ export interface FollowPose {
 const RIGHTING_TIME = 1.2;
 /** How high it is lifted on the way, metres. */
 const RIGHTING_LIFT = 1.2;
+
+/**
+ * A vehicle's ground pressure standing on level ground, in pascals: each tyre's share of the
+ * weight over its width times its diameter. More wheels or wider tyres lower it.
+ */
+export function groundPressure(def: VehicleDef): number {
+  const load = (def.chassis.mass * GRAVITY) / (def.axles.length * 2);
+  return load / (def.wheels.width * def.wheels.radius * 2);
+}
 
 type Quat = { x: number; y: number; z: number; w: number };
 
@@ -641,6 +659,9 @@ export class VehicleSim {
   private sinkWheels(dt: number): void {
     const r = this.def.wheels.radius;
     const staticLoad = (this.def.chassis.mass * GRAVITY) / this.wheels.length;
+    // The vehicle's own pressure standing still decides how deep it goes; weight shifting onto
+    // a wheel while driving adds a little (its square root), as before.
+    const pressure = groundPressure(this.def) / PRESSURE_REF;
     const travelled = Math.abs(this.speed) * dt;
     let wading = 0, wet = false;
     for (let i = 0; i < this.wheels.length; i++) {
@@ -653,7 +674,7 @@ export class VehicleSim {
         const snow = wheel.snow;
         wheel.softness = snow ? SNOW_SOFTNESS * Math.min(1, snow / SNOW_SOFT_DEPTH) : this.ground.softness(x, z);
         const soft = wheel.softness;
-        const loaded = Math.sqrt(Math.min(2, wheel.load / staticLoad));
+        const loaded = Math.min(PRESSURE_MAX, pressure * Math.sqrt(Math.min(2, wheel.load / staticLoad)));
         const settle = snow ? Math.min(SNOW_SETTLE * snow, SNOW_SINK * r) * loaded : SETTLE * r * soft * loaded;
         const bottom = snow ? Math.min(snow * 0.85, SNOW_DIG_LIMIT * r) : DIG_LIMIT * r;
         if (wheel.sink < settle) wheel.sink += (settle - wheel.sink) * Math.min(1, travelled / SETTLE_DISTANCE + dt * 0.1);

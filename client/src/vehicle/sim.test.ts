@@ -184,6 +184,21 @@ describe('soft ground', () => {
     expect(car.body.translation().z).toBeLessThan(-8);
   });
 
+  it('sinks by ground pressure: the light 4×4 and the 6×6 float, the heavy pickup goes deeper', () => {
+    const settled = (name: string) => {
+      const { car, run } = setup(name, bog);
+      car.toggleRange();
+      run(1);
+      run(6, { throttle: 0.25 });
+      const sinks = car.wheels.map((w) => w.sink);
+      return sinks.reduce((a, b) => a + b, 0) / sinks.length / car.def.wheels.radius;
+    };
+    const light = settled('ltb4'), six = settled('tgb13'), base = settled('tgb11'), heavy = settled('elpickup');
+    expect(light).toBeLessThan(base * 0.95);
+    expect(six).toBeLessThan(base * 0.9);
+    expect(heavy).toBeGreaterThan(base * 1.1);
+  });
+
   it('digs itself in when the wheels are spun in the rain, and crawls out with the locks in', () => {
     const { car, run } = setup('tgb11', { ...bog, wet: 1 });
     run(1);

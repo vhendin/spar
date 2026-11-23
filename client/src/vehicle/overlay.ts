@@ -1,4 +1,4 @@
-import type { VehicleSim } from './sim';
+import { groundPressure, type VehicleSim } from './sim';
 
 const pad = (text: string, width: number): string => text.padEnd(width);
 
@@ -15,5 +15,6 @@ export function driveReadout(sim: VehicleSim, detailed: boolean): string {
     const sunk = w.sink > 0.005 ? `${(w.sink * 100).toFixed(0)} cm` : '';
     return `${pad(name, 9)}${pad(load, 9)}${pad(w.grip.toFixed(2), 6)}${pad(w.ground, 9)}${pad(sunk, 7)}${w.spin > 0.02 ? `${(w.spin * 100).toFixed(0)}% spin` : ''}`;
   });
-  return [head, `${pad('wheel', 9)}${pad('load', 9)}${pad('grip', 6)}${pad('ground', 9)}${pad('sunk', 7)}`, ...rows].join('\n');
+  const pressure = `ground pressure ${(groundPressure(sim.def) / 1000).toFixed(0)} kPa`;
+  return [head, pressure, `${pad('wheel', 9)}${pad('load', 9)}${pad('grip', 6)}${pad('ground', 9)}${pad('sunk', 7)}`, ...rows].join('\n');
 }
