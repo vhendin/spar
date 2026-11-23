@@ -54,7 +54,7 @@
         "stiffness": 36000,
         "damping": 2700
       },
-      "differential": "lockable"
+      "differential": "open"
     }
   ],
   "drivetrain": {

@@ -234,7 +234,7 @@ same as the Terrängkombi.
     open. (Done.)
   - Felled trees and broken fences stay session-only; the server does not save them. (As is.)
   - Join in another region stays: it switches you to their region. (As is.)
-  - Light 4×4: no locks at all, like the real M38A1 (drop the rear lock).
+  - Light 4×4: no locks at all, like the real M38A1 (drop the rear lock). (Done.)
   - Sinking: count ground pressure (load per tyre area), so light vehicles and wide tyres
     float better over bog and heavy ones sink deeper.
   - Colours: keep the defaults (faded red light 4×4, dark grey Terrängkombi). (As is.)
