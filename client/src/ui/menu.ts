@@ -38,6 +38,7 @@ const CONTROLS: [string, string][] = [
   ['Space', 'Handbrake'],
   ['L', 'Low and high range'],
   ['X', 'Crawl control in low range: next speed, then off (Shift+X off)'],
+  ['Z', 'Air suspension: a level higher (Shift+Z lower)'],
   ['1  2  3', 'Differential locks, per axle'],
   ['H', 'Headlights: automatic, on, off'],
   ['V', 'Camera: chase, orbit, cab'],

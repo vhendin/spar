@@ -50,6 +50,7 @@ export interface Chassis {
    * Air drag: the drag coefficient times the frontal area, in square metres (Cd·A). Sets the top speed together with the engine. 0 if left out.
    */
   dragArea?: number;
+  airSuspension?: AirSuspension;
 }
 /**
  * The bodywork as a box for collisions: its centre and full width, height and length. The frame under it, between the axles and down to the ground clearance, is added automatically; keeping the box above the wheels gives the vehicle its approach and departure angles.
@@ -57,6 +58,43 @@ export interface Chassis {
 export interface CollisionBox {
   center: Vec3;
   size: Vec3;
+}
+/**
+ * Ride heights the driver can choose, lowest first; the body rises and sinks on its springs between them. groundClearance is the height at the normal level.
+ */
+export interface AirSuspension {
+  /**
+   * @minItems 2
+   * @maxItems 6
+   */
+  levels:
+    | [RideLevel, RideLevel]
+    | [RideLevel, RideLevel, RideLevel]
+    | [RideLevel, RideLevel, RideLevel, RideLevel]
+    | [RideLevel, RideLevel, RideLevel, RideLevel, RideLevel]
+    | [RideLevel, RideLevel, RideLevel, RideLevel, RideLevel, RideLevel];
+  /**
+   * Index of the level it starts at, whose clearance should equal groundClearance.
+   */
+  normal: number;
+  /**
+   * How fast the body rises or sinks, metres a second. 0.05 if left out.
+   */
+  rate?: number;
+}
+export interface RideLevel {
+  /**
+   * Shown on the dashboard.
+   */
+  name: string;
+  /**
+   * Ground clearance at this level, metres.
+   */
+  clearance: number;
+  /**
+   * Fastest it may be driven at this level, km/h: it cannot be chosen faster, and comes down by itself beyond it. No limit if left out.
+   */
+  maxSpeed?: number;
 }
 export interface Wheels {
   radius: number;

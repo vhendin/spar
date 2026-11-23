@@ -102,6 +102,8 @@ const DROWN_TIME = 0.4;
 const DRY_TIME = 3;
 /** Wading depth when the definition has none. */
 const WADING = 0.6;
+/** Metres a second air suspension raises or lowers the body, when the definition does not say. */
+const RIDE_RATE = 0.05;
 
 export interface VehicleInput {
   /** Pedals, 0..1. In reverse they swap roles: the brake pedal drives backwards. */
@@ -276,6 +278,13 @@ export class VehicleSim {
   private crawlLever = 0;
   /** Seconds the pedal against the direction of travel has been held at a standstill. */
   private againstHeld = 0;
+  /** Air suspension: which of the definition's ride levels is chosen. */
+  ride = 0;
+  /**
+   * Metres the body stands above where groundClearance puts it, moving towards the chosen
+   * level's height (below 0 at a level lower than normal).
+   */
+  lift = 0;
 
   private readonly controller: RAPIER.DynamicRayCastVehicleController;
   private readonly restLength: number[] = [];
@@ -314,6 +323,7 @@ export class VehicleSim {
     const { mass, centerOfMass: com, box } = def.chassis;
     const [w, h, l] = box.size as [number, number, number];
     this.iceNeeded = Math.sqrt(mass / ICE_STRENGTH) / 100;
+    this.ride = def.chassis.airSuspension?.normal ?? 0;
     // A box's resistance to turning, eased a little: much of the weight sits low and central.
     const k = (mass / 12) * 0.8;
     this.body = world.createRigidBody(
@@ -495,6 +505,35 @@ export class VehicleSim {
     this.crawl = off || this.crawl >= speeds.length ? 0 : this.crawl + 1;
   }
 
+  /**
+   * Air suspension's key, on a vehicle that has it: one level higher, or with `down` one lower.
+   * A level is not taken while driving faster than it allows.
+   */
+  rideKey(down = false): void {
+    const air = this.def.chassis.airSuspension;
+    if (!air) return;
+    const next = this.ride + (down ? -1 : 1);
+    const level = air.levels[next];
+    if (!level || (level.maxSpeed !== undefined && Math.abs(this.speed) * 3.6 > level.maxSpeed)) return;
+    this.ride = next;
+  }
+
+  /** Moves the body towards the chosen ride height, first bringing it down if driven too fast for it. */
+  private stepRide(dt: number): void {
+    const air = this.def.chassis.airSuspension;
+    if (!air) return;
+    const kmh = Math.abs(this.speed) * 3.6;
+    while (this.ride > 0 && kmh > (air.levels[this.ride]!.maxSpeed ?? Infinity)) this.ride--;
+    const want = air.levels[this.ride]!.clearance - this.def.chassis.groundClearance;
+    const rate = (air.rate ?? RIDE_RATE) * dt;
+    this.lift += Math.max(-rate, Math.min(rate, want - this.lift));
+  }
+
+  /** Height of the body's underside above the bottom of the tyres, at the ride height it stands at now. */
+  get clearance(): number {
+    return this.def.chassis.groundClearance + this.lift;
+  }
+
   /** Locks or frees an axle's differential, if it is a lockable one. */
   toggleLock(axle: number): void {
     if (this.def.axles[axle]?.differential === 'lockable') this.locks[axle] = !this.locks[axle];
@@ -614,6 +653,7 @@ export class VehicleSim {
       if (normal) Object.assign(wheel.normal, { x: normal.x, y: normal.y, z: normal.z });
       wheel.grip = tireOnGround(def, wheel.ground, wet).grip;
     }
+    this.stepRide(dt);
     this.sinkWheels(dt);
 
     const out = stepDrivetrain(def, state, drive, this.speed, dt);
@@ -668,7 +708,7 @@ export class VehicleSim {
         // driven, so on a driven wheel it comes off the drive force instead: holding it back from
         // a standstill, slowing it once rolling. Off the drive it all goes on the brake.
         // Ruts drag, and so does snow pushed aside.
-        const belly = Math.max(0, wheel.snow * SNOW_PACK - def.chassis.groundClearance - wheel.sink);
+        const belly = Math.max(0, wheel.snow * SNOW_PACK - this.clearance - wheel.sink);
         const sunk = ((wheel.snow ? SNOW_RUT : RUT_DRAG) * (wheel.sink / def.wheels.radius) ** 2 + SNOW_DRAG * wheel.snow + SNOW_BELLY * belly) * wheel.load;
         let force = axle.driven ? split.forces[d]! : 0;
         if (force !== 0) {
@@ -703,8 +743,10 @@ export class VehicleSim {
     const w = this.body.angvel();
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i]!;
-      wheel.suspension = c.wheelSuspensionLength(i) ?? this.restLength[i]!;
-      wheel.bump = Math.min(1, Math.max(0, (this.restLength[i]! - wheel.suspension) / this.travel[i]!));
+      // Counted from where the wheel hangs at the normal ride height, so it shows where the wheel is.
+      const length = c.wheelSuspensionLength(i) ?? this.restLength[i]!;
+      wheel.suspension = length + this.lift;
+      wheel.bump = Math.min(1, Math.max(0, (this.restLength[i]! - length) / this.travel[i]!));
       wheel.rotation = c.wheelRotation(i) ?? 0;
       // Velocity of the contact patch (body velocity plus spin about the centre), along the
       // tyre's own sideways axis.
@@ -753,13 +795,14 @@ export class VehicleSim {
       if (wheel.water > 0.02) wet = true;
       wading = Math.max(wading, wheel.water + wheel.sink);
       const at = this.wheelPosition(i);
-      this.controller.setWheelChassisConnectionPointCs(i, { x: at.x, y: this.connectionY[i]! + wheel.sink + wheel.water, z: at.z });
+      // Air suspension lifts the body by hanging the wheels lower from it.
+      this.controller.setWheelChassisConnectionPointCs(i, { x: at.x, y: this.connectionY[i]! + wheel.sink + wheel.water - this.lift, z: at.z });
     }
     this.wading = wet ? wading : 0;
 
     // Deep in a lake the body sits below the water's surface, which is where the ground's
     // collider is; it bumps the ground again once the water is shallow.
-    const deep = this.wheels.some((w) => w.water > this.def.chassis.groundClearance * 0.6);
+    const deep = this.wheels.some((w) => w.water > this.clearance * 0.6);
     const shallow = this.wheels.every((w) => w.water < 0.08);
     if (this.bodyMeetsGround === deep || (!this.bodyMeetsGround && shallow)) {
       this.bodyMeetsGround = !deep;
@@ -768,7 +811,8 @@ export class VehicleSim {
     }
 
     // The engine drowns with water over its intake for a moment, and starts again a while after.
-    const limit = this.def.chassis.wading ?? WADING;
+    // Raised on its air suspension, the intake stands that much higher.
+    const limit = (this.def.chassis.wading ?? WADING) + this.lift;
     if (!this.drowned) {
       this.drowning = this.wading > limit ? this.drowning + dt : 0;
       if (this.drowning > DROWN_TIME) {
@@ -889,6 +933,8 @@ export class VehicleSim {
       locks: [...this.locks] as VehicleHandover['locks'],
       holding: this.holding,
       crawl: this.crawl,
+      ride: this.ride,
+      lift: this.lift,
       drowned: this.drowned,
       steer: this.steerAngle,
     };
@@ -915,6 +961,9 @@ export class VehicleSim {
     this.holding = s.holding;
     this.crawl = d.range === 'low' ? Math.min(s.crawl ?? 0, this.def.drivetrain.crawl?.length ?? 0) : 0;
     this.crawlLever = 0;
+    const air = this.def.chassis.airSuspension;
+    this.ride = air ? Math.min(s.ride ?? air.normal, air.levels.length - 1) : 0;
+    this.lift = air ? (s.lift ?? 0) : 0;
     this.drowned = s.drowned;
     this.drowning = 0;
     this.steerAngle = s.steer;

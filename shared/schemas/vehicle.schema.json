@@ -75,6 +75,60 @@
           "description": "Air drag: the drag coefficient times the frontal area, in square metres (Cd·A). Sets the top speed together with the engine. 0 if left out.",
           "type": "number",
           "minimum": 0
+        },
+        "airSuspension": {
+          "title": "AirSuspension",
+          "description": "Ride heights the driver can choose, lowest first; the body rises and sinks on its springs between them. groundClearance is the height at the normal level.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "levels",
+            "normal"
+          ],
+          "properties": {
+            "levels": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 6,
+              "items": {
+                "title": "RideLevel",
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "name",
+                  "clearance"
+                ],
+                "properties": {
+                  "name": {
+                    "description": "Shown on the dashboard.",
+                    "type": "string",
+                    "pattern": "^[a-z]+$",
+                    "maxLength": 10
+                  },
+                  "clearance": {
+                    "description": "Ground clearance at this level, metres.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "maxSpeed": {
+                    "description": "Fastest it may be driven at this level, km/h: it cannot be chosen faster, and comes down by itself beyond it. No limit if left out.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                }
+              }
+            },
+            "normal": {
+              "description": "Index of the level it starts at, whose clearance should equal groundClearance.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "rate": {
+              "description": "How fast the body rises or sinks, metres a second. 0.05 if left out.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
         }
       }
     },

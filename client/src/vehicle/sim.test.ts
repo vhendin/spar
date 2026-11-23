@@ -438,6 +438,49 @@ describe('electric pickup', () => {
     expect(fast.rear).toBeGreaterThan(2 * Math.PI / 180);
     expect(fast.rear).toBeLessThanOrEqual(3 * Math.PI / 180 + 1e-9);
   });
+
+  it('raises and lowers its body on air suspension, coming down by itself at speed', () => {
+    const { car, run } = setup('elpickup', { ground: () => 'asphalt' });
+    run(2);
+    const normal = car.body.translation().y;
+    car.rideKey();
+    car.rideKey();
+    expect(car.ride).toBe(3); // extract
+    run(5);
+    expect(car.body.translation().y - normal).toBeCloseTo(0.14, 1);
+    expect(car.clearance).toBeCloseTo(0.44, 2);
+    // Down to road height, 5 cm under normal.
+    car.rideKey(true);
+    car.rideKey(true);
+    car.rideKey(true);
+    car.rideKey(true); // already the lowest
+    expect(car.ride).toBe(0);
+    run(6);
+    expect(car.body.translation().y - normal).toBeCloseTo(-0.05, 1);
+    // Back at extract and driving off: past 15 km/h it drops to high, past 50 to normal.
+    car.rideKey(); car.rideKey(); car.rideKey();
+    run(4);
+    const seen = new Set<number>();
+    while (car.speed < 60 / 3.6) {
+      run(0.1, { throttle: 0.4 });
+      seen.add(car.ride);
+    }
+    expect(seen.has(2)).toBe(true);
+    expect(car.ride).toBe(1);
+    // Too fast to choose high again.
+    car.rideKey();
+    expect(car.ride).toBe(1);
+  });
+
+  it('carries its ride height to another browser', () => {
+    const a = setup('elpickup');
+    a.car.rideKey();
+    a.run(2);
+    const b = setup('elpickup');
+    b.car.load(a.car.save(1));
+    expect(b.car.ride).toBe(2);
+    expect(b.car.lift).toBeCloseTo(a.car.lift, 5);
+  });
 });
 
 describe('handing a vehicle between browsers', () => {

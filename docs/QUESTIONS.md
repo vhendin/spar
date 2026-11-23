@@ -257,7 +257,10 @@ same as the Terrängkombi.
     (a few degrees) at high speed. (Done: against up to 10° at a standstill, straight at
     60 km/h, with it up to 3° at full lock from 90 km/h; `steerWith` on the axle.)
   - Elpickup air suspension: a key to raise and lower it (road, normal, high, extract 44 cm),
-    high settings only at low speed.
+    high settings only at low speed. (Done: Z higher, Shift+Z lower; road 25 cm, normal 30, high 37
+    up to 50 km/h, extract 44 up to 15 km/h, coming down by itself beyond that; 5 cm a second;
+    AIR lamp on the dashboard; `chassis.airSuspension`. Guessed: the heights of road and
+    high, the speed limits and the rate.)
 
 - Logins: Cloudflare Access (email one-time code) in front of `spar.vhendin.se`, and the
   game ties each driver to their login email. Kept per account on the server: name and

@@ -12,6 +12,8 @@ export const PAD_ACTIONS = [
   { id: 'lights', label: 'Headlights' },
   { id: 'range', label: 'Low and high range' },
   { id: 'crawl', label: 'Crawl control: next speed, then off' },
+  { id: 'rideUp', label: 'Air suspension: higher' },
+  { id: 'rideDown', label: 'Air suspension: lower' },
   { id: 'locks', label: 'Differential locks, all axles' },
   { id: 'winch', label: 'Winch: choose an anchor, hook on, unhook' },
   { id: 'winchIn', label: 'Winch in' },
@@ -32,7 +34,7 @@ export const BUTTON_NAMES = [
 export const buttonName = (i: number): string => (i < 0 ? '–' : (BUTTON_NAMES[i] ?? `Button ${i}`));
 
 const DEFAULTS: Record<PadAction, number> = {
-  throttle: 7, brake: 6, handbrake: 0, right: 3, camera: 2, lights: 1, range: 4, crawl: 11, locks: 5,
+  throttle: 7, brake: 6, handbrake: 0, right: 3, camera: 2, lights: 1, range: 4, crawl: 11, rideUp: 10, rideDown: -1, locks: 5,
   winch: 15, winchIn: 13, winchOut: 14, map: 8, minimap: 12, toStart: -1, menu: 9,
 };
 

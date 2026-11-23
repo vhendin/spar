@@ -30,7 +30,7 @@ const SEND_EVERY = 50;
 export const NO_CONTROLS: DriveControls = { throttle: 0, brake: 0, steer: 0, handbrake: false, digital: false, pull: false, slack: false, lights: false };
 
 /** The once-only parts of the controls: a key pressed. */
-export type DriveEvent = Pick<DriveControls, 'range' | 'crawl' | 'lock' | 'right' | 'hook' | 'release'>;
+export type DriveEvent = Pick<DriveControls, 'range' | 'crawl' | 'ride' | 'lock' | 'right' | 'hook' | 'release'>;
 
 /** Another driver's vehicle simulated here. */
 interface Hosted {
@@ -214,6 +214,7 @@ export class Towing {
     h.heard = now;
     if (c.range) h.sim.toggleRange();
     if (c.crawl) h.sim.crawlKey(c.crawl === 'off');
+    if (c.ride) h.sim.rideKey(c.ride === 'down');
     if (c.lock !== undefined) h.sim.toggleLock(c.lock);
     if (c.right && !h.sim.beingRighted) {
       h.winch.stow();

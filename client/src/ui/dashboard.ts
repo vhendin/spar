@@ -88,7 +88,7 @@ export class Dashboard {
   private gear!: SVGTextElement;
   private range!: SVGTextElement;
   private speed!: SVGTextElement;
-  private lamps: { range: HTMLSpanElement; crawl: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement } | null = null;
+  private lamps: { range: HTMLSpanElement; crawl: HTMLSpanElement; ride: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement } | null = null;
   private def: VehicleDef | null = null;
   private tachMax = 5000;
   /** Electric: the left dial shows the power drawn, kW, up to this. */
@@ -153,11 +153,13 @@ export class Dashboard {
     if (d.ranges.low === undefined) range.style.display = 'none';
     const crawl = lamp('CRAWL', 'Crawl control in low range (X; Shift+X off)');
     if (!d.crawl) crawl.style.display = 'none';
+    const ride = lamp('AIR', 'Air suspension height (Z higher; Shift+Z lower)');
+    if (!def.chassis.airSuspension) ride.style.display = 'none';
     const locks = def.axles.map((axle, a) => (axle.differential === 'lockable' ? lamp(`DIFF ${a + 1}`, `Differential lock, axle ${a + 1} (${a + 1})`) : null)).filter((s): s is HTMLSpanElement => s !== null);
     const lights = lamp('LIGHTS', 'Headlights (H)');
     const parked = lamp('P', 'Parking brake');
     parked.classList.add('brake');
-    this.lamps = { range, crawl, locks, lights, parked };
+    this.lamps = { range, crawl, ride, locks, lights, parked };
     this.winch.root.before(row);
   }
 
@@ -188,6 +190,15 @@ export class Dashboard {
     const crawl = sim.crawl > 0 && speeds ? `CRAWL ${speeds[sim.crawl - 1]} km/h` : 'CRAWL';
     if (l.crawl.textContent !== crawl) l.crawl.textContent = crawl;
     l.crawl.classList.toggle('on', sim.crawl > 0);
+    const air = sim.def.chassis.airSuspension;
+    if (air) {
+      // The level's name, with an arrow while the body is still on its way there.
+      const level = air.levels[sim.ride]!;
+      const off = level.clearance - sim.def.chassis.groundClearance - sim.lift;
+      const ride = `AIR ${level.name.toUpperCase()}${off > 0.005 ? ' ▲' : off < -0.005 ? ' ▼' : ''}`;
+      if (l.ride.textContent !== ride) l.ride.textContent = ride;
+      l.ride.classList.toggle('on', sim.ride !== air.normal);
+    }
     let i = 0;
     sim.def.axles.forEach((axle, a) => {
       if (axle.differential === 'lockable') l.locks[i++]!.classList.toggle('on', sim.locks[a]!);

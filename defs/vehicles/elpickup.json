@@ -11,6 +11,15 @@
     "groundClearance": 0.3,
     "wading": 0.79,
     "dragArea": 1.2,
+    "airSuspension": {
+      "levels": [
+        { "name": "road", "clearance": 0.25 },
+        { "name": "normal", "clearance": 0.3 },
+        { "name": "high", "clearance": 0.37, "maxSpeed": 50 },
+        { "name": "extract", "clearance": 0.44, "maxSpeed": 15 }
+      ],
+      "normal": 1
+    },
     "box": {
       "center": [
         0,

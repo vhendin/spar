@@ -797,6 +797,11 @@
           "type": "string",
           "enum": ["next", "off"]
         },
+        "ride": {
+          "description": "Air suspension's key, once: a level higher or lower.",
+          "type": "string",
+          "enum": ["up", "down"]
+        },
         "lock": {
           "description": "Lock or free this axle's differential, once.",
           "type": "integer",
@@ -998,6 +1003,16 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 9
+        },
+        "ride": {
+          "description": "Air suspension's chosen level; the normal one if left out.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "lift": {
+          "description": "Metres the air suspension has the body above its normal height right now.",
+          "type": "number"
         },
         "drowned": {
           "type": "boolean"

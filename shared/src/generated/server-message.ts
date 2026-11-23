@@ -581,6 +581,10 @@ export interface DriveControls {
    */
   crawl?: 'next' | 'off';
   /**
+   * Air suspension's key, once: a level higher or lower.
+   */
+  ride?: 'up' | 'down';
+  /**
    * Lock or free this axle's differential, once.
    */
   lock?: number;
@@ -784,6 +788,14 @@ export interface VehicleHandover {
    * Crawl control's speed, 1 the slowest; 0 or left out when it is off.
    */
   crawl?: number;
+  /**
+   * Air suspension's chosen level; the normal one if left out.
+   */
+  ride?: number;
+  /**
+   * Metres the air suspension has the body above its normal height right now.
+   */
+  lift?: number;
   drowned: boolean;
   /**
    * Angle of the steered wheels, radians.
