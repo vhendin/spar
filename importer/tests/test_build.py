@@ -83,6 +83,7 @@ OSM_WAYS = [
     ([(500, 3900), (500, 2100)], {"aerialway": "chair_lift", "name": "Testliften", "aerialway:occupancy": "4"}),
     ([(1500, 3900), (1500, 3300)], {"aerialway": "drag_lift", "piste:lift": "platter"}),
     ([(700, 3900), (700, 2100)], {"piste:type": "downhill", "piste:difficulty": "easy"}),
+    ([(1100, 3900), (1100, 3200)], {"piste:type": "nordic", "piste:grooming": "classic+skating"}),
 ]
 FELLED = {"fresh": ((1700, 2700, 1900, 2900), "2025-06-01"), "young": ((800, 2300, 1000, 2500), "2012-06-01")}
 
@@ -352,6 +353,11 @@ def test_masks_follow_the_map(data):
         assert cleared["canopy"] == 0 and cleared["biome"] == biome("grassland"), x
     between = mask_at(folder, index, 1, 600, 3600)
     assert between["biome"] == biome("forest") and between["canopy"] * 0.25 > 3
+    # The cross-country track is a narrow strip: open on it, forest 8 m to the side.
+    track = mask_at(folder, index, 1, 1100, 3600)
+    assert track["canopy"] == 0 and track["biome"] == biome("grassland")
+    beside = mask_at(folder, index, 1, 1108, 3600)
+    assert beside["biome"] == biome("forest") and beside["canopy"] * 0.25 > 3
 
 
 def test_vectors(data):

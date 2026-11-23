@@ -491,22 +491,29 @@ DRAG_CORRIDOR = 5.0
 CLEARED_COVER = ("forest", "scrub", "clearcut", "regrowth")
 
 
+# Cross-country tracks: a machine-groomed track with room for two lanes and skating.
+NORDIC_WIDTH = 5.0
+
+
 def piste_width(tags: dict) -> float:
+    nordic = tags.get("piste:type") == "nordic"
     for key in ("piste:width", "width"):
         text = (tags.get(key) or "").replace("m", "").replace(",", ".").strip()
         try:
             width = float(text)
         except ValueError:
             continue
+        if nordic and 2 <= width <= 12:
+            return width
         # Narrower than a few metres is a mapped skiing path, not the cleared run.
-        if 2 <= width <= 200:
+        if not nordic and 2 <= width <= 200:
             return max(width, 8.0)
-    return PISTE_WIDTH
+    return NORDIC_WIDTH if nordic else PISTE_WIDTH
 
 
 def clear_ski_runs(osm: OsmData, biome: np.ndarray, canopy: np.ndarray, **grid) -> int:
     """
-    Downhill runs and the lines under lifts are cleared of trees: grass where the forest was,
+    Downhill runs, cross-country tracks and the lines under lifts are cleared of trees: grass where the forest was,
     open ground above the treeline left as it is. Returns the samples cleared.
     """
     shapes = []

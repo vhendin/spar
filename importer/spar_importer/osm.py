@@ -77,7 +77,7 @@ POWER_LINES = ("line", "minor_line")
 # Lifts by aerialway value; zip lines and goods ropes are left out.
 LIFTS = ("cable_car", "gondola", "mixed_lift", "chair_lift", "drag_lift", "t-bar", "j-bar", "platter", "rope_tow", "magic_carpet")
 # Ski runs kept clear of trees: by piste:type.
-PISTES = ("downhill", "snow_park")
+PISTES = ("downhill", "snow_park", "nordic")
 BARRIERS = ("fence", "wall", "retaining_wall")
 
 

@@ -220,7 +220,7 @@ same as the Terrängkombi.
 
 - Decisions of 2026-11-23 (to do unless marked otherwise):
   - Moving chairs, cabins and hangers on the lifts: later; they stand still for now.
-  - Cross-country tracks (`piste:type=nordic`): clear a narrow strip, about 4–6 m.
+  - Cross-country tracks (`piste:type=nordic`): clear a narrow strip, about 4–6 m. (Done: 5 m.)
   - Lift top stations become destinations ("Top of VM6:an"), every kind of lift.
   - `landuse=winter_sports` stays as built: forest between the runs, only runs and lift lines
     open. (Done.)
