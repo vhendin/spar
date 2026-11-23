@@ -5,14 +5,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Scouting drone (later)
-
-- **How should it work?** Launched from the vehicle with a key and flown by the driver while
-  the vehicle stands still, or flying ahead on its own along the way you look? How far may
-  it go (range, battery time), and does it come back on its own? Does it show the camera
-  view full screen or as a picture in the corner? Do others in the session see it? Can it
-  fly in rain, wind and snow, and does it fit every vehicle or only some?
-
 ### Vehicle menu (TODO 9)
 
 - **Where does it open?** On the start screen when picking a vehicle, from a key while
@@ -242,6 +234,17 @@ same as the Terrängkombi.
 - **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
 ## Answered
+
+- Scouting drone, decided 2026-11-23 (to do):
+  - The driver flies it, launched from the roof with the vehicle stopped; the driving keys or
+    stick fly it (forward and back, turn, up and down).
+  - About 1 km from the vehicle and 5 minutes of battery; a warning near either limit, then it
+    flies home and lands by itself. A key also sends it home.
+  - The drone camera full screen, a small picture of the vehicle in a corner, and a height,
+    distance and battery readout.
+  - Others in the session see it: a small drone with a blinking light and the name tag.
+  - Weather has no effect on it.
+  - Every vehicle carries one.
 
 - Decisions of 2026-11-23 (to do unless marked otherwise):
   - Moving chairs, cabins and hangers on the lifts: later; they stand still for now.
