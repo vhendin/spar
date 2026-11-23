@@ -262,7 +262,7 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
     print(f"  {len(vectors['roads'])} road part(s), {len(vectors['lakes'])} lake(s), {len(vectors['spawns'])} spawn point(s), treeline {treeline:.0f} m")
     print(
         f"  {len(vectors['buildings'])} building(s), {len(vectors['powerLines'])} power line(s), "
-        f"{len(vectors['fences'])} fence line(s), {len(vectors['objects'])} other object(s)"
+        f"{len(vectors['fences'])} fence line(s), {len(vectors['lifts'])} lift(s), {len(vectors['objects'])} other object(s)"
     )
 
     latitude, longitude = region.center_wgs84()

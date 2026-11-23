@@ -3,7 +3,7 @@
 
 import type { RegionIndex } from '@spar/shared';
 import { fetchUint16, heightFileUrl } from '../terrain/region';
-import { buildTile, type BuiltTile } from './build';
+import { buildTile, LIFT_DEFS, type BuiltTile } from './build';
 import { OBJECTS } from './defs';
 import { assignToTiles, tileKey, type FeatureVectors, type TileJob } from './layout';
 
@@ -12,7 +12,8 @@ export type FeatureRequest =
   | { kind: 'tile'; id: number; tx: number; tz: number };
 
 export type FeatureResponse =
-  | { kind: 'ready'; tiles: string[] }
+  /** The tiles with anything in them, each with the farthest any of its objects is drawn. */
+  | { kind: 'ready'; tiles: [string, number][] }
   | { kind: 'tile'; id: number; ok: true; tile: BuiltTile }
   | { kind: 'tile'; id: number; ok: false; error: string };
 
@@ -38,6 +39,34 @@ function extent(job: TileJob): [number, number, number, number] {
   return [x0 - pad, z0 - pad, x1 + pad, z1 + pad];
 }
 
+/**
+ * Points along every lift through the tile, end to end: its towers are placed from the ground
+ * along the whole line, so each tile it crosses needs all of it to agree on where they stand.
+ */
+function liftPoints(job: TileJob): [number, number][] {
+  const out: [number, number][] = [];
+  for (const { lift } of job.lifts) {
+    for (let k = 0; k + 1 < lift.points.length; k++) {
+      const a = lift.points[k]!, b = lift.points[k + 1]!;
+      const steps = Math.max(1, Math.ceil(Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!) / 32));
+      for (let s = 0; s <= steps; s++) out.push([a[0]! + ((b[0]! - a[0]!) * s) / steps, a[1]! + ((b[1]! - a[1]!) * s) / steps]);
+    }
+  }
+  return out;
+}
+
+/** The farthest any object in the tile is drawn. */
+function reach(job: TileJob): number {
+  const range = (name: string | undefined): number => (name && OBJECTS[name]?.range) || 0;
+  let r = 0;
+  if (job.buildings.length) r = Math.max(r, range('building'));
+  if (job.power.length) r = Math.max(r, range('power_pole'));
+  for (const f of job.fences) r = Math.max(r, range(f.kind));
+  for (const o of job.objects) r = Math.max(r, range(o.kind));
+  for (const { lift } of job.lifts) r = Math.max(r, range(LIFT_DEFS[lift.kind]));
+  return r || 500;
+}
+
 async function build(tx: number, tz: number): Promise<BuiltTile> {
   const job = jobs.get(tileKey(tx, tz));
   if (!job) return { parts: [], solids: [], low: 0, high: 0 };
@@ -46,20 +75,22 @@ async function build(tx: number, tz: number): Promise<BuiltTile> {
   const side = h.samples + 2 * h.apron;
   const fileOf = (v: number): number => Math.min(level.count - 1, Math.max(0, Math.floor(v / level.span)));
   const [x0, z0, x1, z1] = extent(job);
+  const wanted = new Set<string>();
+  if (x0 <= x1) for (let fz = fileOf(z0); fz <= fileOf(z1); fz++) for (let fx = fileOf(x0); fx <= fileOf(x1); fx++) wanted.add(`${fx},${fz}`);
+  for (const [x, z] of liftPoints(job)) for (const [ox, oz] of [[-30, -30], [30, -30], [30, 30], [-30, 30]] as const) wanted.add(`${fileOf(x + ox)},${fileOf(z + oz)}`);
   const loaded = new Map<string, Uint16Array>();
   const waits: Promise<void>[] = [];
-  for (let fz = fileOf(z0); fz <= fileOf(z1); fz++) {
-    for (let fx = fileOf(x0); fx <= fileOf(x1); fx++) {
-      const url = heightFileUrl(index, level.level, fx, fz);
-      let file = files.get(url);
-      if (!file) {
-        file = fetchUint16(url, side * side);
-        file.catch(() => files.delete(url));
-        files.set(url, file);
-        if (files.size > 48) files.delete(files.keys().next().value!);
-      }
-      waits.push(file.then((data) => void loaded.set(`${fx},${fz}`, data)));
+  for (const key of wanted) {
+    const [fx, fz] = key.split(',').map(Number) as [number, number];
+    const url = heightFileUrl(index, level.level, fx, fz);
+    let file = files.get(url);
+    if (!file) {
+      file = fetchUint16(url, side * side);
+      file.catch(() => files.delete(url));
+      files.set(url, file);
+      if (files.size > 64) files.delete(files.keys().next().value!);
     }
+    waits.push(file.then((data) => void loaded.set(key, data)));
   }
   await Promise.all(waits);
 
@@ -85,7 +116,7 @@ self.onmessage = (ev: MessageEvent<FeatureRequest>): void => {
   if (req.kind === 'init') {
     ({ index, seed } = req);
     jobs = assignToTiles(req.vectors, index.tileSize, index.size);
-    self.postMessage({ kind: 'ready', tiles: [...jobs.keys()] } satisfies FeatureResponse);
+    self.postMessage({ kind: 'ready', tiles: [...jobs].map(([key, job]) => [key, reach(job)]) } satisfies FeatureResponse);
     return;
   }
   build(req.tx, req.tz).then(

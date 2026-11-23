@@ -3,7 +3,7 @@
 export type HexColor = string;
 
 /**
- * One kind of man-made object, built by a procedural generator where the region's vectors place it (buildings, power lines, fences, log piles). Lives in defs/objects/<name>.json.
+ * One kind of man-made object, built by a procedural generator where the region's vectors place it (buildings, power lines, fences, log piles, lifts). Lives in defs/objects/<name>.json.
  */
 export interface ObjectDef {
   name: string;
@@ -14,7 +14,7 @@ export interface ObjectDef {
   /**
    * Which generator builds it.
    */
-  generator: 'building' | 'pole' | 'fence' | 'log_pile';
+  generator: 'building' | 'pole' | 'fence' | 'log_pile' | 'lift';
   /**
    * Shape parameters read by the generator, in metres and degrees. A [min, max] pair is drawn anew for every object.
    */

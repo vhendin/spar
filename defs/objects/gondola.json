@@ -1,0 +1,29 @@
+{
+  "name": "gondola",
+  "title": "Gondola or cable car (kabinbana)",
+  "generator": "lift",
+  "params": {
+    "style": "gondola",
+    "towerHeight": [13, 18],
+    "stationHeight": 6.5,
+    "gauge": 6.2,
+    "maxSpan": 420,
+    "minSpan": 40,
+    "clearance": 8,
+    "sag": 0.0003,
+    "spacing": [40, 55],
+    "hang": 3.2,
+    "seats": 8,
+    "stationLength": 26,
+    "stationWidth": 14
+  },
+  "colors": {
+    "steel": ["#7a7f83", "#5d6266"],
+    "concrete": ["#9a968c"],
+    "roof": ["#3b3f42", "#2f4a63"],
+    "chair": ["#c8ccd0", "#b8322a", "#d8d2c2"],
+    "seat": ["#24282c"]
+  },
+  "range": 2400,
+  "collider": true
+}

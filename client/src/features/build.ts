@@ -4,9 +4,10 @@
 import type { ObjectDef } from '@spar/shared';
 import { building } from './generators/building';
 import { fence } from './generators/fence';
+import { lift } from './generators/lift';
 import { logPile } from './generators/logPile';
 import { powerLine } from './generators/pole';
-import type { TileJob } from './layout';
+import { inBox, type TileJob } from './layout';
 import { FeatureMesh, type GroundFn, type Solid } from './mesh';
 
 export interface BuiltPart {
@@ -30,6 +31,19 @@ export interface BuiltTile {
 /** Definition used for each feature family; fences name theirs in the data. */
 const BUILDING = 'building';
 const POLE = 'power_pole';
+/** Definition used for each kind of lift, by OpenStreetMap aerialway value. */
+export const LIFT_DEFS: Record<string, string> = {
+  chair_lift: 'chair_lift',
+  mixed_lift: 'chair_lift',
+  gondola: 'gondola',
+  cable_car: 'gondola',
+  drag_lift: 'drag_lift',
+  't-bar': 'drag_lift',
+  'j-bar': 'drag_lift',
+  platter: 'drag_lift',
+  rope_tow: 'drag_lift',
+  magic_carpet: 'magic_carpet',
+};
 
 export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: number, ground: GroundFn): BuiltTile {
   const meshes = new Map<string, FeatureMesh>();
@@ -50,6 +64,11 @@ export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: n
   for (const f of job.fences) {
     const def = defs[f.kind];
     if (def?.generator === 'fence') fence(f.id, f.points, def, seed, ground, mesh(f.kind));
+  }
+  for (const { lift: l, box } of job.lifts) {
+    const name = LIFT_DEFS[l.kind];
+    const def = name ? defs[name] : undefined;
+    if (def?.generator === 'lift') lift(l, def, seed, ground, (x, z) => inBox(box, x, z), mesh(name!));
   }
   for (const o of job.objects) {
     const def = defs[o.kind];

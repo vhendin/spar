@@ -763,6 +763,21 @@ export class MapScreen {
         c.stroke();
       }
     }
+    // Lifts: a dark line from station to station, a dot at each end.
+    if (s > 0.06 && this.vectors.lifts?.length) {
+      c.strokeStyle = c.fillStyle = '#26221f';
+      for (const l of this.vectors.lifts) {
+        c.lineWidth = l.kind === 'magic_carpet' ? 1 : 1.6;
+        line(l.points);
+        c.stroke();
+        for (const end of [l.points[0]!, l.points[l.points.length - 1]!]) {
+          const [x, y] = this.toScreen(end[0]!, end[1]!);
+          c.beginPath();
+          c.arc(x, y, 2.4, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    }
     // Paths and trails dashed, then the roads cased and filled: asphalt orange, gravel white.
     c.setLineDash([4, 3]);
     c.strokeStyle = '#6b4a33';

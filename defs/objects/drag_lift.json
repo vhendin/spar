@@ -1,0 +1,28 @@
+{
+  "name": "drag_lift",
+  "title": "Drag lift: T-bar or button lift (släplift, knapplift)",
+  "generator": "lift",
+  "params": {
+    "style": "drag",
+    "towerHeight": [6, 7.5],
+    "stationHeight": 4.2,
+    "gauge": 2.6,
+    "maxSpan": 130,
+    "minSpan": 18,
+    "clearance": 4.2,
+    "sag": 0.0006,
+    "spacing": [10, 13],
+    "hang": 1.4,
+    "stationLength": 4,
+    "stationWidth": 3.5
+  },
+  "colors": {
+    "steel": ["#6f7477", "#5c6d3c", "#7a7f83"],
+    "concrete": ["#9a968c"],
+    "roof": ["#3b3f42", "#7b2e25"],
+    "chair": ["#2b2c2e"],
+    "seat": ["#b8322a", "#2b2c2e", "#d0a032"]
+  },
+  "range": 900,
+  "collider": true
+}

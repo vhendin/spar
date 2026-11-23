@@ -1,0 +1,29 @@
+{
+  "name": "chair_lift",
+  "title": "Chair lift (stollift)",
+  "generator": "lift",
+  "params": {
+    "style": "chair",
+    "towerHeight": [9, 12.5],
+    "stationHeight": 4.6,
+    "gauge": 5.2,
+    "maxSpan": 260,
+    "minSpan": 30,
+    "clearance": 6,
+    "sag": 0.00035,
+    "spacing": [13, 17],
+    "hang": 2.6,
+    "seats": 4,
+    "stationLength": 18,
+    "stationWidth": 10
+  },
+  "colors": {
+    "steel": ["#6f7477", "#5d6266", "#3f5a73"],
+    "concrete": ["#9a968c"],
+    "roof": ["#3b3f42", "#7b2e25", "#2f4a63"],
+    "chair": ["#2b2c2e", "#2b2c2e", "#8e2a22", "#25466b"],
+    "seat": ["#3a3b3d", "#a33a2c", "#30557f"]
+  },
+  "range": 2000,
+  "collider": true
+}

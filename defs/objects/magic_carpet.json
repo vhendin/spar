@@ -1,0 +1,9 @@
+{
+  "name": "magic_carpet",
+  "title": "Moving walkway for beginners (rullband)",
+  "generator": "lift",
+  "params": { "style": "carpet", "width": 0.9 },
+  "colors": { "steel": ["#7a7f83"], "seat": ["#26282a"], "roof": ["#c9cfd2", "#a9c4d8"] },
+  "range": 400,
+  "collider": false
+}

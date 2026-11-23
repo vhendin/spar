@@ -38,7 +38,8 @@ BIOME_TAGS: dict[tuple[str, str], str] = {
     ("natural", "grassland"): "grassland",
     ("landuse", "meadow"): "grassland",
     ("landuse", "grass"): "grassland",
-    ("landuse", "winter_sports"): "grassland",
+    # Not landuse=winter_sports: it outlines a whole ski area, forest between the runs
+    # included. The runs themselves are cleared from piste:type (masks.clear_ski_runs).
     ("leisure", "pitch"): "grassland",
     ("leisure", "park"): "grassland",
     ("natural", "scrub"): "scrub",

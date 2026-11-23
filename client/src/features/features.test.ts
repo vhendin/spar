@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Building, FenceLine, PowerLine } from '@spar/shared';
+import type { Building, FenceLine, Lift, PowerLine } from '@spar/shared';
 import { buildTile } from './build';
 import { OBJECTS } from './defs';
 import { footprintRect, rectWings } from './generators/building';
 import { alongLine } from './generators/fence';
+import { liftSupports } from './generators/lift';
 import { assignToTiles, type FeatureVectors, type TileJob } from './layout';
 import { FeatureMesh } from './mesh';
 
@@ -88,7 +89,7 @@ describe('assignToTiles', () => {
 });
 
 describe('buildTile', () => {
-  const job: TileJob = { buildings: [house, turned, lShape], power: [{ line, poles: [1, 2, 3] }], fences: [], objects: vectors.objects };
+  const job: TileJob = { buildings: [house, turned, lShape], power: [{ line, poles: [1, 2, 3] }], fences: [], objects: vectors.objects, lifts: [] };
   for (const f of vectors.fences) job.fences.push({ id: f.id, kind: f.kind, points: f.points });
 
   it('builds the same tile identically every time', () => {
@@ -122,7 +123,7 @@ describe('buildTile', () => {
 
   it('lets wooden fences break in stretches that between them hold every post, but not stone walls', () => {
     // As the game has them: cut into pieces at tile edges, each named <fence>#<piece>.
-    const t = buildTile({ buildings: [], power: [], fences: job.fences.map((f) => ({ ...f, id: `${f.id}#0` })), objects: [] }, OBJECTS, 7, hilly);
+    const t = buildTile({ buildings: [], power: [], fences: job.fences.map((f) => ({ ...f, id: `${f.id}#0` })), objects: [], lifts: [] }, OBJECTS, 7, hilly);
     for (const kind of ['roundpole', 'wire']) {
       const part = t.parts.find((p) => p.kind === kind)!;
       const stretches = t.solids.filter((s) => s.breaks?.kind === kind).map((s) => s.breaks!);
@@ -140,7 +141,7 @@ describe('buildTile', () => {
   });
 
   it('stands buildings on the ground: walls start at or below the lowest corner', () => {
-    const t = buildTile({ buildings: [house], power: [], fences: [], objects: [] }, OBJECTS, 3, hilly);
+    const t = buildTile({ buildings: [house], power: [], fences: [], objects: [], lifts: [] }, OBJECTS, 3, hilly);
     const ys = t.parts[0]!.positions.filter((_, k) => k % 3 === 1);
     const corners = house.outline.map(([x, z]) => hilly(x, z));
     expect(Math.min(...ys)).toBeLessThanOrEqual(Math.min(...corners));
@@ -149,7 +150,7 @@ describe('buildTile', () => {
   });
 
   it('turns the faces of a rectangular house outward', () => {
-    const t = buildTile({ buildings: [house], power: [], fences: [], objects: [] }, OBJECTS, 5, flat);
+    const t = buildTile({ buildings: [house], power: [], fences: [], objects: [], lifts: [] }, OBJECTS, 5, flat);
     const { positions: p, normals: n } = t.parts[0]!;
     // Walls of the 10 x 6 house centred at (105, 103): their normals point away from the middle.
     let checked = 0;
@@ -176,6 +177,57 @@ describe('FeatureMesh.box', () => {
         const d = (p[v * 3]! - 3) * n[v * 3]! + (p[v * 3 + 1]! - 2) * n[v * 3 + 1]! + (p[v * 3 + 2]! + 1) * n[v * 3 + 2]!;
         expect(d).toBeGreaterThan(0);
       }
+    }
+  });
+});
+
+describe('lifts', () => {
+  // A chair lift 1200 m up a slope with a bump in the middle, mapped by its two ends only.
+  const chair: Lift = { id: 'a7', kind: 'chair_lift', name: 'Testliften', points: [[100, 500], [100, 1700]] };
+  const slope = (x: number, z: number): number => 800 - (z - 500) * 0.3 + 25 * Math.exp(-(((z - 1100) / 60) ** 2)) + 0 * x;
+  const def = OBJECTS.chair_lift!;
+
+  it('stands towers no farther apart than the longest span, with the rope clear of the ground', () => {
+    const s = liftSupports(chair, def, 3, slope);
+    expect(s[0]!.station && s[s.length - 1]!.station).toBe(true);
+    expect(s.slice(1, -1).every((p) => !p.station)).toBe(true);
+    expect(s.length).toBeGreaterThan(5);
+    const longest = (def.params.maxSpan as number) + 4;
+    for (let k = 1; k < s.length; k++) {
+      const a = s[k - 1]!, b = s[k]!;
+      expect(b.s - a.s).toBeLessThanOrEqual(longest);
+      for (let t = 0.05; t < 1; t += 0.05) {
+        const z = a.z + (b.z - a.z) * t;
+        if (z - 500 < 25 || 1700 - z < 25) continue;
+        const rope = a.y + a.height + (b.y + b.height - a.y - a.height) * t;
+        expect(rope - slope(100, z)).toBeGreaterThanOrEqual((def.params.clearance as number) - 0.5);
+      }
+    }
+    // A tower close to the top of the bump.
+    expect(s.some((p) => Math.abs(p.z - 1100) < 60)).toBe(true);
+    expect(liftSupports(chair, def, 3, slope)).toEqual(s);
+  });
+
+  it('builds each tower and station in exactly one tile, with chairs and rope', () => {
+    const jobs = [...assignToTiles({ buildings: [], powerLines: [], fences: [], objects: [], lifts: [chair] }, 256, 2048).values()];
+    expect(jobs.length).toBe(6); // z 500 to 1700 crosses tiles 1 to 6
+    const keys = jobs.flatMap((j) => buildTile(j, OBJECTS, 3, slope).solids.map((s) => s.key));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys.length).toBe(liftSupports(chair, def, 3, slope).length);
+    const t = buildTile(jobs[2]!, OBJECTS, 3, slope);
+    const part = t.parts.find((p) => p.kind === 'chair_lift')!;
+    expect(part.lines.length).toBeGreaterThan(0);
+    expect(part.indices.length / 3).toBeGreaterThan(200);
+    expect(part.positions.every(Number.isFinite)).toBe(true);
+  });
+
+  it('builds drag lifts, gondolas and walkways too', () => {
+    for (const kind of ['t-bar', 'platter', 'rope_tow', 'gondola', 'cable_car', 'magic_carpet']) {
+      const l: Lift = { id: `k${kind}`, kind, points: [[300, 300], [300, 420]] };
+      const jobs = [...assignToTiles({ buildings: [], powerLines: [], fences: [], objects: [], lifts: [l] }, 256, 2048).values()];
+      const parts = jobs.flatMap((j) => buildTile(j, OBJECTS, 1, slope).parts);
+      expect(parts.length, kind).toBeGreaterThan(0);
+      expect(parts.every((p) => p.positions.every(Number.isFinite)), kind).toBe(true);
     }
   });
 });

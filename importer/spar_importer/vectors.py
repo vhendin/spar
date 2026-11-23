@@ -133,6 +133,40 @@ def power_lines(osm: OsmData, region: Region, box: ogr.Geometry) -> list[dict]:
     return out
 
 
+# Drag lifts are often tagged only drag_lift, with the kind of hanger given elsewhere.
+DRAG_HANGERS = {"t-bar": "t-bar", "t_bar": "t-bar", "j-bar": "j-bar", "j_bar": "j-bar", "platter": "platter", "button": "platter"}
+
+
+def lifts(osm: OsmData, region: Region, box: ogr.Geometry) -> list[dict]:
+    """
+    Ski lifts and gondolas, from end station to end station. Points between the ends are
+    towers where the map has them; the game adds more where the ground needs them. One point
+    beyond the edge is kept at each end, as for power lines.
+    """
+    out = []
+    for lift in osm.lifts:
+        if not lift.geom.Intersects(box):
+            continue
+        kind = lift.tags["aerialway"]
+        if kind == "drag_lift":
+            kind = DRAG_HANGERS.get(lift.tags.get("piste:lift") or lift.tags.get("type") or "", kind)
+        for n, part in enumerate(_lines(lift.geom)):
+            points = _local(region, part)
+            inside = [0 <= x <= region.size and 0 <= z <= region.size for x, z in points]
+            keep = [i for i in range(len(points)) if inside[i] or (i > 0 and inside[i - 1]) or (i + 1 < len(points) and inside[i + 1])]
+            if len(keep) < 2:
+                continue
+            entry: dict = {"id": lift.id if n == 0 else f"{lift.id}.{n}", "kind": kind, "points": [points[i] for i in keep]}
+            name = lift.tags.get("name") or lift.tags.get("ref")
+            if name:
+                entry["name"] = name
+            seats = _number(lift.tags.get("aerialway:occupancy") or lift.tags.get("chairs"))
+            if seats and 1 <= seats <= 40:
+                entry["occupancy"] = int(seats)
+            out.append(entry)
+    return out
+
+
 FIELD_FENCE_LANDUSE = ("farmland", "meadow")
 OSM_FENCE_KINDS = {"split_rail": "roundpole", "rails": "roundpole", "wood": "roundpole", "log": "roundpole"}
 
@@ -267,6 +301,7 @@ def build_vectors(osm: OsmData, region: Region, levels: dict[str, float], clearc
         "spawns": _spawns(places, drivable_points, region),
         "buildings": buildings(osm, region),
         "powerLines": power_lines(osm, region, box),
+        "lifts": lifts(osm, region, box),
         "fences": fences(osm, region, box),
         "objects": log_piles(clearcuts or [], region, drivable_points),
     }

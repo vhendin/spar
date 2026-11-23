@@ -66,7 +66,7 @@ class Poi:
 
 @dataclass
 class Feature:
-    """A building outline, power line or barrier line: kept with its tags for the vectors."""
+    """A building outline, power line, lift, ski run or barrier line: kept with its tags."""
 
     id: str
     geom: ogr.Geometry
@@ -74,6 +74,10 @@ class Feature:
 
 
 POWER_LINES = ("line", "minor_line")
+# Lifts by aerialway value; zip lines and goods ropes are left out.
+LIFTS = ("cable_car", "gondola", "mixed_lift", "chair_lift", "drag_lift", "t-bar", "j-bar", "platter", "rope_tow", "magic_carpet")
+# Ski runs kept clear of trees: by piste:type.
+PISTES = ("downhill", "snow_park")
 BARRIERS = ("fence", "wall", "retaining_wall")
 
 
@@ -87,6 +91,8 @@ class OsmData:
     buildings: list[Feature] = field(default_factory=list)
     power: list[Feature] = field(default_factory=list)
     barriers: list[Feature] = field(default_factory=list)
+    lifts: list[Feature] = field(default_factory=list)
+    pistes: list[Feature] = field(default_factory=list)
 
 
 def load_osm(path: Path) -> OsmData:
@@ -121,6 +127,8 @@ def load_osm(path: Path) -> OsmData:
                 if destination and kind in ("Point", "Polygon", "MultiPolygon"):
                     point = _geometry(feature, to_metres).Centroid()
                     data.pois.append(Poi(fid, destination, tags.get("name") or None, _elevation(tags.get("ele")), point.GetX(), point.GetY()))
+                if tags.get("piste:type") in PISTES and kind in ("LineString", "Polygon", "MultiPolygon"):
+                    data.pistes.append(Feature(fid, _geometry(feature, to_metres), tags))
                 if kind in ("Polygon", "MultiPolygon"):
                     biome = biome_for(tags)
                     if biome:
@@ -129,6 +137,8 @@ def load_osm(path: Path) -> OsmData:
                         data.buildings.append(Feature(fid, _geometry(feature, to_metres), tags))
                 elif kind == "LineString" and tags.get("power") in POWER_LINES and tags.get("location") not in ("underground", "underwater"):
                     data.power.append(Feature(fid, _geometry(feature, to_metres), tags))
+                elif kind == "LineString" and tags.get("aerialway") in LIFTS:
+                    data.lifts.append(Feature(fid, _geometry(feature, to_metres), tags))
                 elif kind == "LineString" and tags.get("barrier") in BARRIERS:
                     data.barriers.append(Feature(fid, _geometry(feature, to_metres), tags))
                 elif kind == "LineString":

@@ -482,6 +482,47 @@ def clear_corridors(osm: OsmData, canopy: np.ndarray, **grid) -> int:
     return int(corridor.sum())
 
 
+# Ski runs drawn as a line have rarely a width mapped: a typical Swedish run is about this wide.
+PISTE_WIDTH = 30.0
+# Half width in metres of the strip cleared under each kind of lift.
+LIFT_CORRIDOR = {"cable_car": 8.0, "gondola": 10.0, "mixed_lift": 10.0, "chair_lift": 9.0, "magic_carpet": 2.0}
+DRAG_CORRIDOR = 5.0
+# Land cover a cleared run or lift line turns into: what grows on the open slopes in summer.
+CLEARED_COVER = ("forest", "scrub", "clearcut", "regrowth")
+
+
+def piste_width(tags: dict) -> float:
+    for key in ("piste:width", "width"):
+        text = (tags.get(key) or "").replace("m", "").replace(",", ".").strip()
+        try:
+            width = float(text)
+        except ValueError:
+            continue
+        # Narrower than a few metres is a mapped skiing path, not the cleared run.
+        if 2 <= width <= 200:
+            return max(width, 8.0)
+    return PISTE_WIDTH
+
+
+def clear_ski_runs(osm: OsmData, biome: np.ndarray, canopy: np.ndarray, **grid) -> int:
+    """
+    Downhill runs and the lines under lifts are cleared of trees: grass where the forest was,
+    open ground above the treeline left as it is. Returns the samples cleared.
+    """
+    shapes = []
+    for p in osm.pistes:
+        kind = ogr.GT_Flatten(p.geom.GetGeometryType())
+        shapes.append((p.geom.Buffer(piste_width(p.tags) / 2) if kind == ogr.wkbLineString else p.geom, 1))
+    shapes += [(f.geom.Buffer(LIFT_CORRIDOR.get(f.tags["aerialway"], DRAG_CORRIDOR)), 1) for f in osm.lifts]
+    if not shapes:
+        return 0
+    cleared = rasterize(shapes, **grid) > 0
+    wooded = np.isin(biome, [biome_id(name) for name in CLEARED_COVER])
+    biome[cleared & wooded] = biome_id("grassland")
+    canopy[cleared] = 0
+    return int(cleared.sum())
+
+
 def build_planes(
     osm: OsmData,
     heights2: np.ndarray,
@@ -509,9 +550,12 @@ def build_planes(
     canopy = canopy_estimate(biome, heights2, wetness, treeline)
     felled = apply_clearcuts(clearcuts or [], biome, canopy, **grid)
     clear_corridors(osm, canopy, **grid)
+    runs = clear_ski_runs(osm, biome, canopy, **grid)
     clear_verges(osm, canopy, **grid)
     pools = bog_pools(biome, surface, road, heights2, slope)
     print(f"  clear-cuts cover {felled * MASK_SPACING**2 / 1e4:.0f} ha; bog pools {pools * MASK_SPACING**2 / 1e4:.1f} ha")
+    if runs:
+        print(f"  ski runs and lift lines {runs * MASK_SPACING**2 / 1e4:.0f} ha")
     planes = {"biome": biome, "surface": surface, "road": road, "wetness": wetness, "canopy": canopy, "slope": slope}
     return planes, treeline, levels
 

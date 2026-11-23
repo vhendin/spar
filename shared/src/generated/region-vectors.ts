@@ -42,6 +42,10 @@ export interface RegionVectors {
    */
   powerLines: PowerLine[];
   /**
+   * Ski lifts and gondolas, from end station to end station. Points between the ends are towers where mapped; the game adds towers where the ground needs them. Points outside the area only carry the cable. Missing in regions built before lifts were imported.
+   */
+  lifts?: Lift[];
+  /**
    * Fences and walls: mapped ones, and fences along field edges.
    */
   fences: FenceLine[];
@@ -159,6 +163,22 @@ export interface PowerLine {
    * Highest voltage in kV, when mapped.
    */
   voltage?: number;
+  points: Line;
+}
+export interface Lift {
+  id: string;
+  /**
+   * OpenStreetMap aerialway value: chair_lift, gondola, cable_car, mixed_lift, drag_lift, t-bar, j-bar, platter, rope_tow or magic_carpet.
+   */
+  kind: string;
+  /**
+   * Name, or the lift's number when it has no name.
+   */
+  name?: string;
+  /**
+   * People per chair or cabin, when mapped.
+   */
+  occupancy?: number;
   points: Line;
 }
 export interface FenceLine {

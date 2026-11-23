@@ -5,6 +5,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Ski lifts and runs (this commit)
+
+- **Lifts from the map**: chair lifts, gondolas, cable cars, T-bars, button lifts, rope tows
+  and moving walkways (`aerialway` in OpenStreetMap; zip lines left out). Most are mapped by
+  their two end stations only, so the towers are placed from the ground: spans up to 260 m
+  (chair), 420 m (gondola) or 130 m (drag lift), and a tower wherever the rope would come
+  closer than 6 / 8 / 4.2 m to the ground. Towers are 9–12.5 m (chair), 13–18 m (gondola),
+  6–7.5 m (drag). Do they look right next to the real ones you know?
+- **Standing still.** Chairs, cabins and hangers hang on the rope but do not move. Make them
+  run (they would need to be the same for everyone)?
+- **Ski runs** (`piste:type=downhill`) are cleared of trees and turn to grass where there was
+  forest. Runs drawn as a line are taken as 30 m wide unless a width is mapped. Too wide,
+  too narrow? Cross-country tracks are not cleared: wanted?
+- **The whole ski area is no longer grass.** `landuse=winter_sports` outlines the whole
+  resort, forest between the runs included, and used to turn all of it into grass. Now only
+  the runs and lift lines are open.
+- **Stations as destinations**: "Top of VM6:an" in the map's list of places, and in the
+  logbook when you get there?
+
 ### Fences, edges and the compass (this commit)
 
 - **How hard is hard?** Wire fence goes at about 10 km/h head on (10 kJ, or 12 kN of steady

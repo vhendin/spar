@@ -45,8 +45,8 @@ export class Features {
   private readonly wireMaterial = new THREE.LineBasicNodeMaterial({ color: 0x1c1c1c });
   private readonly tiles = new Map<string, Tile>();
   private readonly pending = new Map<number, (r: Extract<FeatureResponse, { kind: 'tile' }>) => void>();
-  /** Tiles that have anything in them; the rest are never asked for. */
-  private occupied = new Set<string>();
+  /** Tiles that have anything in them, with the farthest any of it is drawn; the rest are never asked for. */
+  private occupied = new Map<string, number>();
   private readonly reach: number;
   private nextId = 1;
   private inFlight = 0;
@@ -66,15 +66,15 @@ export class Features {
     this.worker.onmessage = (ev: MessageEvent<FeatureResponse>) => {
       const msg = ev.data;
       if (msg.kind === 'ready') {
-        this.occupied = new Set(msg.tiles);
+        this.occupied = new Map(msg.tiles);
         return;
       }
       const done = this.pending.get(msg.id);
       this.pending.delete(msg.id);
       done?.(msg);
     };
-    const { buildings, powerLines, fences, objects } = vectors;
-    this.post({ kind: 'init', index, vectors: { buildings, powerLines, fences, objects }, seed });
+    const { buildings, powerLines, fences, objects, lifts } = vectors;
+    this.post({ kind: 'init', index, vectors: { buildings, powerLines, fences, objects, lifts }, seed });
   }
 
   update(camera: THREE.Vector3): void {
@@ -92,9 +92,10 @@ export class Features {
       for (let tz = lo(camera.z); tz <= hi(camera.z); tz++) {
         for (let tx = lo(camera.x); tx <= hi(camera.x); tx++) {
           const key = `${tx},${tz}`;
-          if (!this.occupied.has(key) || this.tiles.has(key)) continue;
+          const own = this.occupied.get(key);
+          if (own === undefined || this.tiles.has(key)) continue;
           const d = distance(tx, tz);
-          if (d <= reach) missing.push({ tx, tz, d });
+          if (d <= own * this.rangeScale) missing.push({ tx, tz, d });
         }
       }
       missing.sort((a, b) => a.d - b.d);
@@ -105,7 +106,7 @@ export class Features {
     for (const [key, tile] of this.tiles) {
       if (tile.state !== 'ready') continue;
       const d = distance(tile.tx, tile.tz);
-      if (d > reach + size * 2) {
+      if (d > (this.occupied.get(key) ?? 0) * this.rangeScale + size * 2) {
         this.drop(key, tile);
         continue;
       }

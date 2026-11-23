@@ -80,6 +80,9 @@ OSM_WAYS = [
     ([(2200, 2950), (2210, 2950), (2210, 2956), (2200, 2956), (2200, 2950)], {"building": "house", "building:levels": "2"}),
     ([(100, 2500), (400, 2500), (700, 2520)], {"power": "minor_line", "voltage": "20000"}),
     ([(1800, 3100), (2300, 3100), (2300, 3400), (1800, 3400), (1800, 3100)], {"landuse": "farmland"}),
+    ([(500, 3900), (500, 2100)], {"aerialway": "chair_lift", "name": "Testliften", "aerialway:occupancy": "4"}),
+    ([(1500, 3900), (1500, 3300)], {"aerialway": "drag_lift", "piste:lift": "platter"}),
+    ([(700, 3900), (700, 2100)], {"piste:type": "downhill", "piste:difficulty": "easy"}),
 ]
 FELLED = {"fresh": ((1700, 2700, 1900, 2900), "2025-06-01"), "young": ((800, 2300, 1000, 2500), "2012-06-01")}
 
@@ -343,6 +346,12 @@ def test_masks_follow_the_map(data):
     # The power line runs through a cleared strip in the forest.
     assert mask_at(folder, index, 1, 250, 2500)["canopy"] * 0.25 <= 1.25
     assert mask_at(folder, index, 1, 250, 2540)["canopy"] * 0.25 > 3
+    # The ski run and the line under the lift are open grass through the forest; between them it is forest.
+    for x in (500, 700):
+        cleared = mask_at(folder, index, 1, x, 3600)
+        assert cleared["canopy"] == 0 and cleared["biome"] == biome("grassland"), x
+    between = mask_at(folder, index, 1, 600, 3600)
+    assert between["biome"] == biome("forest") and between["canopy"] * 0.25 > 3
 
 
 def test_vectors(data):
@@ -374,6 +383,10 @@ def test_vectors(data):
     assert house["kind"] == "house" and house["levels"] == 2 and len(house["outline"]) == 4
     (line,) = vectors["powerLines"]
     assert line["kind"] == "minor_line" and line["voltage"] == 20 and line["points"] == [[100.0, 2500.0], [400.0, 2500.0], [700.0, 2520.0]]
+    assert vectors["lifts"] == [
+        {"id": "w12", "kind": "chair_lift", "name": "Testliften", "occupancy": 4, "points": [[500.0, 3900.0], [500.0, 2100.0]]},
+        {"id": "w13", "kind": "platter", "points": [[1500.0, 3900.0], [1500.0, 3300.0]]},
+    ]
     # The field gets a fence all round, with a gap where the track crosses it.
     fences = [f for f in vectors["fences"] if f["id"].startswith("field")]
     assert fences and all(f["kind"] in ("roundpole", "wire") for f in fences)

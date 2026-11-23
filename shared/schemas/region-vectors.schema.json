@@ -303,6 +303,41 @@
         }
       }
     },
+    "lifts": {
+      "description": "Ski lifts and gondolas, from end station to end station. Points between the ends are towers where mapped; the game adds towers where the ground needs them. Points outside the area only carry the cable. Missing in regions built before lifts were imported.",
+      "type": "array",
+      "items": {
+        "title": "Lift",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "points"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "OpenStreetMap aerialway value: chair_lift, gondola, cable_car, mixed_lift, drag_lift, t-bar, j-bar, platter, rope_tow or magic_carpet.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Name, or the lift's number when it has no name.",
+            "type": "string"
+          },
+          "occupancy": {
+            "description": "People per chair or cabin, when mapped.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "points": {
+            "$ref": "#/definitions/Line"
+          }
+        }
+      }
+    },
     "fences": {
       "description": "Fences and walls: mapped ones, and fences along field edges.",
       "type": "array",
