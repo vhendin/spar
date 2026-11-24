@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Performance: recorder, frame rate limit, benchmarks, cheaper ground and sky (this commit)
+### Performance: recorder, frame rate limit, benchmarks, cheaper ground and sky
 
 - **Recorder:** F9 starts and stops (fn+F9 on a Mac keyboard), F8 drops a numbered mark (say
   what each mark was, e.g. "mark 2: fan spun up"). Saved in `data/perf/` on the server; from
@@ -42,13 +42,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   can lie, and the sky dome is drawn last, only where it shows. Second run: Ottsjö 10.0 → 8.5 ms,
   over the valley 16.9 → 10.7 ms. The ground's remaining noise cost 2.0–2.8 ms of that, all its
   shading beyond a flat colour 3.1–4.5 ms.
-- **Ground noise from a texture (this commit):** the five noise lookups every ground pixel made
-  for its colour and borders now read a repeating noise texture made at start (23 ms), not
-  computed. The same kind of noise, so the ground should look much the same; say if it looks
-  different, patterned or repeating. Snow and water still compute theirs.
-- **Wanted from you:** one more `?bench=parts` run, and a look at the ground close up and far;
-  later one or two normal drives with F9, marking with F8 when the fan spins up.
-- **Open, your call later:** medium draws 1.5 pixels per point; 1 saves 2.5–3 ms now. Lowering it, or
+- **Ground noise from a texture (done):** the ground's colour and border noise reads a
+  repeating texture made at start. Third run: Ottsjö 8.5 → 6.9 ms, over the valley 10.7 →
+  8.1 ms (from 10.0 and 16.9 at the start). What is left, roughly: the ground's shading beyond a
+  flat colour 1.6–1.9 ms, the sky 1.2–1.5, the resolution 1.6–2.0; the rest about nothing.
+- **Wanted from you:** a look at the ground close up and far (patterned or repeating?), and one
+  or two normal drives with F9, marking with F8 when the fan spins up. With the GPU at about half
+  of each 60 fps frame, the CPU (4–7 ms) may now matter as much.
+- **Next if needed:** the sky's clouds from a texture too (about 1 ms); resolution.
+- **Open, your call later:** medium draws 1.5 pixels per point; 1 saves about 2 ms now. Lowering it, or
   a resolution that drops by itself when frames run long, is the next big step if needed.
 
 ### Scouting drone (this commit)
