@@ -5,15 +5,23 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Crisp roads from their lines instead of the 2 m mask
+### Roads drawn from their lines (this commit)
 
-- **Asked:** build roads, paths and streams from their centre lines (already in vectors.json
-  with kind, surface and width) instead of the blended 2 m mask, for clear edges.
-- **Proposed:** first a distance-to-centre-line channel in the mask (crisp edges at any
-  distance, room for wheel ruts, a grass strip on forest tracks and soft verges; lake shores the
-  same from their outlines). Road meshes with their own texture later, if still wanted. Land
-  cover (bog, forest, heath) stays as it is. Waiting: go ahead, and ruts and grass strip in the
-  same step?
+- **Asked:** straight, clean road edges, and paths blended rather than pixelated: for looks,
+  not speed.
+- **Done:** each ground patch now gets a small texture worked out from the road, path and
+  stream lines: every texel's distance from the nearest edge, and which road it is. Close up
+  that is a texel every 25 cm (it was 2 m), and the shader cuts between texels, so edges are
+  straight lines. Asphalt and boardwalks are sharp, gravel nearly so; trails, dirt tracks and
+  stream banks blend over 0.3–0.4 m each side with a ragged edge. Far off, roads too thin for
+  their patch are drawn a little wider but fainter. Bog pools still come from the mask.
+  Built when a patch loads, under 1 ms each, off the main thread; no region rebuild needed.
+- **Not changed:** grip, plant placement and the minimap still use the 2 m mask, so a bush can
+  stand a little into a crisp road edge, and grip changes up to a metre off the drawn edge.
+  Say if either shows.
+- **To look at:** edges of roads and paths close up and far; where roads meet; streams.
+- **Later, if wanted:** wheel ruts and a grass strip down forest tracks (the distance from the
+  centre line makes them possible); road meshes with their own texture.
 
 ### Performance: recorder, frame rate limit, benchmarks, cheaper ground and sky
 

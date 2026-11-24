@@ -1,10 +1,11 @@
 import * as THREE from 'three/webgpu';
-import type { RegionIndex } from '@spar/shared';
+import type { RegionIndex, RegionVectors } from '@spar/shared';
 import type { GroundLook, GroundShading } from './groundMaterial';
 import { distanceToBox, MASK_TEXELS, maskSource, NODE_QUADS, nodeSize, nodeSource, terrainLayout, type TerrainLayout } from './layout';
 import { buildNodeIndex, type NodeMeshData } from './meshData';
 import { heightFileUrl, maskFileUrl } from './region';
 import type { WorkerRequest, WorkerResponse } from './worker';
+import { roadLines } from './roadField';
 
 /** A node splits when the camera is closer than this many node sizes. */
 const SPLIT_FACTOR = 1.6;
@@ -75,9 +76,12 @@ export class Terrain {
     private readonly shading: GroundShading,
     /** A patch is divided while the camera is nearer than this many times its size; can change at any time. */
     public split: number,
+    vectors: Pick<RegionVectors, 'roads' | 'waterways'>,
   ) {
     this.layout = terrainLayout(index);
-    this.material = shading.material(MASK_TEXELS + 1, null);
+    // Roads, paths and streams are drawn from their lines; the worker needs them before any node.
+    this.worker.postMessage({ id: 0, kind: 'roads', lines: roadLines(vectors, index.masks.surfaces) } satisfies WorkerRequest);
+    this.material = shading.material(MASK_TEXELS + 1, null, 2, 'full', true);
     this.looks.set('full', this.material);
     this.surfaceRank = [];
     for (const s of index.masks.surfaces) this.surfaceRank[s.id] = Math.max(0, SURFACE_IMPORTANCE.indexOf(s.name));
@@ -106,8 +110,8 @@ export class Terrain {
 
   /** Loads the coarsest level for the whole area, so there is always something to draw. */
   /** `split`: a patch is divided while the camera is nearer than this many times its size. */
-  static async load(index: RegionIndex, shading: GroundShading, split = SPLIT_FACTOR): Promise<Terrain> {
-    const t = new Terrain(index, shading, split);
+  static async load(index: RegionIndex, shading: GroundShading, vectors: Pick<RegionVectors, 'roads' | 'waterways'>, split = SPLIT_FACTOR): Promise<Terrain> {
+    const t = new Terrain(index, shading, split, vectors);
     const { rootsPerSide, rootSize, rootLevel } = t.layout;
     const h = index.heights;
     const side = h.samples + 2 * h.apron;
@@ -181,7 +185,7 @@ export class Terrain {
   /** Draws the ground in another look (for the parts benchmark); 'full' is the finished one. */
   setLook(look: GroundLook): void {
     let m = this.looks.get(look);
-    if (!m) this.looks.set(look, (m = this.shading.material(MASK_TEXELS + 1, null, 2, look)));
+    if (!m) this.looks.set(look, (m = this.shading.material(MASK_TEXELS + 1, null, 2, look, true)));
     this.material = m;
     for (const o of this.group.children) if (o instanceof THREE.Mesh) o.material = m;
   }
@@ -263,6 +267,7 @@ export class Terrain {
     this.group.remove(node.mesh);
     node.mesh.geometry.dispose();
     (node.mesh.userData.mask as THREE.Texture).dispose();
+    (node.mesh.userData.roads as THREE.Texture).dispose();
     node.mesh = null;
     node.state = State.Empty;
   }
@@ -313,8 +318,9 @@ export class Terrain {
           size: MASK_TEXELS + 1,
           surfaceRank: this.surfaceRank,
         },
+        roads: { x0: node.x0, z0: node.z0, size: node.size },
       });
-      if ('mesh' in reply) this.attach(node, reply.mesh, reply.mask);
+      if ('mesh' in reply) this.attach(node, reply.mesh, reply.mask, reply.roads);
     } catch (err) {
       node.state = State.Empty;
       node.retryAt = this.frame + 120;
@@ -327,7 +333,7 @@ export class Terrain {
     }
   }
 
-  private attach(node: Node, data: NodeMeshData, maskData: Uint8Array): void {
+  private attach(node: Node, data: NodeMeshData, maskData: Uint8Array, roadData: Uint8Array): void {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
@@ -346,6 +352,12 @@ export class Terrain {
     mask.needsUpdate = true;
     mesh.userData.mask = mask;
     mesh.userData.texel = node.size / MASK_TEXELS;
+    // Distance from the road edges across this node (see roadField): smoothly filtered.
+    const roads = new THREE.DataTexture(roadData, MASK_TEXELS + 1, MASK_TEXELS + 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    roads.magFilter = roads.minFilter = THREE.LinearFilter;
+    roads.needsUpdate = true;
+    mesh.userData.roads = roads;
+    mesh.userData.size = node.size;
     mesh.receiveShadow = true;
     mesh.visible = false;
     mesh.matrixAutoUpdate = false;

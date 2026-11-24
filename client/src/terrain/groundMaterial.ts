@@ -6,13 +6,14 @@
 
 import * as THREE from 'three/webgpu';
 import {
-  Fn, If, cameraPosition, clamp, dot, float, floor, fract, int, ivec2, max, mix, mx_noise_float, normalWorld, positionWorld,
+  Fn, If, cameraPosition, clamp, dot, float, floor, fract, fwidth, int, ivec2, max, mix, mx_noise_float, normalWorld, positionLocal, positionWorld,
   pow, reflect, select, smoothstep, texture, time, uniform, uniformArray, uv, vec2, vec3, vec4,
 } from 'three/tsl';
 import { cloudShadow } from '../sky/clouds';
 import type { GroundClasses, RegionIndex } from '@spar/shared';
 import groundDefs from '../../../defs/ground.json';
 import { NOISE_CELLS, noiseTexture } from './noiseTexture';
+import { ROAD_STEPS } from './roadField';
 
 const ICE = (groundDefs as unknown as GroundClasses).ice;
 /** Holes broken through the ice that are drawn at once. */
@@ -78,6 +79,13 @@ const SURFACE_COLORS: Record<string, number> = {
 };
 // Water in roads' place shines; everything else on that layer is matt.
 const SURFACE_ROUGHNESS: Record<string, number> = { stream: 0.25, pool: 0.15 };
+/**
+ * Drawn from their lines (see roadField): how softly each surface's edge blends into the ground
+ * either side of it, and how ragged the noise makes it, metres. Made roads are sharp; trails,
+ * dirt and stream banks worn into the ground and blended.
+ */
+const SURFACE_SOFTNESS: Record<string, number> = { asphalt: 0.04, gravel: 0.12, dirt: 0.35, trail: 0.4, boardwalk: 0.02, stream: 0.3, pool: 0.3 };
+const SURFACE_RAGGED: Record<string, number> = { asphalt: 0.03, gravel: 0.12, dirt: 0.3, trail: 0.3, boardwalk: 0, stream: 0.35 };
 /** Surfaces on the road layer that are water. */
 const SURFACE_WATER: Record<string, number> = { stream: 1, pool: 1 };
 // Loud colours for the raw mask views.
@@ -172,6 +180,9 @@ export class GroundShading {
   private readonly surfaceKey;
   private readonly surfaceRoughness;
   private readonly surfaceWater;
+  private readonly surfaceSoftness;
+  private readonly surfaceRagged;
+  private readonly poolId: number;
   private readonly waterId: number;
   private readonly streamId: number;
   private readonly forestId: number;
@@ -187,6 +198,9 @@ export class GroundShading {
     this.surfaceKey = uniformArray<'vec3'>(colors(surfaces, SURFACE_KEY), 'vec3');
     this.surfaceRoughness = uniformArray<'float'>(byId(surfaces, SURFACE_ROUGHNESS, -1), 'float');
     this.surfaceWater = uniformArray<'float'>(byId(surfaces, SURFACE_WATER, 0), 'float');
+    this.surfaceSoftness = uniformArray<'float'>(byId(surfaces, SURFACE_SOFTNESS, 0.1), 'float');
+    this.surfaceRagged = uniformArray<'float'>(byId(surfaces, SURFACE_RAGGED, 0), 'float');
+    this.poolId = surfaces.find((c) => c.name === 'pool')?.id ?? -1;
     this.waterId = biomes.find((b) => b.name === 'water')?.id ?? -1;
     this.streamId = surfaces.find((c) => c.name === 'stream')?.id ?? -1;
     this.forestId = biomes.find((b) => b.name === 'forest')?.id ?? -1;
@@ -199,16 +213,26 @@ export class GroundShading {
    * buildNodeMask). With `mask` null, every
    * mesh supplies its own texture as `userData.mask`, and the metres one texel spans as
    * `userData.texel` (otherwise `texel`).
+   *
+   * With `lines`, roads, paths and streams come from each mesh's own `userData.roads` texture
+   * (see roadField, `size` texels across the mesh's `userData.size` metres from its origin)
+   * instead of the mask; only bog pools stay on the mask.
    */
-  material(size: number, mask: THREE.Texture | null, texel = 2, look: GroundLook = 'full'): THREE.MeshStandardNodeMaterial {
+  material(size: number, mask: THREE.Texture | null, texel = 2, look: GroundLook = 'full', lines = false): THREE.MeshStandardNodeMaterial {
     const placeholder = new THREE.DataTexture(new Uint8Array(4), 1, 1);
     const maskNode = texture(mask ?? placeholder);
-    // Runs before each mesh is drawn and points the shader at that mesh's texture.
+    const roadPlaceholder = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);
+    roadPlaceholder.magFilter = roadPlaceholder.minFilter = THREE.LinearFilter;
+    roadPlaceholder.needsUpdate = true;
+    const roadNode = texture(roadPlaceholder);
+    // Runs before each mesh is drawn and points the shader at that mesh's textures.
     const perMesh = uniform(0).onObjectUpdate(({ object }) => {
-      const own = (object?.userData as { mask?: THREE.Texture } | undefined)?.mask;
-      if (mask === null && own) maskNode.value = own;
+      const data = object?.userData as { mask?: THREE.Texture; roads?: THREE.Texture } | undefined;
+      if (mask === null && data?.mask) maskNode.value = data.mask;
+      if (data?.roads) roadNode.value = data.roads;
       return 0;
     });
+    const meshSize = uniform(1).onObjectUpdate(({ object }) => (object?.userData as { size?: number } | undefined)?.size ?? 1);
     const texelMetres = uniform(texel).onObjectUpdate(({ object }) => (object?.userData as { texel?: number } | undefined)?.texel ?? texel);
 
     if (look === 'flat') {
@@ -259,7 +283,9 @@ export class GroundShading {
     const roadTexel = Fn(([texel]: [THREE.Node<'vec4'>]) => {
       const packed = texel.y.mul(255).add(0.5).floor();
       const surface = packed.div(32).floor();
-      const coverage = packed.sub(surface.mul(32)).div(31);
+      // From the lines, only bog pools are left on the mask.
+      const kept = lines ? select(int(surface).equal(int(this.poolId)), float(1), float(0)) : float(1);
+      const coverage = packed.sub(surface.mul(32)).div(31).mul(kept);
       return vec4(this.surfaceColors.element(int(surface)).mul(coverage), coverage);
     });
     /** Fixed roughness of the surface in one mask texel, or -1 when it follows the weather. */
@@ -294,10 +320,31 @@ export class GroundShading {
       mix(roadTexel(r.t01), roadTexel(r.t11), r.f.x),
       r.f.y,
     );
-    const onRoad = smoothstep(0.4, 0.6, road.w);
-    const roadColor = road.xyz.div(road.w.max(0.001)).mul(tint.mul(0.6).add(0.4)).mul(float(1).sub(this.wet.mul(0.35)));
+    const waterSurface = (t: THREE.Node<'vec4'>) => float(this.surfaceWater.element(int(t.y.mul(255).add(0.5).floor().div(32).floor())));
+    let onRoad: THREE.Node<'float'> = smoothstep(0.4, 0.6, road.w);
+    let roadBase: THREE.Node<'vec3'> = road.xyz.div(road.w.max(0.001));
+    let fixedRough: THREE.Node<'float'> = roadRoughness(r.t00).max(roadRoughness(r.t11));
+    let roadWater: THREE.Node<'float'> = max(waterSurface(r.t00), waterSurface(r.t11));
+    if (lines) {
+      // The distance from the nearest edge, smoothly filtered between texels, so the cut at
+      // zero is a clean line; that road's surface from the nearest texel. Anti-aliased over
+      // about a pixel, or blended wider and made ragged for the softer surfaces.
+      const p = positionLocal.xz.div(meshSize).mul(size - 1);
+      const field = roadNode.sample(p.add(0.5).div(size));
+      const nearest = roadNode.load(ivec2(clamp(p.round(), 0, size - 1)));
+      const d = field.x.mul(255).sub(128).div(ROAD_STEPS);
+      const surface = int(nearest.y.mul(255).add(0.5));
+      const edge = d.add(noise4(ground.mul(0.8)).y.mul(this.surfaceRagged.element(surface)));
+      const blend = max(this.surfaceSoftness.element(surface), fwidth(d).mul(0.75));
+      const lineCover = float(1).sub(smoothstep(blend.negate(), blend, edge)).mul(nearest.z);
+      const fromLine = lineCover.greaterThanEqual(onRoad);
+      roadBase = select(fromLine, this.surfaceColors.element(surface), roadBase);
+      fixedRough = select(fromLine, float(this.surfaceRoughness.element(surface)), fixedRough);
+      roadWater = select(fromLine, float(this.surfaceWater.element(surface)), roadWater);
+      onRoad = max(lineCover, onRoad);
+    }
+    const roadColor = roadBase.mul(tint.mul(0.6).add(0.4)).mul(float(1).sub(this.wet.mul(0.35)));
     // A wet road shines far more than wet moss.
-    const fixedRough = roadRoughness(r.t00).max(roadRoughness(r.t11));
     const roadRough = select(fixedRough.greaterThanEqual(0), fixedRough, float(1).sub(this.wet.mul(0.6)));
     const bare = vec4(mix(natural.xyz, roadColor, onRoad), mix(natural.w, roadRough, onRoad));
 
@@ -327,9 +374,8 @@ export class GroundShading {
 
     // How much of this spot is water: the land-cover texels, and streams and pools on the road layer.
     const isWater = (t: THREE.Node<'vec4'>) => select(int(t.x.mul(255).add(0.5)).equal(int(this.waterId)), float(1), float(0));
-    const waterSurface = (t: THREE.Node<'vec4'>) => float(this.surfaceWater.element(int(t.y.mul(255).add(0.5).floor().div(32).floor())));
     const lakeShare = mix(mix(isWater(g.t00), isWater(g.t10), gBlend.x), mix(isWater(g.t01), isWater(g.t11), gBlend.x), gBlend.y);
-    const streamShare = onRoad.mul(max(waterSurface(r.t00), waterSurface(r.t11)));
+    const streamShare = onRoad.mul(roadWater);
     const water = max(lakeShare, streamShare);
     const shoreline = smoothstep(0.3, 0.6, water);
 

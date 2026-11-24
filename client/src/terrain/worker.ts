@@ -4,13 +4,16 @@
 import { buildNodeMask, type NodeMaskRequest } from './maskData';
 import { buildNodeMesh, type NodeMeshData, type NodeMeshRequest } from './meshData';
 import { fetchBytes, fetchUint16 } from './region';
+import { buildRoadField, type RoadLines } from './roadField';
 
 export type WorkerRequest =
-  | { id: number; kind: 'node'; heightUrl: string; mesh: NodeMeshRequest; maskUrl: string; mask: NodeMaskRequest }
-  | { id: number; kind: 'file'; url: string; side: number };
+  | { id: number; kind: 'node'; heightUrl: string; mesh: NodeMeshRequest; maskUrl: string; mask: NodeMaskRequest; roads: { x0: number; z0: number; size: number } }
+  | { id: number; kind: 'file'; url: string; side: number }
+  /** The region's road, path and stream lines, sent once before any node. */
+  | { id: number; kind: 'roads'; lines: RoadLines };
 
 export type WorkerResponse =
-  | { id: number; ok: true; mesh: NodeMeshData; mask: Uint8Array }
+  | { id: number; ok: true; mesh: NodeMeshData; mask: Uint8Array; roads: Uint8Array }
   | { id: number; ok: true; file: Uint16Array }
   | { id: number; ok: false; error: string };
 
@@ -40,12 +43,18 @@ class FileCache<T> {
 const heights = new FileCache(96, fetchUint16);
 const masks = new FileCache(48, fetchBytes);
 
+let lines: RoadLines | null = null;
+
 const post = (msg: WorkerResponse, transfer: Transferable[] = []): void => self.postMessage(msg, { transfer });
 const fail = (id: number) => (err: unknown) =>
   post({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
 
 self.onmessage = (ev: MessageEvent<WorkerRequest>): void => {
   const req = ev.data;
+  if (req.kind === 'roads') {
+    lines = req.lines;
+    return;
+  }
   if (req.kind === 'file') {
     heights.get(req.url, req.side * req.side).then((file) => post({ id: req.id, ok: true, file: file.slice() }), fail(req.id));
     return;
@@ -56,6 +65,8 @@ self.onmessage = (ev: MessageEvent<WorkerRequest>): void => {
   ]).then(([heightFile, maskFile]) => {
     const mesh = buildNodeMesh(heightFile, req.mesh);
     const mask = buildNodeMask(maskFile, req.mask);
-    post({ id: req.id, ok: true, mesh, mask }, [mesh.positions.buffer, mesh.normals.buffer, mesh.uvs.buffer, mask.buffer]);
+    const { x0, z0, size } = req.roads;
+    const roads = lines ? buildRoadField(lines, x0, z0, size, req.mask.size) : new Uint8Array(req.mask.size * req.mask.size * 4).fill(255);
+    post({ id: req.id, ok: true, mesh, mask, roads }, [mesh.positions.buffer, mesh.normals.buffer, mesh.uvs.buffer, mask.buffer, roads.buffer]);
   }, fail(req.id));
 };

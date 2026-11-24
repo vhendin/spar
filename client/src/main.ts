@@ -707,10 +707,11 @@ async function start(): Promise<void> {
     ambience.treeline = index.masks.treeline;
     const shading = new GroundShading(index);
     shading.view.value = groundView;
+    const vectorsLoad = fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>);
     const [terrain, horizon, vectors] = await Promise.all([
-      Terrain.load(index, shading, settings.terrainSplit),
+      vectorsLoad.then((v) => Terrain.load(index, shading, v, settings.terrainSplit)),
       loadHorizon(index, shading),
-      fetch(regionUrl(index.name, index.vectors.path)).then((r) => r.json() as Promise<RegionVectors>),
+      vectorsLoad,
     ]);
     scene.add(terrain.group, horizon);
     placesToReach = vectors.destinations?.length ?? 0;
