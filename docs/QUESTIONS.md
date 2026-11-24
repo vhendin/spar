@@ -5,6 +5,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Performance: recorder and frame rate limit (this commit)
+
+- **Recorder:** F9 starts and stops (fn+F9 on a Mac keyboard), F8 drops a numbered mark (say
+  what each mark was, e.g. "mark 2: fan spun up"). Saved in `data/perf/` on the server; from
+  another computer without a login it downloads instead. Each frame: time per part, CPU, GPU
+  (two ways: `gpuWait`, from handing the frame over until the GPU is done, is the one to trust;
+  `gpu`, the sum of render passes, overlaps on Apple GPUs and reads high), draws, triangles,
+  place, what was loading, memory; Chrome-family browsers also name the scripts behind long
+  stalls. Firefox gives no stalls and no memory.
+- **Frame rate limit (decided by me, say if not):** new setting, 60 by default; before, the
+  game drew as fast as the screen (120 on ProMotion). The menus and start screen draw at 30.
+  `?fps=0` lifts it for one visit, `?gpu=0` turns GPU timing off.
+- **Next:** a fixed benchmark route (`?bench=1`) recorded the same way, to compare before and
+  after each optimisation. Then drives from you on your usual settings.
+
 ### Scouting drone (this commit)
 
 - **Left out for now, say if any should come:** the gamepad has no button for it until one is

@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { lanAddresses } from './lan';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { dayOfYear, PROTOCOL_VERSION, seasonAt, type Player, type SeasonCalendar, type ServerMessage } from '@spar/shared';
@@ -130,6 +132,34 @@ async function handleMe(req: IncomingMessage, res: ServerResponse, access: Acces
   json(res, 200, { values: await accounts.update(email, changes) });
 }
 
+/** Largest performance recording taken: 15 minutes at 120 frames a second is about 25 MB. */
+const PERF_LIMIT = 64 << 20;
+
+/**
+ * /api/perf: a performance recording from the game (F9), kept in perfDir for reading
+ * afterwards. Only from the computer running the server, or a logged-in driver.
+ */
+async function handlePerf(req: IncomingMessage, res: ServerResponse, access: AccessVerifier | null, config: ServerConfig): Promise<void> {
+  if (req.method !== 'POST') return json(res, 405, { error: 'POST.' });
+  if (!config.perfDir) return json(res, 403, { error: 'Recordings are not kept on this server.' });
+  const site = req.headers['sec-fetch-site'];
+  if (req.headers['x-spar'] !== '1' || (site !== undefined && site !== 'same-origin')) return json(res, 403, { error: 'Not from the game.' });
+  if (!fromHost(req) && !(access && (await access.email(req)))) return json(res, 403, { error: 'Only from this computer, or logged in.' });
+  let body: { version?: unknown; columns?: unknown; rows?: unknown; meta?: Record<string, unknown> };
+  try {
+    body = (await readBody(req, PERF_LIMIT)) as typeof body;
+  } catch {
+    return json(res, 400, { error: 'Bad or too large a recording.' });
+  }
+  if (body?.version !== 1 || !Array.isArray(body.columns) || !Array.isArray(body.rows)) return json(res, 400, { error: 'Not a recording.' });
+  const word = (v: unknown): string => (typeof v === 'string' ? v.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) : '');
+  const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  const name = [stamp, word(body.meta?.region), word(body.meta?.label)].filter(Boolean).join('-') + '.json';
+  await mkdir(config.perfDir, { recursive: true });
+  await writeFile(join(config.perfDir, name), JSON.stringify(body));
+  json(res, 201, { name });
+}
+
 export function createGameServer(config: ServerConfig, deps: { access?: AccessVerifier } = {}): GameServer {
   const access = deps.access ?? (config.access ? new AccessVerifier(config.access) : null);
   const accounts = new AccountStore(config.accountsDir);
@@ -153,6 +183,13 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
     }
     if (apiPath === '/api/me') {
       handleMe(req, res, access, accounts).catch((err: unknown) => {
+        console.error('request failed', apiPath, err);
+        if (!res.headersSent) json(res, 500, { error: 'Server error.' });
+      });
+      return;
+    }
+    if (apiPath === '/api/perf') {
+      handlePerf(req, res, access, config).catch((err: unknown) => {
         console.error('request failed', apiPath, err);
         if (!res.headersSent) json(res, 500, { error: 'Server error.' });
       });

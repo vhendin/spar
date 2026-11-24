@@ -40,6 +40,8 @@ export interface ServerConfig {
   access?: AccessConfig;
   /** Folder of what is kept for each account. */
   accountsDir: string;
+  /** Folder performance recordings are saved in; left out, they are not taken. */
+  perfDir?: string;
 }
 
 /** Central European standard time; the game does not follow summer time. */
@@ -82,6 +84,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     rawDir: resolve(env.RAW_DIR ?? '../data/raw'),
     startsDir: resolve(env.STARTS_DIR ?? '../data/starts'),
     accountsDir: resolve(env.ACCOUNTS_DIR ?? '../data/accounts'),
+    perfDir: resolve(env.PERF_DIR ?? '../data/perf'),
     // Making areas runs the importer through Docker from the repository; inside the game's own
     // container there is no Docker, so it is off there unless IMPORTER says how.
     importer: (env.IMPORTER ?? (existsSync('/.dockerenv') ? '' : 'docker compose run --rm importer')).split(' ').filter(Boolean),

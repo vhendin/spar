@@ -17,11 +17,12 @@ ENV NODE_ENV=production \
     PORT=8080 \
     CLIENT_DIST=/app/client \
     REGIONS_DIR=/data/regions \
-    ACCOUNTS_DIR=/data/accounts
+    ACCOUNTS_DIR=/data/accounts \
+    PERF_DIR=/data/perf
 COPY --from=build /app/client/dist /app/client
 COPY --from=build /app/server/dist/index.cjs /app/server/index.cjs
 # Where logged-in drivers' things are kept; a volume, owned by the user the server runs as.
-RUN mkdir -p /data/accounts && chown node:node /data/accounts
+RUN mkdir -p /data/accounts /data/perf && chown node:node /data/accounts /data/perf
 USER node
 EXPOSE 8080
 CMD ["node", "/app/server/index.cjs"]

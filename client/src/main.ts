@@ -55,6 +55,7 @@ import { Towing } from './multiplayer/towing';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
 import { dateOfYear, formatDuration, seasonName, TOGETHER_MS, Trips } from './trips';
+import { FrameTimer, MAX_SECONDS, MODES, Recorder, saveRecording, SECTIONS, type Mode } from './perf/recorder';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -177,6 +178,8 @@ async function start(): Promise<void> {
     canvas,
     antialias: true,
     forceWebGL: params.get('renderer') === 'webgl',
+    // How long the GPU takes to draw, for F3 and the performance recorder (F9); ?gpu=0 turns it off.
+    trackTimestamp: params.get('gpu') !== '0',
   });
   // Falls back to WebGL 2 by itself when the browser has no WebGPU. A logged-in driver's
   // kept values are in storage before anything below reads it.
@@ -372,6 +375,30 @@ async function start(): Promise<void> {
   let fps: number | null = null;
   /** CPU time of the last frames' work, smoothed, in milliseconds. */
   let frameMs = 0;
+  /** The GPU's time drawing a recent frame, smoothed, when the browser can tell. */
+  let gpuSmooth: number | null = null;
+  /** The latest GPU time, and whether it is new since the last frame recorded. */
+  let gpuMs = 0;
+  let gpuFresh = false;
+  let gpuPending = false;
+  let gpuWait = 0;
+  let gpuWaitFresh = false;
+  let gpuWaitPending = false;
+  let gpuWaitSmooth: number | null = null;
+  // ?fps=<n> sets the frame rate limit for this visit (0 for none).
+  const fpsParam = params.get('fps');
+  const capOverride = fpsParam !== null && Number.isFinite(Number(fpsParam)) ? Number(fpsParam) : null;
+  const frameCap = (): number => Math.max(0, capOverride ?? settings.frameCap);
+  const timer = new FrameTimer();
+  const recorder = new Recorder();
+  let stepsThisFrame = 0;
+  let markCount = 0;
+  const recBadge = document.createElement('div');
+  Object.assign(recBadge.style, {
+    position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: '30', display: 'none',
+    font: '600 13px system-ui, sans-serif', color: '#fff', background: 'rgba(160, 20, 20, 0.85)', padding: '4px 10px', borderRadius: '12px', pointerEvents: 'none',
+  });
+  document.body.append(recBadge);
   let latestWorld: Extract<ServerMessage, { type: 'world' }> | null = null;
   /** Headlights: null follows the daylight, true and false are the driver's choice. */
   let lamps: boolean | null = null;
@@ -559,7 +586,10 @@ async function start(): Promise<void> {
     if (!debug) return;
     const info = renderer.info.render;
     const lines = [
-      `${fps === null ? '–' : fps.toFixed(0)} fps · ${backend} · ${frameMs.toFixed(1)} ms CPU · ${info.drawCalls} draws · ${(info.triangles / 1e6).toFixed(2)}M triangles`,
+      `${fps === null ? '–' : fps.toFixed(0)} fps${frameCap() > 0 ? ` (limit ${frameCap()})` : ''} · ${backend} · ${frameMs.toFixed(1)} ms CPU` +
+        (gpuWaitSmooth === null ? '' : ` · GPU ${gpuWaitSmooth.toFixed(1)} ms`) +
+        (gpuSmooth === null ? '' : ` (passes ${gpuSmooth.toFixed(1)} ms)`) +
+        ` · ${info.drawCalls} draws · ${(info.triangles / 1e6).toFixed(2)}M triangles`,
       describe(link, world?.index ?? null),
     ];
     if (world) {
@@ -1156,6 +1186,17 @@ async function start(): Promise<void> {
       } else pause();
       return;
     }
+    if (e.code === 'F9') {
+      e.preventDefault();
+      toggleRecording();
+      return;
+    }
+    if (e.code === 'F8' && recorder.recording) {
+      e.preventDefault();
+      markCount++;
+      recorder.mark(performance.now(), `mark ${markCount}`);
+      return;
+    }
     if (e.code === 'F3') {
       e.preventDefault();
       debug = !debug;
@@ -1388,6 +1429,72 @@ async function start(): Promise<void> {
     },
   }, storedProfile());
 
+  /** This frame's row in the performance recording. */
+  const recordFrame = (now: number, began: number): void => {
+    const r = recorder.row;
+    SECTIONS.forEach((section, i) => (r[section] = timer.ms[i]!));
+    r.cpu = performance.now() - began;
+    r.gpu = gpuFresh ? gpuMs : NaN;
+    gpuFresh = false;
+    r.gpuWait = gpuWaitFresh ? gpuWait : NaN;
+    gpuWaitFresh = false;
+    r.steps = stepsThisFrame;
+    const info = renderer.info.render;
+    r.draws = info.drawCalls;
+    r.triangles = info.triangles / 1000;
+    r.x = camera.position.x;
+    r.y = camera.position.y;
+    r.z = camera.position.z;
+    const w = world;
+    const mode: Mode = starting ? 'start' : !w || w.unplaced ? 'loading' : paused ? 'paused' : w.map.open ? 'map' : flying ? 'flying' : drone.flown ? 'drone' : 'driving';
+    r.mode = MODES.indexOf(mode);
+    r.speed = w && !w.unplaced ? Math.abs(w.sim.speed) : 0;
+    r.terrainLoading = w?.terrain.stats.loading ?? 0;
+    r.plantsLoading = w?.vegetation?.stats.loading ?? 0;
+    r.buildingsLoading = w?.features?.stats.loading ?? 0;
+    r.plantMeshes = (w?.vegetation?.stats.meshes ?? 0) / 1000;
+    r.farTrees = (w?.vegetation?.stats.impostors ?? 0) / 1000;
+    const memory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+    r.heap = memory ? memory.usedJSHeapSize / 1e6 : NaN;
+    recorder.commit(now);
+    if (recorder.elapsed(now) > MAX_SECONDS * 1000) toggleRecording();
+  };
+  /** F9: starts a performance recording, or stops it and saves it. */
+  const toggleRecording = (): void => {
+    const now = performance.now();
+    if (!recorder.recording) {
+      const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+      const device = (renderer.backend as { device?: { adapterInfo?: { vendor?: string; architecture?: string; description?: string } } }).device;
+      recorder.start(now, {
+        label: 'drive',
+        region: world?.index.name ?? null,
+        vehicle: world?.sim.def.name ?? null,
+        backend,
+        gpu: device?.adapterInfo ? { vendor: device.adapterInfo.vendor, architecture: device.adapterInfo.architecture, description: device.adapterInfo.description } : null,
+        userAgent: navigator.userAgent,
+        cores: navigator.hardwareConcurrency,
+        devicePixelRatio: window.devicePixelRatio,
+        drawingBuffer: [size.x, size.y],
+        window: [window.innerWidth, window.innerHeight],
+        frameCap: frameCap(),
+        settings: { ...settings },
+        url: location.search,
+      });
+      markCount = 0;
+      recBadge.textContent = '● REC 0:00 · F8 mark · F9 stop';
+      recBadge.style.display = 'block';
+      return;
+    }
+    const rec = recorder.stop();
+    recBadge.style.display = 'none';
+    const s = rec.summary;
+    const line = `${s.seconds.toFixed(0)} s at ${s.fps.toFixed(0)} fps · ${s.cpu.mean} ms CPU` + (s.gpuWait ? ` · ${s.gpuWait.mean} ms GPU` : '') + ` a frame · slowest frames ${s.frame.p99} ms`;
+    chat.add(`Recording stopped: ${line}. Saving…`);
+    saveRecording(rec)
+      .then((r) => chat.add('saved' in r ? `Recording saved on the server as data/perf/${r.saved}` : `The server would not keep it: downloaded as ${r.downloaded}`))
+      .catch((err: unknown) => chat.add(`Recording not saved: ${err instanceof Error ? err.message : String(err)}`));
+  };
+
   let last = performance.now();
   let frames = 0;
   let fpsSince = last;
@@ -1424,7 +1531,12 @@ async function start(): Promise<void> {
 
   renderer.setAnimationLoop(() => {
     const now = performance.now();
+    // The frame rate limit: screens drawing faster are skipped (2 ms early, for the timing's
+    // jitter). The menus and start screen need no more than 30.
+    const cap = paused || starting ? Math.min(frameCap() || 30, 30) : frameCap();
+    if (cap > 0 && now - last < 1000 / cap - 2) return;
     const began = now;
+    timer.begin();
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
 
@@ -1461,6 +1573,8 @@ async function start(): Promise<void> {
         }
       }
     }
+    timer.lap('input');
+    stepsThisFrame = 0;
 
     const w = world;
     if (w) {
@@ -1521,6 +1635,8 @@ async function start(): Promise<void> {
         if (w.sim.body.translation().y < w.index.heights.min - 50) w.unplaced = true;
       }
       if (steps === 4) owed = 0; // too slow to keep up: let time slip rather than spiral
+      stepsThisFrame = steps;
+      timer.lap('physics');
       w.view.render(w.unplaced ? 1 : owed / STEP);
       // The drone: put away whenever the vehicle is put somewhere new, else flown or charging.
       if (jumps !== droneJump || starting || w.unplaced) {
@@ -1543,7 +1659,9 @@ async function start(): Promise<void> {
       // While flying with the collider view on, colliders gather round the camera instead,
       // so they can be inspected anywhere.
       const at = flying && w.obstacles?.debug.visible ? camera.position : w.view.group.position;
+      timer.lap('vehicle');
       w.obstacles?.update(now / 1000, at.x, at.z, towing.places());
+      timer.lap('solids');
       towing.update(now);
 
       // The winch: what can be hooked to, picked by looking towards it; the cable.
@@ -1632,9 +1750,13 @@ async function start(): Promise<void> {
       w.view.setInside(cab);
       seeThrough.eye.value.copy(camera.position);
       seeThrough.focus.value.copy(chase.target);
+      timer.lap('misc');
       w.terrain.update(camera.position);
+      timer.lap('terrain');
       w.vegetation?.update(camera.position);
+      timer.lap('plants');
       w.features?.update(camera.position);
+      timer.lap('buildings');
 
       // The sky sets the light, and the weather reaches into everything else.
       const env = w.environment;
@@ -1681,6 +1803,7 @@ async function start(): Promise<void> {
         w.vegetation.shading.impostorLight.value = env.daylight;
         if (!w.unplaced) w.vegetation.shading.trample.update(paused ? 0 : dt, w.sim, w.view.group);
       }
+      timer.lap('sky');
       // Mud, dust and water off the tyres.
       // Ruts behind the wheels, and mud on the vehicle.
       if (!w.unplaced) w.tracks.update(w.sim, env.weather.wetness, now);
@@ -1699,6 +1822,7 @@ async function start(): Promise<void> {
         celsius: airTemperature(day, env.sunElevation),
         heightAt: (x, z) => w.terrain.heightAt(x, z),
       });
+      timer.lap('effects');
 
       // Sound: the vehicle where it is, the world where the camera is.
       const inside = cab;
@@ -1726,6 +1850,7 @@ async function start(): Promise<void> {
         speed: flying ? 0 : Math.abs(w.sim.speed),
         inside,
       }, camera.position);
+      timer.lap('sound');
 
       // The map, and the way to the destination.
       const where = mapState(w);
@@ -1769,13 +1894,43 @@ async function start(): Promise<void> {
       const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || (!towing.following && w.sim.holding) }, gauge);
       hint.style.opacity = now < hintUntil && !paused && winchShown === '' ? '1' : '0';
+      timer.lap('hud');
     }
     // ?look=0 draws the plain picture, without the grade and glow.
     if (plain) renderer.render(scene, camera);
     else look.render(world?.environment.grade ?? NEUTRAL);
     if (world && drone.flown && !flying && !starting && !world.unplaced && !world.map.open && !paused) drawInset(world);
     else droneInset.style.display = 'none';
+    timer.lap('render');
     frameMs += (performance.now() - began - frameMs) * 0.05;
+    // The GPU's time comes back a few frames late; one question at a time.
+    if (!gpuPending) {
+      gpuPending = true;
+      renderer
+        .resolveTimestampsAsync('render')
+        .then((ms) => {
+          if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return;
+          gpuMs = ms;
+          gpuFresh = true;
+          gpuSmooth = gpuSmooth === null ? ms : gpuSmooth + (ms - gpuSmooth) * 0.05;
+        })
+        .catch(() => {})
+        .finally(() => (gpuPending = false));
+    }
+    const device = (renderer.backend as { device?: { queue: { onSubmittedWorkDone(): Promise<undefined> } } }).device;
+    if (device && !gpuWaitPending) {
+      gpuWaitPending = true;
+      const handed = performance.now();
+      device.queue
+        .onSubmittedWorkDone()
+        .then(() => {
+          gpuWait = performance.now() - handed;
+          gpuWaitFresh = true;
+          gpuWaitSmooth = gpuWaitSmooth === null ? gpuWait : gpuWaitSmooth + (gpuWait - gpuWaitSmooth) * 0.05;
+        })
+        .catch(() => {})
+        .finally(() => (gpuWaitPending = false));
+    }
 
     frames++;
     if (now - fpsSince >= 250) {
@@ -1784,7 +1939,13 @@ async function start(): Promise<void> {
       fpsSince = now;
       drawHud();
       if (w) panel.refresh(w.environment);
+      timer.lap('hud');
+      if (recorder.recording) {
+        const s = Math.floor(recorder.elapsed(now) / 1000);
+        recBadge.textContent = `● REC ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · F8 mark${markCount ? ` (${markCount})` : ''} · F9 stop`;
+      }
     }
+    if (recorder.recording) recordFrame(now, began);
   });
 }
 

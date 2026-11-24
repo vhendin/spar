@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -45,6 +45,7 @@ if (step === 'build') {
     rawDir: join(dir, 'raw'),
     startsDir: join(dir, 'starts'),
     accountsDir: join(dir, 'accounts'),
+    perfDir: join(dir, 'perf'),
     importer: [process.execPath, join(dir, 'importer.mjs')],
     importerCwd: dir,
     rejoinSeconds: 0.6,
@@ -220,6 +221,21 @@ describe('areas', () => {
     expect((await put([{ name: '', x: 1, z: 1, heading: 0 }])).status).toBe(400);
     expect((await put(mine, { 'X-Forwarded-For': '192.168.1.20' })).status).toBe(403);
     expect((await fetch(url('/api/starts/nowhere'), { method: 'PUT', body: '[]' })).status).toBe(404);
+  });
+
+  it('keeps performance recordings sent from the game on this computer', async () => {
+    const recording = { version: 1, meta: { region: 'Demo', label: 'Bench run' }, columns: ['t'], rows: [[0], [16.7]] };
+    const post = (body: unknown, headers: Record<string, string> = {}): Promise<Response> =>
+      fetch(url('/api/perf'), { method: 'POST', headers: { 'X-Spar': '1', ...headers }, body: JSON.stringify(body) });
+    const res = await post(recording);
+    expect(res.status).toBe(201);
+    const { name } = (await res.json()) as { name: string };
+    expect(name).toMatch(/^\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-demo-bench-run\.json$/);
+    expect(await readdir(join(dir, 'perf'))).toEqual([name]);
+    expect(JSON.parse(await readFile(join(dir, 'perf', name), 'utf8'))).toEqual(recording);
+    expect((await post({ version: 1, rows: 'no' })).status).toBe(400);
+    expect((await post(recording, { 'X-Forwarded-For': '192.168.1.20' })).status).toBe(403);
+    expect((await fetch(url('/api/perf'), { method: 'POST', body: JSON.stringify(recording) })).status).toBe(403);
   });
 
   it('only lets the host make areas', async () => {

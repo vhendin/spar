@@ -20,6 +20,8 @@ services:
     volumes:
       - ./data/regions:/data/regions:ro
       - accounts:/data/accounts
+      # Performance recordings (F9 in the game), for reading afterwards.
+      - ./data/perf:/data/perf
     restart: unless-stopped
 
   # Cloudflare Tunnel, for friends outside the home network. Runs only when asked for:

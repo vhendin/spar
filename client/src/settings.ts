@@ -24,12 +24,17 @@ export interface Settings {
   glow: number;
   /** Sound volume, 0 silent to 1 full. Not part of a graphics preset. */
   volume: number;
+  /**
+   * Most frames drawn a second, 0 for as many as the screen shows (120 on a ProMotion
+   * screen). Not part of a preset: 60 keeps a laptop cooler and quieter whatever else is set.
+   */
+  frameCap: number;
 }
 
 export const PRESETS: Record<PresetName, Settings> = {
-  low: { pixelRatio: 1, shadows: 0, plantRange: 0.6, farTreeRange: 0.5, terrainSplit: 1.2, objectRange: 0.6, fov: 60, glow: 0, volume: 0.7 },
-  medium: { pixelRatio: 1.5, shadows: 1024, plantRange: 0.8, farTreeRange: 0.75, terrainSplit: 1.4, objectRange: 0.8, fov: 60, glow: 1, volume: 0.7 },
-  high: { pixelRatio: 2, shadows: 2048, plantRange: 1, farTreeRange: 1, terrainSplit: 1.6, objectRange: 1, fov: 60, glow: 1, volume: 0.7 },
+  low: { pixelRatio: 1, shadows: 0, plantRange: 0.6, farTreeRange: 0.5, terrainSplit: 1.2, objectRange: 0.6, fov: 60, glow: 0, volume: 0.7, frameCap: 60 },
+  medium: { pixelRatio: 1.5, shadows: 1024, plantRange: 0.8, farTreeRange: 0.75, terrainSplit: 1.4, objectRange: 0.8, fov: 60, glow: 1, volume: 0.7, frameCap: 60 },
+  high: { pixelRatio: 2, shadows: 2048, plantRange: 1, farTreeRange: 1, terrainSplit: 1.6, objectRange: 1, fov: 60, glow: 1, volume: 0.7, frameCap: 60 },
 };
 
 /** The settings that only take effect when the world is built again. */
@@ -46,10 +51,11 @@ export const CHOICES: Record<keyof Settings, { label: string; options: [string, 
   glow: { label: 'Glow', options: [['Off', 0], ['On', 1]] },
   fov: { label: 'Field of view', options: [['50°', 50], ['60°', 60], ['70°', 70], ['80°', 80], ['90°', 90]] },
   volume: { label: 'Volume', options: [['Off', 0], ['Quiet', 0.4], ['Medium', 0.7], ['Loud', 1]] },
+  frameCap: { label: 'Frame rate limit', options: [['30', 30], ['60', 60], ['No limit', 0]] },
 };
 
 /** Settings that are a matter of taste rather than of the computer: presets leave them alone. */
-export const PERSONAL: (keyof Settings)[] = ['fov', 'volume'];
+export const PERSONAL: (keyof Settings)[] = ['fov', 'volume', 'frameCap'];
 
 const KEY = 'spar.settings';
 const OLD_KEY = 'spar.quality';
