@@ -5,7 +5,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Handbrake slides and park (this commit)
+### Winch speed (this commit)
+
+- **Asked:** the winch is really slow.
+- **Found:** the cable came in at 0.5 m/s with no load, and the speed fell in a straight line
+  with the pull, so up a slope (a third of the winch's pull) it crawled at about 0.3 m/s.
+  Slack was wound in at 1.6 m/s and paid out at 1.2 m/s.
+- **Done:** 1.5 m/s with no load on every vehicle, and the speed falls with the square of the
+  load, holding up like a motor's power and dropping only near the stall (a third of the pull
+  still gives 1.3 m/s). Slack comes in at 3 m/s, paying out 2.5 m/s. Up a 32° slope the vehicle
+  now climbs about 11 m in 10 s, against about 2 m.
+- **Open:** real winches are slower still (about 0.15 m/s); is 1.5 right for play? Should the
+  vehicles differ (the small ones faster, the trucks slower)?
+- **To try:** winching out of a bog, and up a steep slope.
+
+### Handbrake slides and park
 
 - **Asked:** the handbrake feels weak and does not let the vehicle slide; a double tap
   should put it in park.

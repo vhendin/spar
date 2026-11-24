@@ -67,10 +67,10 @@ describe('winch', () => {
     expect(winch.state).toBe('hooked');
     expect(winch.events).toContain('hooked');
     const z0 = car.body.translation().z;
-    run(12, { pull: true, slack: false });
+    run(6, { pull: true, slack: false });
     const moved = z0 - car.body.translation().z;
     // About the winch's speed with no load, less a little for rolling.
-    expect(moved).toBeGreaterThan(3);
+    expect(moved).toBeGreaterThan(7);
     expect(winch.tension).toBeGreaterThan(0);
     expect(winch.tension).toBeLessThan(car.def.winch!.pull * 1.2);
   });
@@ -85,8 +85,8 @@ describe('winch', () => {
     expect(winch.state).toBe('hooked');
     const z0 = car.body.translation().z;
     run(10, { pull: true, slack: false });
-    // Up the slope it goes, the winch working hard but within what it can do.
-    expect(z0 - car.body.translation().z).toBeGreaterThan(1.5);
+    // Up the slope it goes at a fair pace, the winch working hard but within what it can do.
+    expect(z0 - car.body.translation().z).toBeGreaterThan(7);
     expect(winch.load).toBeGreaterThan(0.25);
     expect(winch.load).toBeLessThan(1.15);
     // Letting go of the winch: the cable holds it where it is.

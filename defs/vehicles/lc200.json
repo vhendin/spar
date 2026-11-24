@@ -223,7 +223,7 @@
   "winch": {
     "attachment": "front_tow",
     "pull": 42000,
-    "speed": 0.5,
+    "speed": 1.5,
     "cable": 30
   }
 }

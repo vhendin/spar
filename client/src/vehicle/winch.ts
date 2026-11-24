@@ -64,8 +64,8 @@ const MAX_TENSION = 250_000;
 const CARRY_SPEED = 45;
 const REEL_SPEED = 40;
 /** Winding in slack cable, and paying out, metres a second. */
-const SLACK_SPEED = 1.6;
-const PAY_OUT_SPEED = 1.2;
+const SLACK_SPEED = 3;
+const PAY_OUT_SPEED = 2.5;
 /** Never shorter than this: the hook is at the anchor. */
 const MIN_LENGTH = 1.2;
 /** Anchors closer than this are too close to bother with. */
@@ -369,7 +369,9 @@ export class Winch {
 
     // The drum: winding in slows as the pull rises and stops at what the winch can manage.
     if (controls.pull && !controls.slack) {
-      this.drum = stretch < -0.05 ? SLACK_SPEED : spec.speed * Math.max(0, 1 - this.tension / spec.pull);
+      // Like a motor's power, the speed holds up under load and falls off only near the stall.
+      const load = Math.min(1, this.tension / spec.pull);
+      this.drum = stretch < -0.05 ? SLACK_SPEED : spec.speed * (1 - load * load);
       // Its brakes off while it is winched, so it rolls.
       this.sim.pulled = true;
     } else if (controls.slack && !controls.pull) this.drum = -PAY_OUT_SPEED;
