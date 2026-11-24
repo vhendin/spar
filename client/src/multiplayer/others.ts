@@ -11,7 +11,7 @@ import type { Player, SnapshotWinch, VehicleDef, VehicleSnapshot } from '@spar/s
 import type { AudioOut } from '../audio/output';
 import { VehicleAudio } from '../audio/vehicleAudio';
 import { Exhaust } from '../vehicle/exhaust';
-import { GROUP_VEHICLE, groups, type WheelTelemetry } from '../vehicle/sim';
+import { bumpShare, GROUP_VEHICLE, groups, type WheelTelemetry } from '../vehicle/sim';
 import { Spray } from '../vehicle/spray';
 import type { VehicleState } from '../vehicle/state';
 import { Tracks } from '../vehicle/tracks';
@@ -133,7 +133,7 @@ class RemoteVehicle implements VehicleState {
       w.contact = ground !== '';
       if (w.contact) w.ground = ground;
       w.load = w.contact ? load : 0;
-      w.bump = Math.min(1, Math.max(0, (this.rest[i]! - suspension) / this.travel[i]!));
+      w.bump = bumpShare(this.rest[i]!, suspension);
       // Where the tyre meets the surface: its bottom, lifted by what it has sunk into the mud or water.
       const at = this.wheelPosition(i);
       const p = new THREE.Vector3(at.x, at.y - r + sink + water, at.z).applyQuaternion(this.q);

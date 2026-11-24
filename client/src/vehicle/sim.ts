@@ -28,6 +28,21 @@ const GLANCE_LOST = 0.8;
 const GLANCE_KEEP = 0.65;
 /** And this share of the spin the blow gave it is taken back. */
 const GLANCE_STEADY = 0.7;
+/**
+ * Struts close to this length (metres) before they stop. The definitions' travel gave only
+ * about 10 cm of bump from standing, and Rapier's spring stops pushing harder past it, so
+ * every lump at speed and every landing dropped the body onto the ground.
+ */
+const MIN_STRUT = 0.04;
+/**
+ * Bump stops: past this share of the way from standing to closed, the strut damps its
+ * closing harder, to BUMP_DAMPING times at the end, so a hard landing is soaked up rather
+ * than bottoming out. Damping, not a stiffer spring, so it is not handed back as a bounce.
+ */
+const BUMP_START = 0.25;
+const BUMP_DAMPING = 8;
+/** How far a strut of this rest length has closed, 0..1: 1 is on the bump stops. */
+export const bumpShare = (rest: number, length: number): number => Math.min(1, Math.max(0, (rest - length) / (rest - MIN_STRUT)));
 /** Steering lock halves at this speed (m/s), so the vehicle stays steady on the road. */
 const STEER_HALF_SPEED = 13;
 /** Speed (m/s) by which rear-wheel steering against the front has faded out (about 60 km/h). */
@@ -298,6 +313,8 @@ export class VehicleSim {
 
   private readonly controller: RAPIER.DynamicRayCastVehicleController;
   private readonly restLength: number[] = [];
+  /** Each strut's damping as Rapier takes it, before the bump stop. */
+  private readonly damping: number[] = [];
   private readonly travel: number[] = [];
   /** Handles of the body's own colliders, to tell its contacts from others'. */
   readonly chassis = new Set<number>();
@@ -416,8 +433,11 @@ export class VehicleSim {
         this.controller.setWheelSuspensionStiffness(i, s.stiffness / mass);
         this.controller.setWheelSuspensionCompression(i, s.damping / mass);
         this.controller.setWheelSuspensionRelaxation(i, s.damping / mass);
-        this.controller.setWheelMaxSuspensionTravel(i, s.travel);
-        this.controller.setWheelMaxSuspensionForce(i, staticLoad * 8);
+        // Rapier's travel is the same either way from `rest`; enough that the strut can close
+        // to MIN_STRUT. Droop past the definition's travel is not counted as touching (step).
+        this.controller.setWheelMaxSuspensionTravel(i, rest - MIN_STRUT);
+        this.controller.setWheelMaxSuspensionForce(i, staticLoad * 10);
+        this.damping.push(s.damping / mass);
         this.controller.setWheelSideFrictionStiffness(i, 1);
         this.wheels.push({ contact: false, load: 0, ground: 'dirt', grip: 0.6, spin: 0, skid: 0, slide: 0, suspension: rest, bump: 0, steer: 0, rotation: 0, sink: 0, softness: 0, snow: 0, water: 0, point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 } });
         void a;
@@ -722,7 +742,15 @@ export class VehicleSim {
     const wet = this.ground.wetness();
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i]!;
-      wheel.contact = c.wheelIsInContact(i);
+      // Hanging further than its travel (Rapier lets it reach as far down as up), the
+      // tyre is in the air.
+      const length = c.wheelSuspensionLength(i) ?? this.restLength[i]!;
+      wheel.contact = c.wheelIsInContact(i) && length <= this.restLength[i]! + this.travel[i]!;
+      // The bump stop: damps harder the further the strut has closed past BUMP_START (last step's length).
+      // Standing, the strut is as long as its travel (see the constructor).
+      const standing = this.travel[i]!;
+      const closed = wheel.contact ? Math.min(1, Math.max(0, (standing - length) / Math.max(0.01, standing - MIN_STRUT) - BUMP_START) / (1 - BUMP_START)) : 0;
+      c.setWheelSuspensionCompression(i, this.damping[i]! * (1 + (BUMP_DAMPING - 1) * closed));
       wheel.load = wheel.contact ? (c.wheelSuspensionForce(i) ?? 0) : 0;
       const point = wheel.contact ? c.wheelContactPoint(i) : null;
       const normal = wheel.contact ? c.wheelContactNormal(i) : null;
@@ -827,9 +855,10 @@ export class VehicleSim {
     for (let i = 0; i < this.wheels.length; i++) {
       const wheel = this.wheels[i]!;
       // Counted from where the wheel hangs at the normal ride height, so it shows where the wheel is.
-      const length = c.wheelSuspensionLength(i) ?? this.restLength[i]!;
+      // Shown hanging no further than its travel.
+      const length = Math.min(c.wheelSuspensionLength(i) ?? this.restLength[i]!, this.restLength[i]! + this.travel[i]!);
       wheel.suspension = length + this.lift;
-      wheel.bump = Math.min(1, Math.max(0, (this.restLength[i]! - length) / this.travel[i]!));
+      wheel.bump = bumpShare(this.restLength[i]!, length);
       wheel.rotation = c.wheelRotation(i) ?? 0;
       // Velocity of the contact patch (body velocity plus spin about the centre), along the
       // tyre's own sideways axis.
@@ -1094,7 +1123,7 @@ export class VehicleSim {
       wheel.contact = ground !== '';
       if (wheel.contact) wheel.ground = ground;
       wheel.load = wheel.contact ? load : 0;
-      wheel.bump = Math.min(1, Math.max(0, (this.restLength[i]! - suspension) / this.travel[i]!));
+      wheel.bump = bumpShare(this.restLength[i]!, suspension);
       const at = this.wheelPosition(i);
       const [ox, oy, oz] = rotate(q, at.x, at.y - r + sink + water, at.z);
       Object.assign(wheel.point, { x: x + ox, y: y + oy, z: z + oz });

@@ -24,6 +24,8 @@ export interface Solid {
   yaw: number;
   /** Wooden fences give way when hit hard enough; left out for what never does. */
   breaks?: Breakable;
+  /** Its top can be driven on, as the ground: wheels stand on it (a lift station's deck). */
+  ground?: boolean;
 }
 
 /** What it takes to knock a stretch over, and what is drawn of it, to tip over when it goes. */

@@ -324,11 +324,7 @@ export class GroundStore implements GroundProbe {
       (file) => {
         if (this.tiles.get(key) !== tile) return;
         const n = h.samples;
-        // Rapier wants the grid column by column (x), each column running along z.
-        const heights = new Float32Array(n * n);
-        for (let i = 0; i < n; i++) {
-          for (let j = 0; j < n; j++) heights[i * n + j] = h.encoding.offset + file[(j + h.apron) * side + i + h.apron]! * h.encoding.scale;
-        }
+        const heights = smoothHeights(file, side, h.apron, n, h.encoding.offset, h.encoding.scale);
         const span = this.level.span;
         tile.heights = heights;
         tile.collider = this.world.createCollider(
@@ -353,4 +349,28 @@ export class GroundStore implements GroundProbe {
       () => this.masks.delete(key),
     );
   }
+}
+
+/**
+ * A height file as Rapier wants it, column by column (x), each column running along z, and
+ * smoothed over a tyre's footprint: each sample a [1 2 1] x [1 2 1] blend of the nine around
+ * it. Ray-cast wheels touch the ground at a single point, so the raw 1 m grid's creases and
+ * small lumps, which a real tyre rolls over, each gave them a kick; ditches, banks and humps
+ * of a few metres and more stay. The apron gives the edge samples their neighbours, so the
+ * shared edges of neighbouring tiles match.
+ */
+export function smoothHeights(file: Uint16Array, side: number, apron: number, n: number, offset: number, scale: number): Float32Array {
+  const raw = (i: number, j: number): number =>
+    file[Math.min(side - 1, Math.max(0, j + apron)) * side + Math.min(side - 1, Math.max(0, i + apron))]!;
+  const heights = new Float32Array(n * n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const sum =
+        raw(i - 1, j - 1) + 2 * raw(i, j - 1) + raw(i + 1, j - 1)
+        + 2 * raw(i - 1, j) + 4 * raw(i, j) + 2 * raw(i + 1, j)
+        + raw(i - 1, j + 1) + 2 * raw(i, j + 1) + raw(i + 1, j + 1);
+      heights[i * n + j] = offset + (sum / 16) * scale;
+    }
+  }
+  return heights;
 }

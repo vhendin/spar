@@ -244,7 +244,7 @@ function bigStation(l: Lift, p: Support, k: number, inward: number, gauge: numbe
   out.rod([p.x, p.y + p.height - 0.15, p.z], [p.x, p.y + p.height + 0.15, p.z], gauge / 2, 18, shade(steel, 0.8), shade(steel, 0.8));
   const [hx, hz] = corner(width / 2 - 1.4, -inward * (length / 2 - 1.8));
   out.box([hx, deck + 1.3, hz], 1.2, 1.3, 1.4, yaw, shade(roof, 1.6), false, roof);
-  out.solids.push({ key: `l${l.id}:${k}`, x: cx, y: deck - hy, z: cz, hx: width / 2, hy, hz: length / 2, yaw });
+  out.solids.push({ key: `l${l.id}:${k}`, x: cx, y: deck - hy, z: cz, hx: width / 2, hy, hz: length / 2, yaw, ground: true });
 }
 
 /** End of a drag lift or rope tow: a post with the wheel on top, and a hut at the bottom. */

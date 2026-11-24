@@ -12,7 +12,7 @@ import type { FelledTree } from '@spar/shared';
 import type { Features } from '../features/features';
 import type { Vegetation } from '../vegetation/vegetation';
 import { Felling } from './felling';
-import { GROUP_OBSTACLE, GROUP_VEHICLE, groups } from './sim';
+import { GROUP_GROUND, GROUP_OBSTACLE, GROUP_VEHICLE, groups } from './sim';
 
 const RADIUS = 28;
 /** Rocks smaller than this pass under the vehicle and are left out. */
@@ -102,9 +102,11 @@ export class Obstacles {
     return this.byHandle.get(handle)?.kind ?? null;
   }
 
-  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, kind: SolidKind): RAPIER.Collider {
+  private add(key: string, desc: RAPIER.ColliderDesc, geometry: THREE.BufferGeometry, scale: [number, number, number], drawn: boolean, kind: SolidKind, ground = false): RAPIER.Collider {
     const plant = kind !== 'object';
-    const collider = this.world.createCollider(desc.setFriction(0.6).setCollisionGroups(groups(GROUP_OBSTACLE, GROUP_VEHICLE)));
+    // What can be driven on is also ground, which the wheels feel.
+    const member = ground ? GROUP_OBSTACLE | GROUP_GROUND : GROUP_OBSTACLE;
+    const collider = this.world.createCollider(desc.setFriction(ground ? 0.9 : 0.6).setCollisionGroups(groups(member, GROUP_VEHICLE)));
     const wire = new THREE.Mesh(geometry, plant ? this.materials.plant : this.materials.object);
     const t = desc.translation, r = desc.rotation;
     wire.position.set(t.x, t.y, t.z);
@@ -248,7 +250,7 @@ export class Obstacles {
         .setRotation({ x: 0, y: Math.sin(s.yaw / 2), z: 0, w: Math.cos(s.yaw / 2) });
       const breaks = this.felling ? s.breaks : undefined;
       if (breaks) desc = this.felling!.listen(desc, this.R);
-      const collider = this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, 'object');
+      const collider = this.add(s.key, desc, UNIT_BOX, [s.hx, s.hy, s.hz], true, 'object', s.ground);
       if (breaks) this.felling!.track(collider, { key: s.key, diameter: FENCE_CRACK, energy: breaks.energy, push: breaks.push });
     });
     this.vegetation?.forEachSolid(x, z, RADIUS, (key, shape, px, py, pz, size, radiusPerHeight, drawn) => {

@@ -5,6 +5,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Bumps, landings and lift stations (this commit)
+
+- **Asked:** downhill every small bump throws the vehicle about and it slides; hard to
+  build speed for a jump without crashing. Stuck on a lift station's deck.
+- **Found:** (1) a strut could close only about 10 cm from standing, and Rapier's spring
+  pushes no harder past that, so any lump at speed or any landing put the body on the ground
+  (a 0.8 m drop did on the lc200 and ltb4). (2) Wheels are single rays on the raw 1 m height
+  grid: every crease and small lump in it was a kick a real tyre would roll over. (3) Wheels
+  feel only the ground, so they fell through the station's deck and the body sat on it.
+- **Done:** struts close to 4 cm, with a bump stop that damps harder over the last three
+  quarters (damping, not a stiffer spring, so landings are not handed back as a bounce); a
+  0.8 m drop now lands clear on all three test vehicles. The physics ground is smoothed over
+  about a tyre's footprint (features of a few metres stay). Lift station decks are ground
+  the wheels stand on.
+- **Not done, could follow:** steadying the vehicle in the air so it lands on its wheels
+  (arcade); physics at 120 Hz so fast landings are caught a step sooner; drops of 1.2 m and
+  more still touch the lower vehicles' undersides.
+- **To try:** fast downhill on rough ground; a jump; the lift station.
+
 ### Roads drawn from their lines (this commit)
 
 - **Asked:** straight, clean road edges, and paths blended rather than pixelated: for looks,

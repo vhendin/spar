@@ -553,6 +553,26 @@ describe('handing a vehicle between browsers', () => {
   });
 });
 
+describe('landing', () => {
+  it('catches a drop on its struts without the body hitting the ground', () => {
+    for (const name of ['lc200', 'tgb11', 'ltb4']) {
+      const { car, run } = setup(name);
+      run(1);
+      // Lifted 0.8 m and let go: it lands at 4 m/s, as off a small jump.
+      const p = car.body.translation();
+      const rest = p.y;
+      car.body.setTranslation({ x: p.x, y: p.y + 0.8, z: p.z }, true);
+      let lowest = Infinity;
+      for (let s = 0; s < 120; s++) {
+        run(1 / 60);
+        lowest = Math.min(lowest, car.body.translation().y);
+      }
+      // Standing, the underside is the ground clearance up; it must stay clear of the ground.
+      expect(rest - lowest, name).toBeLessThan(car.def.chassis.groundClearance - 0.02);
+    }
+  });
+});
+
 describe('edges of ground at speed', () => {
   /** Runs at a bank rising `height` m over 1.2 m, at full throttle from 40 km/h; how slow it got crossing, and how far it went. */
   function bank(name: string, height: number, glance: boolean) {
