@@ -12,6 +12,7 @@ import {
 import { cloudShadow } from '../sky/clouds';
 import type { GroundClasses, RegionIndex } from '@spar/shared';
 import groundDefs from '../../../defs/ground.json';
+import { NOISE_CELLS, noiseTexture } from './noiseTexture';
 
 const ICE = (groundDefs as unknown as GroundClasses).ice;
 /** Holes broken through the ice that are drawn at once. */
@@ -217,13 +218,16 @@ export class GroundShading {
     }
 
     const ground = positionWorld.xz;
-    // The noise that breaks up colour and borders; none for the benchmark's 'noNoise'.
-    const noise = (p: THREE.Node<'vec2'>): THREE.Node<'float'> => (look === 'noNoise' ? float(0) : mx_noise_float(p));
+    // The noise that breaks up colour and borders, read from a repeating texture (four
+    // different noises, -1..1, one per channel) rather than worked out for every pixel;
+    // none for the benchmark's 'noNoise'.
+    const noiseMap = noiseTexture();
+    const noise4 = (p: THREE.Node<'vec2'>): THREE.Node<'vec4'> => (look === 'noNoise' ? vec4(0) : texture(noiseMap, p.div(NOISE_CELLS)).mul(2).sub(1));
     const rock = float(1).sub(smoothstep(0.62, 0.8, normalWorld.y)); // bare rock from about 37° to 52°
     const tint = float(1)
-      .add(noise(ground.mul(0.9)).mul(0.1))
-      .add(noise(ground.mul(0.11)).mul(0.08))
-      .add(noise(ground.mul(0.013)).mul(0.06));
+      .add(noise4(ground.mul(0.9)).z.mul(0.1))
+      .add(noise4(ground.mul(0.11)).w.mul(0.08))
+      .add(noise4(ground.mul(0.013)).x.mul(0.06));
 
     const linear = (hex: number) => {
       const c = new THREE.Color(hex);
@@ -273,7 +277,7 @@ export class GroundShading {
       return { t00: pick(0, 0), t10: pick(1, 0), t01: pick(0, 1), t11: pick(1, 1), f: fract(at) };
     };
     const at = uv().mul(size - 1);
-    const wobble = vec2(noise(ground.mul(0.21)), noise(ground.mul(0.21).add(41.7))).mul(0.45);
+    const wobble = noise4(ground.mul(0.21)).xy.mul(0.45);
     const g = texels(at.add(wobble));
     const gBlend = smoothstep(0.2, 0.8, g.f);
     const natural = mix(

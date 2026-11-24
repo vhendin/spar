@@ -38,14 +38,17 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   sky 2.5. Shadows, glow, finishing pass, far ground, plants, far trees and buildings save
   nothing measurable. Removing the ground drops only 0.2 of 1.24 million triangles, so its cost
   is its per-pixel shading.
-- **Ground and sky made cheaper (this commit):** the ground's snow (six of its eleven noise
-  lookups a pixel) is now worked out only where snow can lie, the same picture. The sky dome,
-  whose cloud noise ran for every pixel under the ground too, is drawn last and only where it
-  shows. The benchmark has two more parts: the near ground without its noise, and in one flat
-  colour, to show what is left in the ground's shading.
-- **Wanted from you:** one more `?bench=parts` run to compare, and one or two normal drives with
-  F9, marking with F8 when the fan spins up.
-- **Open, your call later:** medium draws 1.5 pixels per point; 1 saves 3–8 ms. Lowering it, or
+- **Ground and sky made cheaper (done):** the ground's snow noise is worked out only where snow
+  can lie, and the sky dome is drawn last, only where it shows. Second run: Ottsjö 10.0 → 8.5 ms,
+  over the valley 16.9 → 10.7 ms. The ground's remaining noise cost 2.0–2.8 ms of that, all its
+  shading beyond a flat colour 3.1–4.5 ms.
+- **Ground noise from a texture (this commit):** the five noise lookups every ground pixel made
+  for its colour and borders now read a repeating noise texture made at start (23 ms), not
+  computed. The same kind of noise, so the ground should look much the same; say if it looks
+  different, patterned or repeating. Snow and water still compute theirs.
+- **Wanted from you:** one more `?bench=parts` run, and a look at the ground close up and far;
+  later one or two normal drives with F9, marking with F8 when the fan spins up.
+- **Open, your call later:** medium draws 1.5 pixels per point; 1 saves 2.5–3 ms now. Lowering it, or
   a resolution that drops by itself when frames run long, is the next big step if needed.
 
 ### Scouting drone (this commit)
