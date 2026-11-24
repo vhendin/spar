@@ -188,8 +188,18 @@ export class Vegetation {
    */
   /** With `seeThrough`, trees and rocks between the camera and the vehicle turn see-through. */
   /** Plants take the colours of `season`; setSeason changes them later. */
-  static async create(renderer: THREE.WebGPURenderer, index: RegionIndex, seed: number, range = 1, farRange = 1, seeThrough: SeeThrough | null = null, season: SeasonState = SUMMER): Promise<Vegetation> {
-    const vegetation = new Vegetation(index, seed, range, farRange, seeThrough, season);
+  /** Nothing grows on the `buildings` outlines. */
+  static async create(
+    renderer: THREE.WebGPURenderer,
+    index: RegionIndex,
+    seed: number,
+    range = 1,
+    farRange = 1,
+    seeThrough: SeeThrough | null = null,
+    season: SeasonState = SUMMER,
+    buildings: number[][][] = [],
+  ): Promise<Vegetation> {
+    const vegetation = new Vegetation(index, seed, range, farRange, seeThrough, season, buildings);
     await vegetation.prepare(renderer);
     return vegetation;
   }
@@ -201,6 +211,7 @@ export class Vegetation {
     farRange: number,
     private readonly seeThrough: SeeThrough | null,
     season: SeasonState,
+    private readonly buildings: number[][][],
   ) {
     this.season = season;
     this.group.name = 'vegetation';
@@ -281,7 +292,7 @@ export class Vegetation {
       this.pending.delete(ev.data.id);
       done?.(ev.data);
     };
-    this.post({ kind: 'init', index: this.index, layers: this.layers, seed: this.seed });
+    this.post({ kind: 'init', index: this.index, layers: this.layers, seed: this.seed, buildings: this.buildings });
   }
 
   /**

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Building, FenceLine, Lift, PowerLine } from '@spar/shared';
 import { buildTile } from './build';
 import { OBJECTS } from './defs';
-import { footprintRect, rectWings } from './generators/building';
+import { footprintRect, rectWings, wallSolids } from './generators/building';
 import { alongLine } from './generators/fence';
 import { liftSupports } from './generators/lift';
 import { assignToTiles, type FeatureVectors, type TileJob } from './layout';
@@ -31,6 +31,30 @@ const vectors: FeatureVectors = {
   fences: [fenceLine, { id: 'f2', kind: 'wire', points: [[30, 200], [60, 210]] }, { id: 'f3', kind: 'stone_wall', points: [[40, 220], [60, 225]] }],
   objects: [{ id: 'logs1', kind: 'log_pile', x: 150, z: 150, heading: 30 }],
 };
+
+describe('wallSolids', () => {
+  // A C-shaped building round a yard open to the east, 30 m across, 10 m thick arms.
+  const c = [[0, 0], [30, 0], [30, 10], [10, 10], [10, 20], [30, 20], [30, 30], [0, 30]];
+  /** Whether (x, z) is inside any of the boxes. */
+  const solidAt = (x: number, z: number, outline: number[][]) =>
+    wallSolids('1', outline, 0, 5).some((s) => {
+      const c2 = Math.cos(-s.yaw), s2 = Math.sin(-s.yaw);
+      const u = (x - s.x) * c2 + (z - s.z) * s2, v = -(x - s.x) * s2 + (z - s.z) * c2;
+      return Math.abs(u) <= s.hx && Math.abs(v) <= s.hz;
+    });
+
+  it('leaves the yard in a bend open, whichever way the outline runs', () => {
+    for (const outline of [c, [...c].reverse()]) {
+      expect(solidAt(20, 15, outline)).toBe(false);
+      expect(solidAt(29.8, 5, outline)).toBe(true);
+      expect(solidAt(9.8, 15, outline)).toBe(true);
+      expect(solidAt(10.2, 15, outline)).toBe(false);
+      // Just outside a wall is clear.
+      expect(solidAt(30.2, 5, outline)).toBe(false);
+      expect(solidAt(-0.2, 15, outline)).toBe(false);
+    }
+  });
+});
 
 describe('footprintRect', () => {
   it('recovers a turned rectangle, long side first', () => {

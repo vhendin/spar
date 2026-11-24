@@ -2,7 +2,12 @@
 // ground patch the terrain worker writes a small texture with every texel's distance from the
 // nearest road edge; the shader cuts at zero between texels, so edges are straight and clean
 // at any distance (blended softly for trails and dirt, sharp for asphalt). Patches near the
-// camera are small, so their texels are as fine as 25 cm. Pure functions.
+// camera are small, so their texels are as fine as 25 cm.
+//
+// Where roads meet, the better road lies on top (asphalt over gravel over dirt, any road
+// over a stream): each texel also keeps the distance from the edge of the top road near it
+// and what lies under, so the shader can cut between the two surfaces along a straight line
+// too, rather than taking each texel's surface whole. Pure functions.
 
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 
@@ -20,12 +25,18 @@ const MIN_WIDTH = 0.8;
 const MIN_TEXELS = 1.5;
 /** Grid cell for finding the lines near a patch, metres. */
 const CELL = 64;
+/** Which surface lies on top where two meet; higher is on top. Others are 0. */
+const PRIORITY: Record<string, number> = { asphalt: 6, boardwalk: 5, gravel: 4, dirt: 3, trail: 2, stream: 1 };
+/** Surface ids fit in four bits, two to a byte. */
+const SURFACE_IDS = 16;
 
 export interface RoadLines {
   /** Segments as ax, az, bx, bz. */
   ends: Float32Array;
   halfWidth: Float32Array;
   surface: Uint8Array;
+  /** Per surface id, how high it lies where roads meet (PRIORITY). */
+  priority: Uint8Array;
   /** The grid: per cell, the segments touching it (with their width and ROAD_RANGE around). */
   cells: Map<number, number[]>;
 }
@@ -34,6 +45,8 @@ export interface RoadLines {
 export function roadLines(vectors: Pick<RegionVectors, 'roads' | 'waterways'>, surfaces: RegionIndex['masks']['surfaces']): RoadLines {
   const id = new Map(surfaces.map((s) => [s.name, s.id]));
   const stream = id.get('stream') ?? 0;
+  const priority = new Uint8Array(SURFACE_IDS);
+  for (const s of surfaces) if (s.id < SURFACE_IDS) priority[s.id] = PRIORITY[s.name] ?? 0;
   const lines: { points: number[][]; half: number; surface: number }[] = [];
   for (const w of vectors.waterways ?? []) lines.push({ points: w.points, half: (WATERWAY_WIDTH[w.kind] ?? 2) / 2, surface: stream });
   for (const r of vectors.roads ?? []) lines.push({ points: r.points, half: Math.max(r.width, MIN_WIDTH) / 2, surface: id.get(r.surface) ?? 0 });
@@ -62,7 +75,7 @@ export function roadLines(vectors: Pick<RegionVectors, 'roads' | 'waterways'>, s
       }
     }
   }
-  return { ends, halfWidth, surface, cells };
+  return { ends, halfWidth, surface, priority, cells };
 }
 
 const cellKey = (cx: number, cz: number): number => (cz + 4096) * 8192 + (cx + 4096);
@@ -71,15 +84,35 @@ const cellKey = (cx: number, cz: number): number => (cz + 4096) * 8192 + (cx + 4
 export const encodeDistance = (d: number): number => Math.max(0, Math.min(255, Math.round(128 + d * ROAD_STEPS)));
 export const decodeDistance = (b: number): number => (b - 128) / ROAD_STEPS;
 
+/** A patch's road texture with no road on it. */
+export function emptyRoadField(texels: number): Uint8Array {
+  const out = new Uint8Array(texels * texels * 4);
+  for (let k = 0; k < out.length; k += 4) {
+    out[k] = encodeDistance(ROAD_RANGE);
+    out[k + 3] = encodeDistance(ROAD_RANGE);
+  }
+  return out;
+}
+
+/** Top and under surface ids packed into the G byte, and back. */
+export const packSurfaces = (top: number, under: number): number => (top << 4) | under;
+export const topSurface = (g: number): number => g >> 4;
+export const underSurface = (g: number): number => g & 15;
+
 /**
  * RGBA bytes, `texels` square, north row first, texel (i, j) at (x0 + i * step, z0 + j * step)
- * with step = size / (texels - 1): R the distance from the nearest road edge (encodeDistance),
- * G that road's surface id, B how strongly it shows (255, less where it was widened to stay
- * visible), A unused.
+ * with step = size / (texels - 1): R the distance from the nearest road edge of any road
+ * (encodeDistance); G the surface of the top road near the texel and of the nearest one under
+ * it (packSurfaces; the same twice where nothing lies under); B how strongly the nearest road
+ * shows (255, less where it was widened to stay visible); A the distance from the top road's edge.
  */
 export function buildRoadField(lines: RoadLines, x0: number, z0: number, size: number, texels: number): Uint8Array {
-  const out = new Uint8Array(texels * texels * 4);
-  const best = new Float32Array(texels * texels).fill(ROAD_RANGE);
+  const count = texels * texels;
+  const out = new Uint8Array(count * 4);
+  const best = new Float32Array(count).fill(ROAD_RANGE);
+  const strengths = new Uint8Array(count);
+  // Per surface id, each texel's distance from the nearest edge of a road of that surface.
+  const bySurface: (Float32Array | null)[] = new Array(SURFACE_IDS).fill(null);
   const step = size / (texels - 1);
   const minHalf = (MIN_TEXELS * step) / 2;
   const seen = new Set<number>();
@@ -96,6 +129,8 @@ export function buildRoadField(lines: RoadLines, x0: number, z0: number, size: n
     const real = lines.halfWidth[s]!;
     const half = Math.max(real, minHalf);
     const strength = Math.round((255 * real) / half);
+    const surface = lines.surface[s]! % SURFACE_IDS;
+    const mine = (bySurface[surface] ??= new Float32Array(count).fill(ROAD_RANGE));
     const reach = half + ROAD_RANGE;
     const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - reach - x0) / step));
     const i1 = Math.min(texels - 1, Math.ceil((Math.max(ax, bx) + reach - x0) / step));
@@ -113,17 +148,35 @@ export function buildRoadField(lines: RoadLines, x0: number, z0: number, size: n
         const ez = pz - az - t * dz;
         const d = Math.sqrt(ex * ex + ez * ez) - half;
         const k = j * texels + i;
+        if (d < mine[k]!) mine[k] = d;
         if (d < best[k]!) {
           best[k] = d;
-          out[k * 4 + 1] = lines.surface[s]!;
-          out[k * 4 + 2] = strength;
+          strengths[k] = strength;
         }
       }
     }
   }
-  for (let k = 0; k < best.length; k++) {
+  const present = bySurface.flatMap((f, id) => (f ? [id] : [])).sort((a, b) => lines.priority[b]! - lines.priority[a]! || a - b);
+  for (let k = 0; k < count; k++) {
+    // The top road is the highest one within reach; under it, the nearest of the rest below.
+    let top = -1;
+    let under = -1;
+    let underD = ROAD_RANGE;
+    for (const id of present) {
+      const d = bySurface[id]![k]!;
+      if (d >= ROAD_RANGE) continue;
+      if (top < 0) top = id;
+      else if (lines.priority[id]! < lines.priority[top]! && d < underD) {
+        under = id;
+        underD = d;
+      }
+    }
+    if (top < 0) top = 0;
+    if (under < 0) under = top;
     out[k * 4] = encodeDistance(best[k]!);
-    out[k * 4 + 3] = 255;
+    out[k * 4 + 1] = packSurfaces(top, under);
+    out[k * 4 + 2] = strengths[k]!;
+    out[k * 4 + 3] = encodeDistance(bySurface[top]?.[k] ?? ROAD_RANGE);
   }
   return out;
 }

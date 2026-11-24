@@ -3,6 +3,7 @@
 
 import type { RegionIndex } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
+import { footprints, type Footprints } from './footprints';
 import { groupByChunk, placeLayer, type GroundData, type Placement } from './placement';
 import type { CompiledLayer } from './rules';
 
@@ -12,7 +13,7 @@ export const CHUNK = 64;
 export const PATCH = 32;
 
 export type VegetationRequest =
-  | { kind: 'init'; index: RegionIndex; layers: CompiledLayer[]; seed: number }
+  | { kind: 'init'; index: RegionIndex; layers: CompiledLayer[]; seed: number; buildings: number[][][] }
   | { kind: 'tile'; id: number; x: number; z: number }
   | { kind: 'patch'; id: number; x: number; z: number };
 
@@ -27,6 +28,7 @@ export type VegetationResponse = { id: number; ok: true; layers: PlacedLayer[] }
 let index: RegionIndex;
 let layers: CompiledLayer[] = [];
 let seed = 0;
+let buildings: Footprints | null = null;
 
 const cache = new Map<string, Promise<Uint8Array | Uint16Array>>();
 function cached<T extends Uint8Array | Uint16Array>(url: string, load: () => Promise<T>): Promise<T> {
@@ -82,6 +84,7 @@ async function groundAt(x: number, z: number): Promise<GroundData> {
     waterId: m.biomes.find((b) => b.name === 'water')?.id ?? -1,
     treeline: m.treeline,
     regionSize: index.size,
+    footprints: buildings,
   };
 }
 
@@ -101,6 +104,7 @@ self.onmessage = (ev: MessageEvent<VegetationRequest>): void => {
   const req = ev.data;
   if (req.kind === 'init') {
     ({ index, layers, seed } = req);
+    buildings = footprints(req.buildings);
     return;
   }
   place(req.kind, req.x, req.z).then(

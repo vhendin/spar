@@ -1,6 +1,6 @@
 import type { Building, ObjectDef } from '@spar/shared';
 import { ShapeUtils, Vector2 } from 'three';
-import { objectRng, param, pick, shade, type FeatureMesh, type GroundFn, type Rgb, type Vec3 } from '../mesh';
+import { objectRng, param, pick, shade, type FeatureMesh, type GroundFn, type Rgb, type Solid, type Vec3 } from '../mesh';
 
 /** A footprint's smallest enclosing rectangle: centre, long-axis direction (x, z) = (cos angle, sin angle), half sizes. */
 export interface Rect {
@@ -64,6 +64,38 @@ export function footprintRect(outline: number[][]): Rect {
   return r;
 }
 
+/** Wall colliders' thickness, metres, inside the outline. */
+const WALL = 0.6;
+
+/**
+ * Colliders for a building of no simple shape: a thin box along the inside of each wall, so
+ * a curved or notched building is solid where it stands and nowhere else (one box round it
+ * all would stand across the yards and roads in its bends).
+ */
+export function wallSolids(id: string, outline: number[][], base: number, top: number): Solid[] {
+  const inward = outlineArea(outline) > 0 ? 1 : -1;
+  const solids: Solid[] = [];
+  for (let k = 0; k < outline.length; k++) {
+    const a = outline[k]!, b = outline[(k + 1) % outline.length]!;
+    const dx = b[0]! - a[0]!, dz = b[1]! - a[1]!;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.05) continue;
+    // Left of the edge is inside when the outline turns that way.
+    const nx = (-dz / len) * inward, nz = (dx / len) * inward;
+    solids.push({
+      key: solids.length === 0 ? `b${id}` : `b${id}.w${k}`,
+      x: (a[0]! + b[0]!) / 2 + (nx * WALL) / 2,
+      y: (base + top) / 2,
+      z: (a[1]! + b[1]!) / 2 + (nz * WALL) / 2,
+      hx: len / 2 + WALL / 2,
+      hy: (top - base) / 2,
+      hz: WALL / 2,
+      yaw: -Math.atan2(dz, dx),
+    });
+  }
+  return solids;
+}
+
 const LARGE_KINDS = new Set(['hotel', 'apartments', 'dormitory', 'industrial', 'supermarket', 'retail', 'commercial', 'college', 'school', 'train_station', 'warehouse', 'barn', 'farm_auxiliary']);
 const SMALL_KINDS = new Set(['shed', 'hut', 'garage', 'cabin', 'toilets']);
 
@@ -117,7 +149,7 @@ export function building(b: Building, def: ObjectDef, seed: number, ground: Grou
   // with its own gable roof; anything else is raised as walls under a flat roof.
   const wings = fill >= 0.8 || b.outline.length <= 4 ? [rect] : rectWings(b.outline, rect);
   if (!wings) {
-    out.solids.push({ key: `b${b.id}`, x: rect.cx, y: (base + top) / 2, z: rect.cz, hx: rect.hl, hy: (top - base) / 2, hz: rect.hw, yaw: -rect.angle });
+    out.solids.push(...wallSolids(b.id, b.outline, base, top));
     prismOutline(b.outline, base, floor, stone, null, out);
     prismOutline(b.outline, floor, top, walls, shade(roof, 0.9), out);
     return;

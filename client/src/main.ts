@@ -743,7 +743,7 @@ async function start(): Promise<void> {
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
-      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough, seasonAt(CALENDAR, seasonStep(environment.dayOfYear())));
+      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough, seasonAt(CALENDAR, seasonStep(environment.dayOfYear())), (vectors.buildings ?? []).map((b) => b.outline));
       scene.add(vegetation.group);
       // ?atlas=1 stands the far-tree pictures up in front of the start position.
       if (params.get('atlas') === '1') {

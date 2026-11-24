@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildRoadField, decodeDistance, ROAD_RANGE, roadLines } from './roadField';
+import { buildRoadField, decodeDistance, ROAD_RANGE, roadLines, topSurface, underSurface } from './roadField';
 
 const surfaces = [
-  { id: 0, name: 'none' }, { id: 1, name: 'asphalt' }, { id: 2, name: 'gravel' }, { id: 4, name: 'trail' }, { id: 6, name: 'stream' },
+  { id: 0, name: 'none' }, { id: 1, name: 'asphalt' }, { id: 2, name: 'gravel' }, { id: 3, name: 'dirt' }, { id: 4, name: 'trail' }, { id: 6, name: 'stream' },
 ];
 const road = (points: number[][], width: number, surface = 'gravel') =>
   ({ id: 'w1', kind: 'track', surface, width, drivable: true, points }) as never;
@@ -12,7 +12,7 @@ describe('road field', () => {
   const at = (field: Uint8Array, x: number, z: number, texels = 129, size = 32) => {
     const step = size / (texels - 1);
     const k = (Math.round((z - 200) / step) * texels + Math.round((x - 100) / step)) * 4;
-    return { d: decodeDistance(field[k]!), surface: field[k + 1]!, strength: field[k + 2]! };
+    return { d: decodeDistance(field[k]!), surface: topSurface(field[k + 1]!), under: underSurface(field[k + 1]!), dTop: decodeDistance(field[k + 3]!), strength: field[k + 2]! };
   };
 
   it('gives each texel its distance from the road edge, negative inside, and the road', () => {
@@ -61,10 +61,32 @@ describe('road field', () => {
     // A 2048 m patch: a texel every 16 m; the 1.2 m trail is drawn 24 m wide at 5 % strength.
     const field = buildRoadField(lines, 0, 0, 2048, 129);
     const k = (64 * 129 + 20) * 4;
-    expect(field[k + 1]).toBe(4);
+    expect(topSurface(field[k + 1]!)).toBe(4);
     expect(decodeDistance(field[k]!)).toBeLessThan(0);
     expect(field[k + 2]).toBeLessThan(15);
     const s = (20 * 129 + 64) * 4;
-    expect(field[s + 1]).toBe(6);
+    expect(topSurface(field[s + 1]!)).toBe(6);
+  });
+
+  it('lays the better road on top where two meet, cut along its own edge', () => {
+    // An asphalt road along z = 216, 6 m wide; a dirt track from the south ends in its middle.
+    const lines = roadLines(
+      { roads: [road([[90, 216], [140, 216]], 6, 'asphalt'), road([[115, 190], [115, 216]], 4, 'dirt')], waterways: [] },
+      surfaces,
+    );
+    const field = buildRoadField(lines, 100, 200, 32, 129);
+    // On the asphalt, even where the dirt track's middle is nearer: asphalt on top, dirt under.
+    const onAsphalt = at(field, 115, 215);
+    expect(onAsphalt.surface).toBe(1);
+    expect(onAsphalt.under).toBe(3);
+    expect(onAsphalt.dTop).toBeLessThan(0);
+    // On the track a metre short of the asphalt: still asphalt on top, but outside its edge.
+    const onTrack = at(field, 115, 212);
+    expect(onTrack.surface).toBe(1);
+    expect(onTrack.under).toBe(3);
+    expect(onTrack.dTop).toBeCloseTo(1, 1);
+    expect(onTrack.d).toBeLessThan(0);
+    // Alone: the same surface twice.
+    expect(at(field, 102, 216).under).toBe(1);
   });
 });

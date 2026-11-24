@@ -9,6 +9,7 @@
 // results everywhere, unlike sin or pow.
 
 import { hash32 } from '@spar/shared';
+import { onFootprint, type Footprints } from './footprints';
 import { bandWeight, type CompiledLayer } from './rules';
 
 /** One mask file and one height file that cover the area being placed. */
@@ -39,6 +40,8 @@ export interface GroundData {
   waterId: number;
   treeline: number;
   regionSize: number;
+  /** Buildings, which nothing grows in. */
+  footprints?: Footprints | null;
 }
 
 /** Floats per placed object: x, y, z, size (height in metres), yaw (radians), rand (0..1). */
@@ -123,6 +126,7 @@ export function placeLayer(layer: CompiledLayer, seed: number, x0: number, z0: n
       const biome = g.mask[g.planes.biome * plane + at]!;
       // Nothing grows in open water or on roads, paths and streams.
       if (biome === g.waterId || g.mask[g.planes.road * plane + at]! > 24) continue;
+      if (g.footprints && onFootprint(g.footprints, x, z)) continue;
 
       const wetness = g.mask[g.planes.wetness * plane + at]! * g.wetnessScale;
       const canopy = g.mask[g.planes.canopy * plane + at]! * g.canopyScale;

@@ -4,7 +4,7 @@
 import { buildNodeMask, type NodeMaskRequest } from './maskData';
 import { buildNodeMesh, type NodeMeshData, type NodeMeshRequest } from './meshData';
 import { fetchBytes, fetchUint16 } from './region';
-import { buildRoadField, type RoadLines } from './roadField';
+import { buildRoadField, emptyRoadField, type RoadLines } from './roadField';
 
 export type WorkerRequest =
   | { id: number; kind: 'node'; heightUrl: string; mesh: NodeMeshRequest; maskUrl: string; mask: NodeMaskRequest; roads: { x0: number; z0: number; size: number } }
@@ -66,7 +66,7 @@ self.onmessage = (ev: MessageEvent<WorkerRequest>): void => {
     const mesh = buildNodeMesh(heightFile, req.mesh);
     const mask = buildNodeMask(maskFile, req.mask);
     const { x0, z0, size } = req.roads;
-    const roads = lines ? buildRoadField(lines, x0, z0, size, req.mask.size) : new Uint8Array(req.mask.size * req.mask.size * 4).fill(255);
+    const roads = lines ? buildRoadField(lines, x0, z0, size, req.mask.size) : emptyRoadField(req.mask.size);
     post({ id: req.id, ok: true, mesh, mask, roads }, [mesh.positions.buffer, mesh.normals.buffer, mesh.uvs.buffer, mask.buffer, roads.buffer]);
   }, fail(req.id));
 };

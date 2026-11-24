@@ -329,30 +329,42 @@ export class GroundShading {
     let roadWater: THREE.Node<'float'> = max(waterSurface(r.t00), waterSurface(r.t11));
     if (lines) {
       // The distance from the nearest edge, blended between the four texels around, so the
-      // cut at zero is a clean line; that road's surface from the nearest texel. Anti-aliased
-      // over about a pixel, or blended wider and made ragged for the softer surfaces. Only
-      // plain loads and no screen derivatives here: WebGPU refuses a shader that filters or
-      // takes derivatives where it may be inside a branch, as this can be (water, snow).
+      // cut at zero is a clean line. Where roads meet, likewise the distance from the top
+      // road's edge, which cuts between it and the surface under it (both from the nearest
+      // texel). Anti-aliased over about a pixel, or blended wider and made ragged for the
+      // softer surfaces. Only plain loads and no screen derivatives here: WebGPU refuses a
+      // shader that filters or takes derivatives where it may be inside a branch, as this
+      // can be (water, snow).
       const p = positionLocal.xz.div(meshSize).mul(size - 1);
       const cell = floor(p);
       const f = fract(p);
-      const dAt = (dx: number, dy: number) => roadNode.load(ivec2(clamp(cell.add(vec2(dx, dy)), 0, size - 1))).x;
-      const raw = mix(mix(dAt(0, 0), dAt(1, 0), f.x), mix(dAt(0, 1), dAt(1, 1), f.x), f.y);
+      const tAt = (dx: number, dy: number) => roadNode.load(ivec2(clamp(cell.add(vec2(dx, dy)), 0, size - 1)));
+      const raw = mix(mix(tAt(0, 0), tAt(1, 0), f.x), mix(tAt(0, 1), tAt(1, 1), f.x), f.y);
       const nearest = roadNode.load(ivec2(clamp(p.add(0.5).floor(), 0, size - 1)));
-      const d = raw.mul(255).sub(128).div(ROAD_STEPS);
-      const surface = int(nearest.y.mul(255).add(0.5));
+      const d = raw.x.mul(255).sub(128).div(ROAD_STEPS);
+      const dTop = raw.w.mul(255).sub(128).div(ROAD_STEPS);
+      const packed = nearest.y.mul(255).add(0.5).floor();
+      const topId = packed.div(16).floor();
+      const top = int(topId);
+      const under = int(packed.sub(topId.mul(16)));
       const ragged = look === 'noNoise' ? float(0) : mx_noise_float(ground.mul(0.8));
-      const props = this.surfaceProps.element(surface);
-      const edge = d.add(ragged.mul(props.w));
+      const topProps = this.surfaceProps.element(top);
+      const underProps = this.surfaceProps.element(under);
       // How many metres of ground one pixel spans here: further, and more glancing, is more.
       const toCamera = cameraPosition.sub(positionWorld);
       const glancing = max(dot(normalWorld, toCamera.normalize()).abs(), 0.2);
       const pixel = toCamera.length().mul(this.pixelAngle).div(glancing);
+      const topBlend = max(topProps.z, pixel.mul(0.75));
+      const topShare = float(1).sub(smoothstep(topBlend.negate(), topBlend, dTop.add(ragged.mul(topProps.w))));
+      const props = mix(underProps, topProps, topShare);
       const blend = max(props.z, pixel.mul(0.75));
-      const lineCover = float(1).sub(smoothstep(blend.negate(), blend, edge)).mul(nearest.z);
+      const lineCover = float(1).sub(smoothstep(blend.negate(), blend, d.add(ragged.mul(props.w)))).mul(nearest.z);
       const fromLine = lineCover.greaterThanEqual(onRoad);
-      roadBase = select(fromLine, this.surfaceColors.element(surface), roadBase);
-      fixedRough = select(fromLine, props.x, fixedRough);
+      // Roughness -1 follows the weather; settle each before blending the two.
+      const weatherRough = float(1).sub(this.wet.mul(0.6));
+      const settled = (r: THREE.Node<'float'>) => select(r.greaterThanEqual(0), r, weatherRough);
+      roadBase = select(fromLine, mix(this.surfaceColors.element(under), this.surfaceColors.element(top), topShare), roadBase);
+      fixedRough = select(fromLine, mix(settled(underProps.x), settled(topProps.x), topShare), fixedRough);
       roadWater = select(fromLine, props.y, roadWater);
       onRoad = max(lineCover, onRoad);
     }

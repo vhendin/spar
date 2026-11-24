@@ -19,6 +19,17 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Not changed:** grip, plant placement and the minimap still use the 2 m mask, so a bush can
   stand a little into a crisp road edge, and grip changes up to a metre off the drawn edge.
   Say if either shows.
+- **Junctions (next commit):** where a dirt road or path met asphalt, each texel took the
+  surface of whichever road's middle was nearest, which came out as stairs. Now the better
+  road lies on top (asphalt, boardwalk, gravel, dirt, trail, then streams), and the cut
+  between it and what lies under follows its own edge.
+- **Buildings (same commit):** the curved building in Tandådalen (OSM building=yes, about
+  3,700 m², a C round a yard) had trees growing through its roof: plants did not know about
+  buildings at all. They now keep 1.2 m clear of every footprint. Buildings of no simple
+  shape had one box collider round the whole outline, which stood across the road in their
+  bends: the invisible wall. They now get a thin box along each wall. Such buildings can
+  still be landed on from above and fallen into, as their roof has no collider; say if that
+  happens.
 - **To look at:** edges of roads and paths close up and far; where roads meet; streams.
 - **Later, if wanted:** wheel ruts and a grass strip down forest tracks (the distance from the
   centre line makes them possible); road meshes with their own texture.
