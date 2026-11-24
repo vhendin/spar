@@ -352,9 +352,8 @@ export class Terrain {
     mask.needsUpdate = true;
     mesh.userData.mask = mask;
     mesh.userData.texel = node.size / MASK_TEXELS;
-    // Distance from the road edges across this node (see roadField): smoothly filtered.
+    // Distance from the road edges across this node, and which road (see roadField).
     const roads = new THREE.DataTexture(roadData, MASK_TEXELS + 1, MASK_TEXELS + 1, THREE.RGBAFormat, THREE.UnsignedByteType);
-    roads.magFilter = roads.minFilter = THREE.LinearFilter;
     roads.needsUpdate = true;
     mesh.userData.roads = roads;
     mesh.userData.size = node.size;

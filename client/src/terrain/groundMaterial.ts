@@ -6,7 +6,7 @@
 
 import * as THREE from 'three/webgpu';
 import {
-  Fn, If, cameraPosition, clamp, dot, float, floor, fract, fwidth, int, ivec2, max, mix, mx_noise_float, normalWorld, positionLocal, positionWorld,
+  Fn, If, cameraPosition, clamp, dot, float, floor, fract, int, ivec2, max, mix, mx_noise_float, normalWorld, positionLocal, positionWorld,
   pow, reflect, select, smoothstep, texture, time, uniform, uniformArray, uv, vec2, vec3, vec4,
 } from 'three/tsl';
 import { cloudShadow } from '../sky/clouds';
@@ -141,6 +141,8 @@ const MOON_GLINT = 4;
 export class GroundShading {
   /** Index into GROUND_VIEWS. */
   readonly view = uniform(0);
+  /** The angle one pixel spans on screen, radians, for anti-aliasing road edges. */
+  readonly pixelAngle = uniform(0.0008);
   /** How rain-soaked the ground is, 0 dry to 1: wet ground is darker and shinier. */
   readonly wet = uniform(0);
   /** Colour of the sky near the horizon, which water mirrors; and of the sunlight. Linear RGB. */
@@ -221,10 +223,7 @@ export class GroundShading {
   material(size: number, mask: THREE.Texture | null, texel = 2, look: GroundLook = 'full', lines = false): THREE.MeshStandardNodeMaterial {
     const placeholder = new THREE.DataTexture(new Uint8Array(4), 1, 1);
     const maskNode = texture(mask ?? placeholder);
-    const roadPlaceholder = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);
-    roadPlaceholder.magFilter = roadPlaceholder.minFilter = THREE.LinearFilter;
-    roadPlaceholder.needsUpdate = true;
-    const roadNode = texture(roadPlaceholder);
+    const roadNode = texture(new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1));
     // Runs before each mesh is drawn and points the shader at that mesh's textures.
     const perMesh = uniform(0).onObjectUpdate(({ object }) => {
       const data = object?.userData as { mask?: THREE.Texture; roads?: THREE.Texture } | undefined;
@@ -326,16 +325,26 @@ export class GroundShading {
     let fixedRough: THREE.Node<'float'> = roadRoughness(r.t00).max(roadRoughness(r.t11));
     let roadWater: THREE.Node<'float'> = max(waterSurface(r.t00), waterSurface(r.t11));
     if (lines) {
-      // The distance from the nearest edge, smoothly filtered between texels, so the cut at
-      // zero is a clean line; that road's surface from the nearest texel. Anti-aliased over
-      // about a pixel, or blended wider and made ragged for the softer surfaces.
+      // The distance from the nearest edge, blended between the four texels around, so the
+      // cut at zero is a clean line; that road's surface from the nearest texel. Anti-aliased
+      // over about a pixel, or blended wider and made ragged for the softer surfaces. Only
+      // plain loads and no screen derivatives here: WebGPU refuses a shader that filters or
+      // takes derivatives where it may be inside a branch, as this can be (water, snow).
       const p = positionLocal.xz.div(meshSize).mul(size - 1);
-      const field = roadNode.sample(p.add(0.5).div(size));
-      const nearest = roadNode.load(ivec2(clamp(p.round(), 0, size - 1)));
-      const d = field.x.mul(255).sub(128).div(ROAD_STEPS);
+      const cell = floor(p);
+      const f = fract(p);
+      const dAt = (dx: number, dy: number) => roadNode.load(ivec2(clamp(cell.add(vec2(dx, dy)), 0, size - 1))).x;
+      const raw = mix(mix(dAt(0, 0), dAt(1, 0), f.x), mix(dAt(0, 1), dAt(1, 1), f.x), f.y);
+      const nearest = roadNode.load(ivec2(clamp(p.add(0.5).floor(), 0, size - 1)));
+      const d = raw.mul(255).sub(128).div(ROAD_STEPS);
       const surface = int(nearest.y.mul(255).add(0.5));
-      const edge = d.add(noise4(ground.mul(0.8)).y.mul(this.surfaceRagged.element(surface)));
-      const blend = max(this.surfaceSoftness.element(surface), fwidth(d).mul(0.75));
+      const ragged = look === 'noNoise' ? float(0) : mx_noise_float(ground.mul(0.8));
+      const edge = d.add(ragged.mul(this.surfaceRagged.element(surface)));
+      // How many metres of ground one pixel spans here: further, and more glancing, is more.
+      const toCamera = cameraPosition.sub(positionWorld);
+      const glancing = max(dot(normalWorld, toCamera.normalize()).abs(), 0.2);
+      const pixel = toCamera.length().mul(this.pixelAngle).div(glancing);
+      const blend = max(this.surfaceSoftness.element(surface), pixel.mul(0.75));
       const lineCover = float(1).sub(smoothstep(blend.negate(), blend, edge)).mul(nearest.z);
       const fromLine = lineCover.greaterThanEqual(onRoad);
       roadBase = select(fromLine, this.surfaceColors.element(surface), roadBase);

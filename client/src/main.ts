@@ -1911,6 +1911,8 @@ async function start(): Promise<void> {
       env.snowing = snowDepth > 0.02;
       env.update(now, dt, camera.position, flying || drone.flown ? camera.position : w.view.group.position);
       w.shading.wet.value = env.weather.wetness;
+      // One pixel's angle, for the road edges' anti-aliasing (the view and window change).
+      w.shading.pixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, renderer.domElement.height);
       w.shading.sky.value.set(env.skyColor.r, env.skyColor.g, env.skyColor.b);
       w.shading.sunColor.value.set(env.sunLight.r, env.sunLight.g, env.sunLight.b);
       w.shading.lightFrom.value.copy(env.lightFrom);
