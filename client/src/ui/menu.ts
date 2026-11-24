@@ -37,7 +37,7 @@ export interface MenuActions {
 const CONTROLS: [string, string][] = [
   ['W / S', 'Drive, brake and reverse'],
   ['A / D', 'Steer'],
-  ['Space', 'Handbrake'],
+  ['Space', 'Handbrake (tap twice when stopped to park)'],
   ['L', 'Low and high range'],
   ['X', 'Crawl control in low range: next speed, then off (Shift+X off)'],
   ['Z', 'Air suspension: a level higher (Shift+Z lower)'],

@@ -672,3 +672,27 @@ describe('crawl control', () => {
     expect(car.speed * 3.6).toBeCloseTo(-2, 0);
   });
 });
+
+describe('handbrake', () => {
+  /** Up to about 50 km/h on gravel, then a second of steering, with or without the handbrake. */
+  const turn = (name: string, handbrake: boolean) => {
+    const { car, run } = setup(name);
+    for (let t = 0; t < 12 && car.speed < 50 / 3.6; t += 0.1) run(0.1, { throttle: 1 });
+    const from = car.speed;
+    run(1, { steer: 1, handbrake });
+    const v = car.body.linvel(), r = car.body.rotation();
+    // Angle between where the body points and where it goes: the slide.
+    const fx = 2 * (r.x * r.z + r.w * r.y), fz = 1 - 2 * (r.x * r.x + r.y * r.y);
+    const slip = Math.acos(Math.min(1, Math.abs(fx * v.x + fz * v.z) / Math.hypot(fx, fz) / Math.hypot(v.x, v.z)));
+    return { from, speed: car.speed, slip: (slip * 180) / Math.PI, rear: car.wheels.slice(-2).map((w) => w.skid) };
+  };
+
+  it.each(['lc200', 'tgb11', 'ltb4'])('%s swings its tail out at speed', (name) => {
+    const plain = turn(name, false);
+    const pulled = turn(name, true);
+    expect(plain.from).toBeGreaterThan(45 / 3.6);
+    expect(pulled.slip).toBeGreaterThan(plain.slip + 10);
+    expect(pulled.speed).toBeLessThan(plain.speed);
+    expect(pulled.rear.every((s) => s > 0.9)).toBe(true);
+  });
+});

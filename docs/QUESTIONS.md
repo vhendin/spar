@@ -5,7 +5,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Bumps, landings and lift stations (this commit)
+### Handbrake slides and park (this commit)
+
+- **Asked:** the handbrake feels weak and does not let the vehicle slide; a double tap
+  should put it in park.
+- **Found:** the handbrake only added brake force on the rear wheels, which Rapier's friction
+  circle shared with sideways grip, so the rear barely let go. On a driven axle Rapier drops
+  the brake altogether while the engine pushes, so with the throttle on it did nothing.
+- **Done:** rolling (from 1 m/s, fully from 3 m/s) the handbrake locks its wheels: they take
+  no drive and slide, pushing against the way the tyre moves with 0.8 of its grip, so the
+  tail comes round (about 50° off its path after a second at full lock from 50 km/h, against
+  2–3° without). Slower it holds as before. Locked wheels are shown standing still and leave
+  skid marks. A double tap (within 0.35 s, under about 11 km/h) parks; the next tap or a pedal
+  lets go. The P lamp shows it.
+- **Open:** is 0.8 of the grip right? It also slows the vehicle hard (50 to about 20 km/h in a
+  second at full lock). Should park release on a pedal, or only on a tap?
+- **To try:** a handbrake turn on gravel and on tarmac; a short pull mid-corner; double tap
+  to park on a hill.
+
+### Bumps, landings and lift stations
 
 - **Asked:** downhill every small bump throws the vehicle about and it slides; hard to
   build speed for a jump without crashing. Stuck on a lift station's deck.

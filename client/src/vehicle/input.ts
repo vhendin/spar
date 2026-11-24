@@ -5,22 +5,62 @@ import type { DroneControls } from './drone';
 
 const held = (down: Set<string>, ...codes: string[]): boolean => codes.some((c) => down.has(c));
 
+/** Two handbrake presses within this many milliseconds put the vehicle in park. */
+export const DOUBLE_TAP_MS = 350;
+/** Park takes only below this speed, m/s; faster, a double tap is just two pulls of the handbrake. */
+export const PARK_BELOW = 3;
+
+/**
+ * The parking latch: a double tap of the handbrake sets it, and it holds the handbrake on until
+ * the next tap or a pedal (driving away lets it go, as an electric parking brake does).
+ */
+export class ParkLatch {
+  parked = false;
+  private last = -Infinity;
+
+  /** A press of the handbrake, at `now` milliseconds, at `speed` m/s. */
+  tap(now: number, speed: number): void {
+    if (this.parked) {
+      this.parked = false;
+      this.last = -Infinity;
+      return;
+    }
+    if (now - this.last < DOUBLE_TAP_MS && Math.abs(speed) < PARK_BELOW) {
+      this.parked = true;
+      this.last = -Infinity;
+    } else this.last = now;
+  }
+
+  /** The pedals this frame: either one pressed lets the latch go. */
+  pedals(throttle: number, brake: number): void {
+    if (throttle > 0.1 || brake > 0.1) this.parked = false;
+  }
+}
+
 /** Reads the driver's controls from the keyboard and, when one is plugged in, a gamepad. */
 export class DriveInput {
   private readonly down = new Set<string>();
   private steer = 0;
+  readonly park = new ParkLatch();
+  /** Handbrake key presses since the last read (a quick tap can start and end between frames). */
+  private taps: number[] = [];
+  private padHeld = false;
 
   constructor(private readonly gamepad: PadControls) {
     window.addEventListener('keydown', (e) => {
       this.down.add(e.code);
+      if (e.code === 'Space' && !e.repeat) this.taps.push(e.timeStamp);
       if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
   }
 
-  /** `dt` in seconds since the last read; keys ramp the steering instead of slamming it. */
-  read(dt: number): VehicleInput {
+  /**
+   * `dt` in seconds since the last read; keys ramp the steering instead of slamming it. `speed`,
+   * m/s, decides whether a double tap of the handbrake parks.
+   */
+  read(dt: number, speed = 0): VehicleInput {
     const keys = this.down;
     let throttle = held(keys, 'KeyW', 'ArrowUp') ? 1 : 0;
     let brake = held(keys, 'KeyS', 'ArrowDown') ? 1 : 0;
@@ -40,9 +80,15 @@ export class DriveInput {
       if (pad > 0.05) digital = false;
       throttle = Math.max(throttle, g.value('throttle'));
       brake = Math.max(brake, g.value('brake'));
-      handbrake ||= g.held('handbrake');
+      const pulled = g.held('handbrake');
+      if (pulled && !this.padHeld) this.taps.push(performance.now());
+      this.padHeld = pulled;
+      handbrake ||= pulled;
     }
-    return { throttle, brake, steer, handbrake, digital };
+    for (const t of this.taps) this.park.tap(t, speed);
+    this.taps = [];
+    this.park.pedals(throttle, brake);
+    return { throttle, brake, steer, handbrake: handbrake || this.park.parked, digital };
   }
 
   /**

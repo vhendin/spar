@@ -1729,7 +1729,7 @@ async function start(): Promise<void> {
       // While paused nothing moves: no input, no physics, no flying mud.
       const still = flying || paused || starting || w.map.open;
       // With the drone out the driving controls fly it, and the vehicle waits on its handbrake.
-      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : drone.flown ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : input.read(dt);
+      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : drone.flown ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : input.read(dt, w.sim.speed);
       const winching: WinchControls = still || w.unplaced ? { pull: false, slack: false } : input.winch();
       // Paused, the physics still runs while our vehicle follows another browser: it is not ours to stop.
       if (!paused || towing.following) owed += dt;

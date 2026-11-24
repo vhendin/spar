@@ -44,6 +44,15 @@ const BUMP_DAMPING = 8;
 /** How far a strut of this rest length has closed, 0..1: 1 is on the bump stops. */
 export const bumpShare = (rest: number, length: number): number => Math.min(1, Math.max(0, (rest - length) / (rest - MIN_STRUT)));
 /** Steering lock halves at this speed (m/s), so the vehicle stays steady on the road. */
+/**
+ * The handbrake locks its wheels. A locked tyre slides: it pushes against the way its contact
+ * patch moves with this share of its rolling grip, so at speed nearly all of that goes into
+ * slowing it and little into holding it sideways, and the tail comes round.
+ */
+const LOCKED_GRIP = 0.8;
+/** Below this speed, m/s, the handbrake holds like a parking brake; it slides fully from SLIDE_FULL. */
+const SLIDE_FROM = 1;
+const SLIDE_FULL = 3;
 const STEER_HALF_SPEED = 13;
 /** Speed (m/s) by which rear-wheel steering against the front has faded out (about 60 km/h). */
 const REAR_STEER_FADE = 17;
@@ -316,6 +325,9 @@ export class VehicleSim {
   /** Each strut's damping as Rapier takes it, before the bump stop. */
   private readonly damping: number[] = [];
   private readonly travel: number[] = [];
+  /** Per wheel: how far it slides on its locked handbrake this step, 0..1, and what Rapier's turning of it is ahead of the shown one. */
+  private readonly locked: number[] = [];
+  private readonly turnedAhead: number[] = [];
   /** Handles of the body's own colliders, to tell its contacts from others'. */
   readonly chassis = new Set<number>();
   private readonly connectionY: number[] = [];
@@ -829,18 +841,27 @@ export class VehicleSim {
         }
         if (force === 0) hold += sunk;
         if (axle.driven) hold += out.engineBrakeForce / (driven.length * 2);
-        if (input.handbrake && (axle.handbrake || handbraked === this.wheels.length)) hold += (0.7 * weight) / handbraked;
+        // The handbrake: a parking brake when slow; rolling, it locks the wheel, which then
+        // slides (see slideLocked) and takes no drive, as if declutched from it.
+        const yanked = input.handbrake && (axle.handbrake || handbraked === this.wheels.length);
+        const slide = yanked && wheel.contact ? Math.min(1, Math.max(0, (Math.abs(this.speed) - SLIDE_FROM) / (SLIDE_FULL - SLIDE_FROM))) : 0;
+        this.locked[i] = slide;
+        if (yanked) {
+          hold += ((0.7 * weight) / handbraked) * (1 - slide);
+          force = 0;
+        }
         // How far the brakes outdo the tyre, counted only while really moving.
         const holds = wheel.grip * wheel.load;
         wheel.skid = wheel.contact && holds > 0
-          ? Math.min(1, Math.max(0, (hold / holds - 0.8) / 1.2)) * Math.min(1, Math.max(0, (Math.abs(this.speed) - 1) / 3))
+          ? Math.max(slide, Math.min(1, Math.max(0, (hold / holds - 0.8) / 1.2)) * Math.min(1, Math.max(0, (Math.abs(this.speed) - 1) / 3)))
           : 0;
         if (this.holding) hold += (0.8 * weight) / this.wheels.length;
         c.setWheelBrake(i, hold * dt); // Rapier takes the brake as an impulse per step
         c.setWheelEngineForce(i, force);
         wheel.spin = axle.driven ? split.spin[d]! : 0;
         if (axle.driven) d++;
-        c.setWheelFrictionSlip(i, Math.max(0.05, wheel.grip));
+        // A sliding wheel's grip is all in slideLocked; Rapier's own fades out.
+        c.setWheelFrictionSlip(i, Math.max(0.001, wheel.grip * (1 - slide), slide > 0 ? 0 : 0.05));
         wheel.steer = axle.steer === 0 || lock === 0 ? 0
           : axle.steer < 0 ? rearAngle(axle)
           : this.steerAngle * (axle.steer / (lock * (180 / Math.PI)));
@@ -848,6 +869,7 @@ export class VehicleSim {
       }
     });
 
+    this.slideLocked(dt);
     this.pushThroughWater(dt);
     this.pushThroughAir(dt);
     c.updateVehicle(dt, undefined, groups(0xffff, GROUP_GROUND));
@@ -859,7 +881,10 @@ export class VehicleSim {
       const length = Math.min(c.wheelSuspensionLength(i) ?? this.restLength[i]!, this.restLength[i]! + this.travel[i]!);
       wheel.suspension = length + this.lift;
       wheel.bump = bumpShare(this.restLength[i]!, length);
-      wheel.rotation = c.wheelRotation(i) ?? 0;
+      // Rapier turns a wheel with the ground whatever its brake; a locked one is shown standing.
+      const turned = c.wheelRotation(i) ?? 0;
+      if ((this.locked[i] ?? 0) > 0.5) this.turnedAhead[i] = turned - wheel.rotation;
+      wheel.rotation = turned - (this.turnedAhead[i] ?? 0);
       // Velocity of the contact patch (body velocity plus spin about the centre), along the
       // tyre's own sideways axis.
       const at = this.wheelPosition(i);
@@ -975,6 +1000,32 @@ export class VehicleSim {
     if (ice >= this.iceNeeded) return snow ? { ground: 'snow', water: 0, snow } : { ground: 'ice', water: 0, snow };
     this.ground.breakIce?.(x, z);
     return { ground, water, snow: 0 };
+  }
+
+  /**
+   * Locked wheels sliding: each pushes on the body at its contact patch, against the way the patch
+   * moves over the ground, with LOCKED_GRIP of what the tyre grips there. Below half a metre a
+   * second the push eases off with the speed, so it does not shake back and forth.
+   */
+  private slideLocked(dt: number): void {
+    type V = { x: number; y: number; z: number };
+    let p: V | null = null, v: V | null = null, w: V | null = null;
+    for (let i = 0; i < this.wheels.length; i++) {
+      const slide = this.locked[i] ?? 0;
+      const wheel = this.wheels[i]!;
+      if (slide <= 0 || !wheel.contact) continue;
+      p ??= this.body.worldCom();
+      v ??= this.body.linvel();
+      w ??= this.body.angvel();
+      const { point: c, normal: n } = wheel;
+      const ox = c.x - p.x, oy = c.y - p.y, oz = c.z - p.z;
+      let vx = v!.x + w!.y * oz - w!.z * oy, vy = v!.y + w!.z * ox - w!.x * oz, vz = v!.z + w!.x * oy - w!.y * ox;
+      // Only along the ground.
+      const into = vx * n.x + vy * n.y + vz * n.z;
+      vx -= into * n.x; vy -= into * n.y; vz -= into * n.z;
+      const k = (-LOCKED_GRIP * wheel.grip * wheel.load * slide * dt) / Math.max(0.5, Math.hypot(vx, vy, vz));
+      this.body.applyImpulseAtPoint({ x: k * vx, y: k * vy, z: k * vz }, c, true);
+    }
   }
 
   /** Air drag, at the centre of mass: half the air's density times Cd·A times the speed squared. */
