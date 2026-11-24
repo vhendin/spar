@@ -17,8 +17,13 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Frame rate limit (decided by me, say if not):** new setting, 60 by default; before, the
   game drew as fast as the screen (120 on ProMotion). The menus and start screen draw at 30.
   `?fps=0` lifts it for one visit, `?gpu=0` turns GPU timing off.
-- **Next:** a fixed benchmark route (`?bench=1`) recorded the same way, to compare before and
-  after each optimisation. Then drives from you on your usual settings.
+- **Benchmark route (done):** `?bench=1` waits for the start to load, then flies 80 s: 50 s
+  along Ottsjövägen into Ottsjö at driving height (72 km/h), a climb to 220 m and a full turn
+  over the valley; 15 August 13:00, clear, on your own settings (add `&quality=…` or `&fps=0`
+  to change them for one run). Saved like F9 with `bench` in the name; the results show when
+  it is done. Headless here: 60 fps, 5.8 ms CPU, 8.6 ms GPU a frame (not your GPU).
+- **Wanted from you:** a benchmark run in Arc on your usual settings (F3 off), and one or two
+  normal drives with F9, marking with F8 when the fan spins up.
 
 ### Scouting drone (this commit)
 

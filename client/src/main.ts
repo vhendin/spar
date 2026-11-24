@@ -55,7 +55,8 @@ import { Towing } from './multiplayer/towing';
 import { StartStore } from './ui/starts';
 import seasonDefs from '../../defs/seasons.json';
 import { dateOfYear, formatDuration, seasonName, TOGETHER_MS, Trips } from './trips';
-import { FrameTimer, MAX_SECONDS, MODES, Recorder, saveRecording, SECTIONS, type Mode } from './perf/recorder';
+import { FrameTimer, MAX_SECONDS, MODES, Recorder, saveRecording, SECTIONS, type Mode, type Summary } from './perf/recorder';
+import { BENCH_ROUTE, BENCH_SECONDS, BENCH_SETUP, benchPose, showBenchResult, WARM_MAX_SECONDS, WARM_QUIET_SECONDS, type BenchPose } from './perf/bench';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -174,6 +175,15 @@ interface World {
 
 async function start(): Promise<void> {
   const params = new URLSearchParams(location.search);
+  // ?bench=1: the benchmark route (perf/bench.ts), at its own place, time and weather unless
+  // the URL says otherwise, in the free camera from the start of the route.
+  const benchmark = params.has('bench');
+  if (benchmark) {
+    for (const [k, v] of Object.entries(BENCH_SETUP)) if (!params.has(k)) params.set(k, v);
+    const [x, z] = BENCH_ROUTE[0]!;
+    params.set('pos', `${x},0,${z}`);
+    params.set('agl', '3.5');
+  }
   const renderer = new THREE.WebGPURenderer({
     canvas,
     antialias: true,
@@ -1460,13 +1470,13 @@ async function start(): Promise<void> {
     if (recorder.elapsed(now) > MAX_SECONDS * 1000) toggleRecording();
   };
   /** F9: starts a performance recording, or stops it and saves it. */
-  const toggleRecording = (): void => {
+  const toggleRecording = (label = 'drive'): void => {
     const now = performance.now();
     if (!recorder.recording) {
       const size = renderer.getDrawingBufferSize(new THREE.Vector2());
       const device = (renderer.backend as { device?: { adapterInfo?: { vendor?: string; architecture?: string; description?: string } } }).device;
       recorder.start(now, {
-        label: 'drive',
+        label,
         region: world?.index.name ?? null,
         vehicle: world?.sim.def.name ?? null,
         backend,
@@ -1490,9 +1500,63 @@ async function start(): Promise<void> {
     const s = rec.summary;
     const line = `${s.seconds.toFixed(0)} s at ${s.fps.toFixed(0)} fps · ${s.cpu.mean} ms CPU` + (s.gpuWait ? ` · ${s.gpuWait.mean} ms GPU` : '') + ` a frame · slowest frames ${s.frame.p99} ms`;
     chat.add(`Recording stopped: ${line}. Saving…`);
+    const bench = rec.meta.label === 'bench';
     saveRecording(rec)
-      .then((r) => chat.add('saved' in r ? `Recording saved on the server as data/perf/${r.saved}` : `The server would not keep it: downloaded as ${r.downloaded}`))
-      .catch((err: unknown) => chat.add(`Recording not saved: ${err instanceof Error ? err.message : String(err)}`));
+      .then((r) => {
+        const where = 'saved' in r ? `data/perf/${r.saved}` : `downloaded as ${r.downloaded}`;
+        chat.add('saved' in r ? `Recording saved on the server as ${where}` : `The server would not keep it: ${where}`);
+        if (bench) benchDone(s, where);
+      })
+      .catch((err: unknown) => {
+        chat.add(`Recording not saved: ${err instanceof Error ? err.message : String(err)}`);
+        if (bench) benchDone(s, 'not saved');
+      });
+  };
+  /** The benchmark's state: loading round the start, flying the route, or done. */
+  let benchPhase: 'warming' | 'running' | 'done' = benchmark ? 'warming' : 'done';
+  let benchAt = 0;
+  let benchQuiet = 0;
+  let benchGround = 0;
+  let benchLast: BenchPose | null = null;
+  const benchDone = (summary: Summary, where: string): void => {
+    showBenchResult(summary, frameCap(), where);
+    // For a script driving the browser.
+    (window as unknown as { sparBench?: unknown }).sparBench = { summary, where };
+  };
+  /** Puts the camera where the benchmark has it, and starts and stops the recording. */
+  const benchStep = (w: World, now: number): void => {
+    const ground = (x: number, z: number): number | null => w.terrain.heightAt(x, z);
+    if (benchPhase === 'warming') {
+      if (!benchAt) benchAt = benchQuiet = now;
+      const p = benchPose(0, ground, benchGround)!;
+      const h = ground(p.x, p.z);
+      if (h !== null) benchGround = h;
+      const loading = w.terrain.stats.loading + (w.vegetation?.stats.loading ?? 0) + (w.features?.stats.loading ?? 0) + (w.unplaced || h === null ? 1 : 0);
+      if (loading > 0) benchQuiet = now;
+      recBadge.style.display = 'block';
+      recBadge.textContent = 'Benchmark: loading round the start…';
+      benchLast = p;
+      if (now - benchQuiet > WARM_QUIET_SECONDS * 1000 || now - benchAt > WARM_MAX_SECONDS * 1000) {
+        benchPhase = 'running';
+        benchAt = now;
+        toggleRecording('bench');
+      }
+    } else if (benchPhase === 'running') {
+      const p = benchPose((now - benchAt) / 1000, ground, benchGround);
+      if (p) {
+        const h = ground(p.x, p.z);
+        if (h !== null) benchGround = h;
+        benchLast = p;
+      } else {
+        benchPhase = 'done';
+        if (recorder.recording) toggleRecording();
+      }
+    }
+    // Done, it stays where the route ended.
+    if (benchLast) {
+      camera.position.set(benchLast.x, benchLast.y, benchLast.z);
+      camera.lookAt(benchLast.tx, benchLast.ty, benchLast.tz);
+    }
   };
 
   let last = performance.now();
@@ -1693,7 +1757,8 @@ async function start(): Promise<void> {
         camera.position.set(cx, Math.max(below + 650 * k + 60, (w.terrain.heightAt(cx, cz) ?? below) + 300 * k + 30), cz);
         camera.lookAt(mid, below + 150 * k, mid);
         w.start.setPicture(w.map.picture);
-      } else if (flying) fly.update(dt);
+      } else if (benchmark) benchStep(w, now);
+      else if (flying) fly.update(dt);
       else if (drone.flown) {
         // The drone's camera, under its nose, turned with it and tilted down.
         camera.position.set(drone.p.x, drone.p.y - 0.1, drone.p.z);
@@ -1942,7 +2007,9 @@ async function start(): Promise<void> {
       timer.lap('hud');
       if (recorder.recording) {
         const s = Math.floor(recorder.elapsed(now) / 1000);
-        recBadge.textContent = `● REC ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · F8 mark${markCount ? ` (${markCount})` : ''} · F9 stop`;
+        recBadge.textContent = benchmark && benchPhase === 'running'
+          ? `● Benchmark ${s} of ${BENCH_SECONDS} s`
+          : `● REC ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · F8 mark${markCount ? ` (${markCount})` : ''} · F9 stop`;
       }
     }
     if (recorder.recording) recordFrame(now, began);
