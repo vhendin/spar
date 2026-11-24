@@ -18,6 +18,11 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   2–3° without). Slower it holds as before. Locked wheels are shown standing still and leave
   skid marks. A double tap (within 0.35 s, under about 11 km/h) parks; the next tap or a pedal
   lets go. The P lamp shows it.
+- **Then:** "kicks around real hard, just tapping it spins it 180°". The lever grabbed fully in
+  one step and a locked wheel kept no sideways grip. Now the lever takes 0.3 s to pull fully on
+  (0.1 s to let go) and a locked wheel keeps 0.4 of its sideways grip. At 50 km/h at full lock,
+  a 0.1–0.3 s tap turns the vehicle 3–28° further than steering alone (before: up to 57°); held
+  half a second it comes round 85–110°.
 - **Open:** is 0.8 of the grip right? It also slows the vehicle hard (50 to about 20 km/h in a
   second at full lock). Should park release on a pedal, or only on a tap?
 - **To try:** a handbrake turn on gravel and on tarmac; a short pull mid-corner; double tap

@@ -50,6 +50,11 @@ export const bumpShare = (rest: number, length: number): number => Math.min(1, M
  * slowing it and little into holding it sideways, and the tail comes round.
  */
 const LOCKED_GRIP = 0.8;
+/** Share of a locked wheel's sideways grip that still holds, as a tyre scrubbing over loose ground does. */
+const LOCKED_SIDE = 0.4;
+/** Seconds the lever takes to pull fully on, and to let go: a tap only half locks the wheels. */
+const LEVER_ON = 0.3;
+const LEVER_OFF = 0.1;
 /** Below this speed, m/s, the handbrake holds like a parking brake; it slides fully from SLIDE_FULL. */
 const SLIDE_FROM = 1;
 const SLIDE_FULL = 3;
@@ -327,6 +332,8 @@ export class VehicleSim {
   private readonly travel: number[] = [];
   /** Per wheel: how far it slides on its locked handbrake this step, 0..1, and what Rapier's turning of it is ahead of the shown one. */
   private readonly locked: number[] = [];
+  /** How far the handbrake lever is pulled, 0..1. */
+  private lever = 0;
   private readonly turnedAhead: number[] = [];
   /** Handles of the body's own colliders, to tell its contacts from others'. */
   readonly chassis = new Set<number>();
@@ -801,6 +808,7 @@ export class VehicleSim {
     else if (Math.abs(this.speed) < 0.6) this.holding = true;
     const weight = def.chassis.mass * GRAVITY;
     const handbraked = def.axles.filter((a) => a.handbrake).length * 2 || this.wheels.length;
+    this.lever = input.handbrake ? Math.min(1, this.lever + dt / LEVER_ON) : Math.max(0, this.lever - dt / LEVER_OFF);
 
     const lock = (def.axles.find((a) => a.steer > 0)?.steer ?? 0) * (Math.PI / 180);
     const eased = 1 / (1 + (this.speed / STEER_HALF_SPEED) ** 2);
@@ -844,7 +852,7 @@ export class VehicleSim {
         // The handbrake: a parking brake when slow; rolling, it locks the wheel, which then
         // slides (see slideLocked) and takes no drive, as if declutched from it.
         const yanked = input.handbrake && (axle.handbrake || handbraked === this.wheels.length);
-        const slide = yanked && wheel.contact ? Math.min(1, Math.max(0, (Math.abs(this.speed) - SLIDE_FROM) / (SLIDE_FULL - SLIDE_FROM))) : 0;
+        const slide = yanked && wheel.contact ? this.lever * Math.min(1, Math.max(0, (Math.abs(this.speed) - SLIDE_FROM) / (SLIDE_FULL - SLIDE_FROM))) : 0;
         this.locked[i] = slide;
         if (yanked) {
           hold += ((0.7 * weight) / handbraked) * (1 - slide);
@@ -860,8 +868,8 @@ export class VehicleSim {
         c.setWheelEngineForce(i, force);
         wheel.spin = axle.driven ? split.spin[d]! : 0;
         if (axle.driven) d++;
-        // A sliding wheel's grip is all in slideLocked; Rapier's own fades out.
-        c.setWheelFrictionSlip(i, Math.max(0.001, wheel.grip * (1 - slide), slide > 0 ? 0 : 0.05));
+        // A sliding wheel's grip is mostly in slideLocked; of Rapier's own, LOCKED_SIDE stays.
+        c.setWheelFrictionSlip(i, Math.max(0.05, wheel.grip * (1 - (1 - LOCKED_SIDE) * slide)));
         wheel.steer = axle.steer === 0 || lock === 0 ? 0
           : axle.steer < 0 ? rearAngle(axle)
           : this.steerAngle * (axle.steer / (lock * (180 / Math.PI)));

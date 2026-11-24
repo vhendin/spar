@@ -695,4 +695,29 @@ describe('handbrake', () => {
     expect(pulled.speed).toBeLessThan(plain.speed);
     expect(pulled.rear.every((s) => s > 0.9)).toBe(true);
   });
+
+  /** From about 50 km/h on gravel, full lock for 1.2 s with the handbrake on for the first `pull` seconds: the most the heading turns in 2 s, degrees. */
+  const tap = (name: string, pull: number) => {
+    const { car, run } = setup(name);
+    for (let t = 0; t < 12 && car.speed < 50 / 3.6; t += 0.1) run(0.1, { throttle: 1 });
+    const heading = () => {
+      const r = car.body.rotation();
+      return Math.atan2(2 * (r.x * r.z + r.w * r.y), 1 - 2 * (r.x * r.x + r.y * r.y));
+    };
+    const from = heading();
+    let most = 0;
+    for (let s = 0; s < 120; s++) {
+      run(DT, { steer: s < 72 ? 1 : 0, handbrake: s * DT < pull });
+      const d = heading() - from;
+      most = Math.max(most, Math.abs(Math.atan2(Math.sin(d), Math.cos(d))));
+    }
+    return (most * 180) / Math.PI;
+  };
+
+  it.each(['lc200', 'tgb11', 'ltb4'])('%s turns a little further for a tap, and round for a longer pull', (name) => {
+    const plain = tap(name, 0);
+    expect(tap(name, 0.1)).toBeLessThan(plain + 10);
+    expect(tap(name, 0.3)).toBeLessThan(plain + 35);
+    expect(tap(name, 0.5)).toBeGreaterThan(plain + 30);
+  });
 });
