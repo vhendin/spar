@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Performance: recorder and frame rate limit (this commit)
+### Performance: recorder, frame rate limit, benchmarks (this commit)
 
 - **Recorder:** F9 starts and stops (fn+F9 on a Mac keyboard), F8 drops a numbered mark (say
   what each mark was, e.g. "mark 2: fan spun up"). Saved in `data/perf/` on the server; from
@@ -26,11 +26,18 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   (95%: 17.1) — the GPU is the limit. Headless runs with one thing off at a time (rough,
   single runs): grade and glow off −38% GPU, buildings/fences/lines off −37%, shadows off
   −12%, plants off −8%. Two GPU hitches (66, 137 ms) right after new terrain patches arrive.
-- **Glow at a quarter of the picture's width (this commit):** was half; looks the same at
-  night with headlights. `?glowres=0.5` gives the old size, to compare. Next: buildings,
-  fences and lines, then the hitches.
-- **Wanted from you:** a benchmark run in Arc on your usual settings (F3 off), and one or two
-  normal drives with F9, marking with F8 when the fan spins up.
+- **Glow at a quarter of the picture's width (done):** was half. Your runs: GPU 12.6 → 11.2 ms
+  a frame (−11%). The 137 ms hitch did not come back (slowest frame 23 ms in both runs).
+- **Buildings are not the cost (found):** your recording shows the GPU at about 11 ms all along
+  the route, through the village as much as in the forest and 220 m up; near Ottsjö buildings,
+  fences and lines are only ~195,000 triangles. A flat cost like that is work per pixel, so the
+  headless −37% was wrong. Nothing changed for them.
+- **What each part costs (this commit):** `?bench=parts` holds the camera still in Ottsjö and
+  high over the valley and leaves out one thing at a time for 4.5 s (shadows, glow, finishing
+  pass, near ground, far ground, plants, far trees, buildings, sky, resolution 1×), then shows
+  what each saves. About 2 minutes plus loading. Saved with `parts` in the name.
+- **Wanted from you:** one `?bench=parts` run in Arc on your usual settings (F3 off), and one or
+  two normal drives with F9, marking with F8 when the fan spins up.
 
 ### Scouting drone (this commit)
 

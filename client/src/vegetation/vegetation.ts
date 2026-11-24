@@ -530,6 +530,7 @@ export class Vegetation {
 
     tile.impostor = new THREE.Mesh(geometry, this.impostorMaterial);
     tile.impostor.matrixAutoUpdate = false;
+    tile.impostor.name = 'farTrees';
     this.group.add(tile.impostor);
     this.stats.impostors += count;
     this.stats.tiles++;

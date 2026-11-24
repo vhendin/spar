@@ -57,6 +57,7 @@ import seasonDefs from '../../defs/seasons.json';
 import { dateOfYear, formatDuration, seasonName, TOGETHER_MS, Trips } from './trips';
 import { FrameTimer, MAX_SECONDS, MODES, Recorder, saveRecording, SECTIONS, type Mode, type Summary } from './perf/recorder';
 import { BENCH_ROUTE, BENCH_SECONDS, BENCH_SETUP, benchPose, showBenchResult, WARM_MAX_SECONDS, WARM_QUIET_SECONDS, type BenchPose } from './perf/bench';
+import { PartsBench, placePose, showPartsResult, type Part } from './perf/parts';
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 
@@ -177,10 +178,13 @@ async function start(): Promise<void> {
   const params = new URLSearchParams(location.search);
   // ?bench=1: the benchmark route (perf/bench.ts), at its own place, time and weather unless
   // the URL says otherwise, in the free camera from the start of the route.
+  // ?bench=parts holds the camera still at two places on the route and leaves out one part of
+  // the picture at a time, to see what each costs (perf/parts.ts).
   const benchmark = params.has('bench');
+  const partsBench = params.get('bench') === 'parts' ? new PartsBench() : null;
   if (benchmark) {
     for (const [k, v] of Object.entries(BENCH_SETUP)) if (!params.has(k)) params.set(k, v);
-    const [x, z] = BENCH_ROUTE[0]!;
+    const [x, z] = partsBench ? ((p) => [p.x, p.z])(placePose(0, () => 0, 0)) : BENCH_ROUTE[0]!;
     params.set('pos', `${x},0,${z}`);
     params.set('agl', '3.5');
   }
@@ -1450,6 +1454,7 @@ async function start(): Promise<void> {
     gpuFresh = false;
     r.gpuWait = gpuWaitFresh ? gpuWait : NaN;
     gpuWaitFresh = false;
+    partsBench?.sample(r.gpuWait, r.cpu);
     r.steps = stepsThisFrame;
     const info = renderer.info.render;
     r.draws = info.drawCalls;
@@ -1502,7 +1507,7 @@ async function start(): Promise<void> {
     const s = rec.summary;
     const line = `${s.seconds.toFixed(0)} s at ${s.fps.toFixed(0)} fps · ${s.cpu.mean} ms CPU` + (s.gpuWait ? ` · ${s.gpuWait.mean} ms GPU` : '') + ` a frame · slowest frames ${s.frame.p99} ms`;
     chat.add(`Recording stopped: ${line}. Saving…`);
-    const bench = rec.meta.label === 'bench';
+    const bench = rec.meta.label === 'bench' || rec.meta.label === 'parts';
     saveRecording(rec)
       .then((r) => {
         const where = 'saved' in r ? `data/perf/${r.saved}` : `downloaded as ${r.downloaded}`;
@@ -1521,12 +1526,80 @@ async function start(): Promise<void> {
   let benchGround = 0;
   let benchLast: BenchPose | null = null;
   const benchDone = (summary: Summary, where: string): void => {
-    showBenchResult(summary, frameCap(), where);
+    if (partsBench) showPartsResult(partsBench.results, where);
+    else showBenchResult(summary, frameCap(), where);
     // For a script driving the browser.
-    (window as unknown as { sparBench?: unknown }).sparBench = { summary, where };
+    (window as unknown as { sparBench?: unknown }).sparBench = { summary, where, parts: partsBench?.results };
+  };
+  /** What ?bench=parts leaves out now, and the things hidden for this frame's drawing. */
+  let partNow: Part = 'all';
+  const partHidden: THREE.Object3D[] = [];
+  const sunLight = (): THREE.DirectionalLight | undefined =>
+    scene.children.find((o): o is THREE.DirectionalLight => (o as THREE.DirectionalLight).isDirectionalLight === true);
+  /** Switches what is left out: shadows, glow and resolution stay switched until the next part. */
+  const setPart = (part: Part): void => {
+    if (part === partNow) return;
+    const sun = sunLight();
+    if (partNow === 'shadows' && sun) sun.castShadow = shadows;
+    if (partNow === 'glow') look.glow = settings.glow > 0;
+    if (partNow === 'resolution') renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
+    partNow = part;
+    if (part === 'shadows' && sun) sun.castShadow = false;
+    if (part === 'glow') look.glow = false;
+    if (part === 'resolution') renderer.setPixelRatio(1);
+    recorder.mark(performance.now(), `part: ${part}`);
+  };
+  /** Hides what the part leaves out, for this frame's drawing only (the systems set their own visibility each frame). */
+  const hidePart = (): void => {
+    const names: Partial<Record<Part, string[]>> = { terrain: ['terrain'], horizon: ['horizon'], buildings: ['features'], sky: ['sky', 'stars', 'clouds'] };
+    for (const name of names[partNow] ?? []) {
+      const o = scene.getObjectByName(name);
+      if (o?.visible) partHidden.push(o);
+    }
+    if (partNow === 'plants' || partNow === 'farTrees') {
+      for (const o of scene.getObjectByName('vegetation')?.children ?? []) {
+        if (o.visible && (o.name === 'farTrees') === (partNow === 'farTrees')) partHidden.push(o);
+      }
+    }
+    for (const o of partHidden) o.visible = false;
+  };
+  const showPart = (): void => {
+    for (const o of partHidden) o.visible = true;
+    partHidden.length = 0;
+  };
+  /** ?bench=parts: each place in turn, every part there, then the results. */
+  const partsStep = (w: World, now: number, bench: PartsBench): void => {
+    const ground = (x: number, z: number): number | null => w.terrain.heightAt(x, z);
+    const loading = w.terrain.stats.loading + (w.vegetation?.stats.loading ?? 0) + (w.features?.stats.loading ?? 0) + (w.unplaced ? 1 : 0);
+    const wasDone = bench.done;
+    const s = bench.step(now, loading);
+    if (s) {
+      if (!recorder.recording) toggleRecording('parts');
+      setPart(s.part);
+      const p = placePose(s.place, ground, benchGround);
+      const h = ground(p.x, p.z);
+      if (h !== null) benchGround = h;
+      benchLast = p;
+      recBadge.style.display = 'block';
+      recBadge.textContent = `● ${s.label}`;
+    } else if (!wasDone || recorder.recording) {
+      setPart('all');
+      benchPhase = 'done';
+      // The results go into the recording too.
+      for (const r of bench.results) recorder.mark(now, `result · ${r.place} · ${r.part} · GPU ${r.gpu === null ? '–' : r.gpu.toFixed(2)} ms · CPU ${r.cpu.toFixed(2)} ms · ${r.frames} frames`);
+      if (recorder.recording) toggleRecording();
+    }
+    if (benchLast) {
+      camera.position.set(benchLast.x, benchLast.y, benchLast.z);
+      camera.lookAt(benchLast.tx, benchLast.ty, benchLast.tz);
+    }
   };
   /** Puts the camera where the benchmark has it, and starts and stops the recording. */
   const benchStep = (w: World, now: number): void => {
+    if (partsBench) {
+      partsStep(w, now, partsBench);
+      return;
+    }
     const ground = (x: number, z: number): number | null => w.terrain.heightAt(x, z);
     if (benchPhase === 'warming') {
       if (!benchAt) benchAt = benchQuiet = now;
@@ -1964,8 +2037,10 @@ async function start(): Promise<void> {
       timer.lap('hud');
     }
     // ?look=0 draws the plain picture, without the grade and glow.
-    if (plain) renderer.render(scene, camera);
+    hidePart();
+    if (plain || partNow === 'finish') renderer.render(scene, camera);
     else look.render(world?.environment.grade ?? NEUTRAL);
+    showPart();
     if (world && drone.flown && !flying && !starting && !world.unplaced && !world.map.open && !paused) drawInset(world);
     else droneInset.style.display = 'none';
     timer.lap('render');
@@ -2009,7 +2084,7 @@ async function start(): Promise<void> {
       timer.lap('hud');
       if (recorder.recording) {
         const s = Math.floor(recorder.elapsed(now) / 1000);
-        recBadge.textContent = benchmark && benchPhase === 'running'
+        if (!partsBench) recBadge.textContent = benchmark && benchPhase === 'running'
           ? `● Benchmark ${s} of ${BENCH_SECONDS} s`
           : `● REC ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} · F8 mark${markCount ? ` (${markCount})` : ''} · F9 stop`;
       }
