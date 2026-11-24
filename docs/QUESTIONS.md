@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Performance: recorder, frame rate limit, benchmarks (this commit)
+### Performance: recorder, frame rate limit, benchmarks, cheaper ground and sky (this commit)
 
 - **Recorder:** F9 starts and stops (fn+F9 on a Mac keyboard), F8 drops a numbered mark (say
   what each mark was, e.g. "mark 2: fan spun up"). Saved in `data/perf/` on the server; from
@@ -32,12 +32,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   the route, through the village as much as in the forest and 220 m up; near Ottsjö buildings,
   fences and lines are only ~195,000 triangles. A flat cost like that is work per pixel, so the
   headless −37% was wrong. Nothing changed for them.
-- **What each part costs (this commit):** `?bench=parts` holds the camera still in Ottsjö and
-  high over the valley and leaves out one thing at a time for 4.5 s (shadows, glow, finishing
-  pass, near ground, far ground, plants, far trees, buildings, sky, resolution 1×), then shows
-  what each saves. About 2 minutes plus loading. Saved with `parts` in the name.
-- **Wanted from you:** one `?bench=parts` run in Arc on your usual settings (F3 off), and one or
-  two normal drives with F9, marking with F8 when the fan spins up.
+- **What each part costs (found):** the first `?bench=parts` run (Arc, medium, 2586×1605):
+  in Ottsjö the full picture is 10.0 ms; the near ground costs 3.7 of that, the full resolution
+  2.8, the sky 1.3. High over the valley 16.9 ms: the near ground 8.6, the resolution 8.0, the
+  sky 2.5. Shadows, glow, finishing pass, far ground, plants, far trees and buildings save
+  nothing measurable. Removing the ground drops only 0.2 of 1.24 million triangles, so its cost
+  is its per-pixel shading.
+- **Ground and sky made cheaper (this commit):** the ground's snow (six of its eleven noise
+  lookups a pixel) is now worked out only where snow can lie, the same picture. The sky dome,
+  whose cloud noise ran for every pixel under the ground too, is drawn last and only where it
+  shows. The benchmark has two more parts: the near ground without its noise, and in one flat
+  colour, to show what is left in the ground's shading.
+- **Wanted from you:** one more `?bench=parts` run to compare, and one or two normal drives with
+  F9, marking with F8 when the fan spins up.
+- **Open, your call later:** medium draws 1.5 pixels per point; 1 saves 3–8 ms. Lowering it, or
+  a resolution that drops by itself when frames run long, is the next big step if needed.
 
 ### Scouting drone (this commit)
 

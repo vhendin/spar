@@ -152,7 +152,7 @@ export class Clouds {
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    // After the sky dome, before anything see-through.
+    // Solid, before the sky dome, which is drawn only where nothing else is.
     this.mesh.renderOrder = -900;
   }
 

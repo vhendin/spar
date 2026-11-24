@@ -1,16 +1,17 @@
 // ?bench=parts: what each part of the picture costs the GPU. The camera holds still at two
 // places on the benchmark route (in Ottsjö at driving height, and high over the valley) and
 // at each one leaves out one thing at a time for a few seconds: the shadows, the glow, the
-// finishing pass, the ground, the plants, the far trees, the buildings, the sky, the full
+// finishing pass, the ground (or the ground's noise, or all its shading), the plants, the far trees, the buildings, the sky, the full
 // resolution. Same view and same frames, so the difference from the full picture is that
 // part's cost. The full picture is measured again at the end of each place, to see drift.
 
 import { benchPose, type BenchPose } from './bench';
 
-export type Part = 'all' | 'shadows' | 'glow' | 'finish' | 'terrain' | 'horizon' | 'plants' | 'farTrees' | 'buildings' | 'sky' | 'resolution';
+export type Part =
+  | 'all' | 'shadows' | 'glow' | 'finish' | 'terrain' | 'groundNoise' | 'groundFlat' | 'horizon' | 'plants' | 'farTrees' | 'buildings' | 'sky' | 'resolution';
 
 /** In the order they are measured; `all` first and last at each place. */
-export const PARTS: readonly Part[] = ['all', 'shadows', 'glow', 'finish', 'terrain', 'horizon', 'plants', 'farTrees', 'buildings', 'sky', 'resolution', 'all'];
+export const PARTS: readonly Part[] = ['all', 'shadows', 'glow', 'finish', 'terrain', 'groundNoise', 'groundFlat', 'horizon', 'plants', 'farTrees', 'buildings', 'sky', 'resolution', 'all'];
 
 export const PART_LABELS: Record<Part, string> = {
   all: 'Full picture',
@@ -18,6 +19,8 @@ export const PART_LABELS: Record<Part, string> = {
   glow: 'Without glow',
   finish: 'Without the finishing pass (grade and glow)',
   terrain: 'Without the near ground',
+  groundNoise: 'Near ground without its noise (colour and borders)',
+  groundFlat: 'Near ground in one flat colour, lit',
   horizon: 'Without the far ground',
   plants: 'Without plants and near trees',
   farTrees: 'Without far trees',

@@ -1537,9 +1537,12 @@ async function start(): Promise<void> {
   const sunLight = (): THREE.DirectionalLight | undefined =>
     scene.children.find((o): o is THREE.DirectionalLight => (o as THREE.DirectionalLight).isDirectionalLight === true);
   /** Switches what is left out: shadows, glow and resolution stay switched until the next part. */
-  const setPart = (part: Part): void => {
+  const setPart = (part: Part, w: World): void => {
     if (part === partNow) return;
     const sun = sunLight();
+    if (partNow === 'groundNoise' || partNow === 'groundFlat') w.terrain.setLook('full');
+    if (part === 'groundNoise') w.terrain.setLook('noNoise');
+    if (part === 'groundFlat') w.terrain.setLook('flat');
     if (partNow === 'shadows' && sun) sun.castShadow = shadows;
     if (partNow === 'glow') look.glow = settings.glow > 0;
     if (partNow === 'resolution') renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
@@ -1575,7 +1578,7 @@ async function start(): Promise<void> {
     const s = bench.step(now, loading);
     if (s) {
       if (!recorder.recording) toggleRecording('parts');
-      setPart(s.part);
+      setPart(s.part, w);
       const p = placePose(s.place, ground, benchGround);
       const h = ground(p.x, p.z);
       if (h !== null) benchGround = h;
@@ -1583,7 +1586,7 @@ async function start(): Promise<void> {
       recBadge.style.display = 'block';
       recBadge.textContent = `● ${s.label}`;
     } else if (!wasDone || recorder.recording) {
-      setPart('all');
+      setPart('all', w);
       benchPhase = 'done';
       // The results go into the recording too.
       for (const r of bench.results) recorder.mark(now, `result · ${r.place} · ${r.part} · GPU ${r.gpu === null ? '–' : r.gpu.toFixed(2)} ms · CPU ${r.cpu.toFixed(2)} ms · ${r.frames} frames`);

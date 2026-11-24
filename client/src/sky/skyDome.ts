@@ -103,7 +103,7 @@ export class SkyDome {
 
   constructor(radius: number) {
     this.radius = radius;
-    const material = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
+    const material = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
     material.colorNode = Fn(() => {
       const u = this.u;
       const d = normalize(positionLocal);
@@ -228,7 +228,9 @@ export class SkyDome {
     })();
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 24), material);
     this.mesh.name = 'sky';
-    this.mesh.renderOrder = -1000;
+    // Drawn after everything solid, depth-tested, so its cloud noise is worked out only
+    // where the sky shows, not under all the ground (it was most of the sky's GPU time).
+    this.mesh.renderOrder = 1000;
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
     this.stars.name = 'stars';

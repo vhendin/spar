@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { RegionIndex } from '@spar/shared';
-import type { GroundShading } from './groundMaterial';
+import type { GroundLook, GroundShading } from './groundMaterial';
 import { distanceToBox, MASK_TEXELS, maskSource, NODE_QUADS, nodeSize, nodeSource, terrainLayout, type TerrainLayout } from './layout';
 import { buildNodeIndex, type NodeMeshData } from './meshData';
 import { heightFileUrl, maskFileUrl } from './region';
@@ -56,7 +56,9 @@ export class Terrain {
   private readonly worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   private readonly pending = new Map<number, Pending>();
   private readonly indexArray = buildNodeIndex(NODE_QUADS);
-  private readonly material: THREE.Material;
+  private material: THREE.Material;
+  /** The ground's looks for the parts benchmark, built when first asked for. */
+  private readonly looks = new Map<GroundLook, THREE.Material>();
   private readonly surfaceRank: number[];
   private readonly maskPlanes: { biome: number; surface: number; road: number; wetness: number; canopy: number };
   private readonly roots: Node[] = [];
@@ -70,12 +72,13 @@ export class Terrain {
 
   private constructor(
     readonly index: RegionIndex,
-    shading: GroundShading,
+    private readonly shading: GroundShading,
     /** A patch is divided while the camera is nearer than this many times its size; can change at any time. */
     public split: number,
   ) {
     this.layout = terrainLayout(index);
     this.material = shading.material(MASK_TEXELS + 1, null);
+    this.looks.set('full', this.material);
     this.surfaceRank = [];
     for (const s of index.masks.surfaces) this.surfaceRank[s.id] = Math.max(0, SURFACE_IMPORTANCE.indexOf(s.name));
     const plane = (name: string): number => {
@@ -175,6 +178,14 @@ export class Terrain {
     return h.encoding.offset + (top * (1 - tv) + bottom * tv) * h.encoding.scale;
   }
 
+  /** Draws the ground in another look (for the parts benchmark); 'full' is the finished one. */
+  setLook(look: GroundLook): void {
+    let m = this.looks.get(look);
+    if (!m) this.looks.set(look, (m = this.shading.material(MASK_TEXELS + 1, null, 2, look)));
+    this.material = m;
+    for (const o of this.group.children) if (o instanceof THREE.Mesh) o.material = m;
+  }
+
   dispose(): void {
     this.worker.terminate();
     const drop = (node: Node): void => {
@@ -182,7 +193,7 @@ export class Terrain {
       this.release(node);
     };
     this.roots.forEach(drop);
-    this.material.dispose();
+    for (const m of this.looks.values()) m.dispose();
   }
 
   private makeNode(depth: number, ix: number, iz: number, minY: number, maxY: number): Node {
