@@ -5,6 +5,16 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Crisp roads from their lines instead of the 2 m mask
+
+- **Asked:** build roads, paths and streams from their centre lines (already in vectors.json
+  with kind, surface and width) instead of the blended 2 m mask, for clear edges.
+- **Proposed:** first a distance-to-centre-line channel in the mask (crisp edges at any
+  distance, room for wheel ruts, a grass strip on forest tracks and soft verges; lake shores the
+  same from their outlines). Road meshes with their own texture later, if still wanted. Land
+  cover (bog, forest, heath) stays as it is. Waiting: go ahead, and ruts and grass strip in the
+  same step?
+
 ### Performance: recorder, frame rate limit, benchmarks, cheaper ground and sky
 
 - **Recorder:** F9 starts and stops (fn+F9 on a Mac keyboard), F8 drops a numbered mark (say
