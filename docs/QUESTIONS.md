@@ -22,6 +22,13 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   over the valley; 15 August 13:00, clear, on your own settings (add `&quality=…` or `&fps=0`
   to change them for one run). Saved like F9 with `bench` in the name; the results show when
   it is done. Headless here: 60 fps, 5.8 ms CPU, 8.6 ms GPU a frame (not your GPU).
+- **First benchmark (yours, Arc, Medium, 2586×1605):** 60 fps, CPU 4.9 ms, GPU 11.9 ms a frame
+  (95%: 17.1) — the GPU is the limit. Headless runs with one thing off at a time (rough,
+  single runs): grade and glow off −38% GPU, buildings/fences/lines off −37%, shadows off
+  −12%, plants off −8%. Two GPU hitches (66, 137 ms) right after new terrain patches arrive.
+- **Glow at a quarter of the picture's width (this commit):** was half; looks the same at
+  night with headlights. `?glowres=0.5` gives the old size, to compare. Next: buildings,
+  fences and lines, then the hitches.
 - **Wanted from you:** a benchmark run in Arc on your usual settings (F3 off), and one or two
   normal drives with F9, marking with F8 when the fan spins up.
 

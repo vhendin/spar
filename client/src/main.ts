@@ -223,7 +223,9 @@ async function start(): Promise<void> {
   if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
   const gamepad = new PadControls();
   const input = new DriveInput(gamepad);
-  const look = new Look(renderer, scene, camera, settings.glow > 0);
+  // ?glowres=0.5 works the glow out at half the picture's width instead of a quarter, to compare.
+  const glowRes = Number(params.get('glowres'));
+  const look = new Look(renderer, scene, camera, settings.glow > 0, glowRes > 0 && glowRes <= 1 ? glowRes : undefined);
   const plain = params.get('look') === '0';
   const snowOverride = params.has('snow') && Number.isFinite(Number(params.get('snow'))) ? Number(params.get('snow')) : null;
   // Sound starts with the first key or click; ?sound=0 keeps it off for this visit.

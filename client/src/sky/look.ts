@@ -22,7 +22,12 @@ export class Look {
   };
   private glowOn = false;
 
-  constructor(renderer: THREE.WebGPURenderer, scene: THREE.Scene, camera: THREE.Camera, glow: boolean) {
+  /**
+   * `glowScale` is the share of the picture's width the glow is worked out at. It is a soft,
+   * wide blur, so a quarter looks the same as the half three.js uses by itself, for about a
+   * quarter of the GPU work (the glow was a large part of each frame).
+   */
+  constructor(renderer: THREE.WebGPURenderer, scene: THREE.Scene, camera: THREE.Camera, glow: boolean, private readonly glowScale = 0.25) {
     this.pipeline = new THREE.RenderPipeline(renderer);
     this.scenePass = pass(scene, camera);
     this.glow = glow;
@@ -32,7 +37,12 @@ export class Look {
     this.glowOn = on;
     const u = this.u;
     const color = this.scenePass.getTextureNode('output');
-    const lit = on ? color.add(bloom(color, 0.22, 0.45, 0.8)) : color;
+    let lit: THREE.Node<"vec4"> = color;
+    if (on) {
+      const glow = bloom(color, 0.22, 0.45, 0.8);
+      glow.setResolutionScale(this.glowScale);
+      lit = color.add(glow);
+    }
     this.pipeline.outputNode = Fn(() => {
       const c = vec3(lit.rgb).toVar();
       c.assign(c.mul(u.tint));
