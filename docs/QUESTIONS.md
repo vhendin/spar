@@ -23,6 +23,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   picture of the vehicle in the corner; the loudness and pitch of the whirr; whether it keeps
   up with a fast vehicle (it carries the vehicle's speed on top of its own).
 
+### Rear wheels gone (bug, waiting for it to happen again)
+
+- Stuck on a forest slope at night, swapped through many vehicles, then teleported away: the
+  vehicle stood with its rear wheels missing, also at the new place. Not reproduced: twelve
+  swaps through every vehicle in one world, and setting each down on slopes up to 35° inside
+  the ground, all keep their wheels. Setting down now tilts to the slope and avoids rocks
+  (adc81cf), which may have been the cause. Next time: which vehicle, how it was moved, and a
+  screenshot with F3.
+
 ### Vehicle menu (TODO 9)
 
 - **Where does it open?** On the start screen when picking a vehicle, from a key while
