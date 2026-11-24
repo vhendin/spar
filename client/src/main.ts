@@ -1,4 +1,5 @@
 import './ui/theme.css';
+import { startErrorLog } from './perf/errorLog';
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
 import { parseLocalTime, seasonAt, type RegionIndex, type SeasonCalendar, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
@@ -58,6 +59,10 @@ import { dateOfYear, formatDuration, seasonName, TOGETHER_MS, Trips } from './tr
 import { FrameTimer, MAX_SECONDS, MODES, Recorder, saveRecording, SECTIONS, type Mode, type Summary } from './perf/recorder';
 import { BENCH_ROUTE, BENCH_SECONDS, BENCH_SETUP, benchPose, showBenchResult, WARM_MAX_SECONDS, WARM_QUIET_SECONDS, type BenchPose } from './perf/bench';
 import { PartsBench, placePose, showPartsResult, type Part } from './perf/parts';
+
+
+// Errors and warnings go to the server's log too (data/perf/client-errors.log).
+startErrorLog();
 
 const NEUTRAL: Grade = { tint: new THREE.Vector3(1, 1, 1), saturation: 1, lift: 0 };
 

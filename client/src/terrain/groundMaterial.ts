@@ -180,10 +180,12 @@ export class GroundShading {
   private readonly surfaceColors;
   private readonly biomeKey;
   private readonly surfaceKey;
-  private readonly surfaceRoughness;
-  private readonly surfaceWater;
-  private readonly surfaceSoftness;
-  private readonly surfaceRagged;
+  /**
+   * Per surface id: x fixed roughness (-1 follows the weather), y water (1) or not, z edge
+   * softness, w edge raggedness. One table, because each table takes one of the GPU's uniform
+   * buffers and a shader stage may have only 12 (WebGPU's limit on Apple).
+   */
+  private readonly surfaceProps;
   private readonly poolId: number;
   private readonly waterId: number;
   private readonly streamId: number;
@@ -198,10 +200,11 @@ export class GroundShading {
     this.surfaceColors = uniformArray<'vec3'>(colors(surfaces, SURFACE_COLORS), 'vec3');
     this.biomeKey = uniformArray<'vec3'>(colors(biomes, BIOME_KEY), 'vec3');
     this.surfaceKey = uniformArray<'vec3'>(colors(surfaces, SURFACE_KEY), 'vec3');
-    this.surfaceRoughness = uniformArray<'float'>(byId(surfaces, SURFACE_ROUGHNESS, -1), 'float');
-    this.surfaceWater = uniformArray<'float'>(byId(surfaces, SURFACE_WATER, 0), 'float');
-    this.surfaceSoftness = uniformArray<'float'>(byId(surfaces, SURFACE_SOFTNESS, 0.1), 'float');
-    this.surfaceRagged = uniformArray<'float'>(byId(surfaces, SURFACE_RAGGED, 0), 'float');
+    const rough = byId(surfaces, SURFACE_ROUGHNESS, -1);
+    const water = byId(surfaces, SURFACE_WATER, 0);
+    const soft = byId(surfaces, SURFACE_SOFTNESS, 0.1);
+    const ragged = byId(surfaces, SURFACE_RAGGED, 0);
+    this.surfaceProps = uniformArray<'vec4'>(rough.map((r, i) => new THREE.Vector4(r, water[i], soft[i], ragged[i])), 'vec4');
     this.poolId = surfaces.find((c) => c.name === 'pool')?.id ?? -1;
     this.waterId = biomes.find((b) => b.name === 'water')?.id ?? -1;
     this.streamId = surfaces.find((c) => c.name === 'stream')?.id ?? -1;
@@ -290,7 +293,7 @@ export class GroundShading {
     /** Fixed roughness of the surface in one mask texel, or -1 when it follows the weather. */
     const roadRoughness = Fn(([texel]: [THREE.Node<'vec4'>]): THREE.Node<'float'> => {
       const surface = texel.y.mul(255).add(0.5).floor().div(32).floor();
-      return float(this.surfaceRoughness.element(int(surface)));
+      return this.surfaceProps.element(int(surface)).x;
     });
 
     // Blend the four texels around the fragment ourselves: ids cannot be interpolated,
@@ -319,7 +322,7 @@ export class GroundShading {
       mix(roadTexel(r.t01), roadTexel(r.t11), r.f.x),
       r.f.y,
     );
-    const waterSurface = (t: THREE.Node<'vec4'>) => float(this.surfaceWater.element(int(t.y.mul(255).add(0.5).floor().div(32).floor())));
+    const waterSurface = (t: THREE.Node<'vec4'>) => this.surfaceProps.element(int(t.y.mul(255).add(0.5).floor().div(32).floor())).y;
     let onRoad: THREE.Node<'float'> = smoothstep(0.4, 0.6, road.w);
     let roadBase: THREE.Node<'vec3'> = road.xyz.div(road.w.max(0.001));
     let fixedRough: THREE.Node<'float'> = roadRoughness(r.t00).max(roadRoughness(r.t11));
@@ -339,17 +342,18 @@ export class GroundShading {
       const d = raw.mul(255).sub(128).div(ROAD_STEPS);
       const surface = int(nearest.y.mul(255).add(0.5));
       const ragged = look === 'noNoise' ? float(0) : mx_noise_float(ground.mul(0.8));
-      const edge = d.add(ragged.mul(this.surfaceRagged.element(surface)));
+      const props = this.surfaceProps.element(surface);
+      const edge = d.add(ragged.mul(props.w));
       // How many metres of ground one pixel spans here: further, and more glancing, is more.
       const toCamera = cameraPosition.sub(positionWorld);
       const glancing = max(dot(normalWorld, toCamera.normalize()).abs(), 0.2);
       const pixel = toCamera.length().mul(this.pixelAngle).div(glancing);
-      const blend = max(this.surfaceSoftness.element(surface), pixel.mul(0.75));
+      const blend = max(props.z, pixel.mul(0.75));
       const lineCover = float(1).sub(smoothstep(blend.negate(), blend, edge)).mul(nearest.z);
       const fromLine = lineCover.greaterThanEqual(onRoad);
       roadBase = select(fromLine, this.surfaceColors.element(surface), roadBase);
-      fixedRough = select(fromLine, float(this.surfaceRoughness.element(surface)), fixedRough);
-      roadWater = select(fromLine, float(this.surfaceWater.element(surface)), roadWater);
+      fixedRough = select(fromLine, props.x, fixedRough);
+      roadWater = select(fromLine, props.y, roadWater);
       onRoad = max(lineCover, onRoad);
     }
     const roadColor = roadBase.mul(tint.mul(0.6).add(0.4)).mul(float(1).sub(this.wet.mul(0.35)));

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { lanAddresses } from './lan';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -160,6 +160,33 @@ async function handlePerf(req: IncomingMessage, res: ServerResponse, access: Acc
   json(res, 201, { name });
 }
 
+/** Largest batch of browser errors taken at once. */
+const LOG_LIMIT = 256 << 10;
+
+/**
+ * /api/log: errors and warnings from the game's browser, appended to client-errors.log in
+ * perfDir, so problems on screen can be read without the browser's console. Only from the
+ * computer running the server, or a logged-in driver.
+ */
+async function handleLog(req: IncomingMessage, res: ServerResponse, access: AccessVerifier | null, config: ServerConfig): Promise<void> {
+  if (req.method !== 'POST') return json(res, 405, { error: 'POST.' });
+  if (!config.perfDir) return json(res, 403, { error: 'Logs are not kept on this server.' });
+  const site = req.headers['sec-fetch-site'];
+  if (req.headers['x-spar'] !== '1' || (site !== undefined && site !== 'same-origin')) return json(res, 403, { error: 'Not from the game.' });
+  if (!fromHost(req) && !(access && (await access.email(req)))) return json(res, 403, { error: 'Only from this computer, or logged in.' });
+  let body: { lines?: unknown };
+  try {
+    body = (await readBody(req, LOG_LIMIT)) as typeof body;
+  } catch {
+    return json(res, 400, { error: 'Bad or too large.' });
+  }
+  if (!Array.isArray(body?.lines)) return json(res, 400, { error: 'No lines.' });
+  const lines = body.lines.filter((l): l is string => typeof l === 'string').map((l) => l.slice(0, 8000));
+  await mkdir(config.perfDir, { recursive: true });
+  await appendFile(join(config.perfDir, 'client-errors.log'), lines.map((l) => `${new Date().toISOString()} ${l}\n`).join(''));
+  json(res, 200, { ok: true });
+}
+
 export function createGameServer(config: ServerConfig, deps: { access?: AccessVerifier } = {}): GameServer {
   const access = deps.access ?? (config.access ? new AccessVerifier(config.access) : null);
   const accounts = new AccountStore(config.accountsDir);
@@ -183,6 +210,13 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
     }
     if (apiPath === '/api/me') {
       handleMe(req, res, access, accounts).catch((err: unknown) => {
+        console.error('request failed', apiPath, err);
+        if (!res.headersSent) json(res, 500, { error: 'Server error.' });
+      });
+      return;
+    }
+    if (apiPath === '/api/log') {
+      handleLog(req, res, access, config).catch((err: unknown) => {
         console.error('request failed', apiPath, err);
         if (!res.headersSent) json(res, 500, { error: 'Server error.' });
       });
