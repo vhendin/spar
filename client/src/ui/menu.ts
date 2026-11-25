@@ -30,8 +30,11 @@ export interface MenuActions {
   changed(key: keyof Settings): void;
   /** Builds the world again with the settings that need it, keeping the vehicle where it is. */
   restart(): void;
-  /** The logbook for this area: its title, the arrivals there, and how many places there are to reach. */
-  logbook(): { title: string; entries: LogEntry[]; places: number };
+  /**
+   * The logbook for this area: its title, the arrivals there, how many places there are to
+   * reach, and the share of it seen (null when the whole map is shown).
+   */
+  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null };
   /** Everyone connected, and the title of the region we drive in. */
   players(): { list: PlayerLine[]; region: string; titleOf(name: string): string };
   /** Set off just behind another driver, wherever they are. */
@@ -249,12 +252,13 @@ export class Menu {
     }
 
     if (this.page === 'logbook') {
-      const { title, entries, places } = this.actions.logbook();
+      const { title, entries, places, seen } = this.actions.logbook();
       const names = new Set(entries.map((e) => e.destination));
       add('h2', 'Logbook');
-      add('p', places
+      const share = seen === null ? '' : ` ${seen > 0 && seen < 0.01 ? 'Under 1' : Math.round(seen * 100)} % of it seen.`;
+      add('p', (places
         ? `${title}: ${names.size} place${names.size === 1 ? '' : 's'} reached of the ${places} on the map, in ${entries.length} trip${entries.length === 1 ? '' : 's'}.`
-        : `${title}: ${entries.length} trip${entries.length === 1 ? '' : 's'}.`, box, 'sub');
+        : `${title}: ${entries.length} trip${entries.length === 1 ? '' : 's'}.`) + share, box, 'sub');
       if (!entries.length) {
         add('p', 'Choose a destination on the map (M) and drive there: every arrival is written down here, with the time it took, the season and the vehicle. Trips that jump to a start point on the way do not count. Others arriving within a minute of you are noted.', box, 'hint');
       } else {
@@ -338,6 +342,7 @@ export class Menu {
       const choice = CHOICES[key];
       if (key === 'volume') add('h2', 'Sound');
       if (key === 'touch') add('h2', 'Touch');
+      if (key === 'map') add('h2', 'Map');
       add('div', choice.label + (NEEDS_RESTART.includes(key) ? ' *' : ''), box, 'label');
       const row = add('div', '', box, 'row');
       // A value set elsewhere (an old preset, say) shows as the nearest choice.
@@ -349,6 +354,7 @@ export class Menu {
           this.render();
         }, row, nearest[1] === value ? 'on' : '');
       }
+      if (key === 'map') add('p', 'Filling in: ground you have not yet seen is pale, and its roads and places show once you have had them in sight.', box, 'hint');
       if (key === 'steering') add('p', this.steeringNote || 'Tilt: hold the phone like a wheel and turn it. The stick\'s corner then drags the view.', box, 'hint');
     }
 

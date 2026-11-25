@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { decodeSeen, encodeSeen } from '@spar/shared';
 import { changes, reconcile } from './account';
 
 class Store {
@@ -8,6 +9,12 @@ class Store {
   }
   setItem(key: string, value: string): void {
     this.data[key] = value;
+  }
+  get length(): number {
+    return Object.keys(this.data).length;
+  }
+  key(index: number): string | null {
+    return Object.keys(this.data)[index] ?? null;
   }
 }
 
@@ -33,5 +40,18 @@ describe('account', () => {
     store.setItem('spar.name', 'Anna B');
     delete store.data['spar.color'];
     expect(changes(store, { ...sent, ...send })).toEqual({ 'spar.name': 'Anna B', 'spar.color': null });
+  });
+
+  it('merges what has been seen of a region, and finds keys for new regions', () => {
+    const here = new Uint8Array(256), there = new Uint8Array(256);
+    here[1] = 1;
+    there[2] = 1;
+    const store = new Store({ 'spar.seen.valadalen': encodeSeen(here, 256), 'spar.seen.are': encodeSeen(here, 256) });
+    const { send, sent } = reconcile(store, { 'spar.seen.valadalen': encodeSeen(there, 256) });
+    const both = decodeSeen(store.data['spar.seen.valadalen'], 256)!;
+    expect([both[1], both[2]]).toEqual([1, 1]);
+    expect(Object.keys(send).sort()).toEqual(['spar.seen.are', 'spar.seen.valadalen']);
+    store.setItem('spar.seen.jarvso', encodeSeen(here, 256));
+    expect(Object.keys(changes(store, { ...sent, ...send }))).toEqual(['spar.seen.jarvso']);
   });
 });

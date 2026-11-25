@@ -6,7 +6,7 @@ const ids = { unknown: 0, forest: 1, wetland: 2, water: 8 };
 function rasters(n: number, height: (x: number, y: number) => number, biome = 1): MapRasters {
   const heights = new Float32Array(n * n);
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) heights[y * n + x] = height(x, y);
-  return { n, spacing: 8, heights, biome: new Uint8Array(n * n).fill(biome), surface: new Uint8Array(n * n) };
+  return { n, spacing: 8, heights, biome: new Uint8Array(n * n).fill(biome), surface: new Uint8Array(n * n), canopy: new Uint8Array(n * n), canopyScale: 0.25 };
 }
 
 const pixel = (p: Uint8ClampedArray, n: number, x: number, y: number): number[] => [...p.slice((y * n + x) * 4, (y * n + x) * 4 + 4)];

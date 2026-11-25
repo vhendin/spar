@@ -4,7 +4,7 @@
 // it; afterwards whatever changed in storage is sent back now and then, and when the page
 // is hidden. Players on the home network have no login and keep things in the browser only.
 
-import { ACCOUNT_KEYS, LOGBOOK_KEY, mergeLogbooks } from '@spar/shared';
+import { ACCOUNT_KEYS, isAccountKey, mergeAccountValue } from '@spar/shared';
 
 /** Seconds between looks for changes to send. */
 const SYNC_EVERY = 5;
@@ -17,21 +17,35 @@ export interface Account {
 export interface KeyStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  readonly length: number;
+  key(index: number): string | null;
+}
+
+/** Every key kept with the account that this browser or the account has. */
+function keysOf(store: KeyStore, also: Iterable<string> = []): string[] {
+  const keys = new Set<string>(ACCOUNT_KEYS);
+  for (let i = 0; i < store.length; i++) {
+    const key = store.key(i);
+    if (key !== null && isAccountKey(key)) keys.add(key);
+  }
+  for (const key of also) if (isAccountKey(key)) keys.add(key);
+  return [...keys];
 }
 
 /**
- * The account's values put in storage. Kept values win; the logbooks are merged; values this
- * browser has but the account does not (the first login) are to be sent. Returns those, and
- * what the server has had from this browser so far (the kept values), to compare with later.
+ * The account's values put in storage. Kept values win; the logbooks and what has been seen
+ * are merged; values this browser has but the account does not (the first login) are to be
+ * sent. Returns those, and what the server has had from this browser so far (the kept
+ * values), to compare with later.
  */
 export function reconcile(store: KeyStore, kept: Record<string, string>): { send: Record<string, string>; sent: Record<string, string> } {
   const send: Record<string, string> = {};
   const sent: Record<string, string> = { ...kept };
-  for (const key of ACCOUNT_KEYS) {
+  for (const key of keysOf(store, Object.keys(kept))) {
     const local = store.getItem(key);
     const theirs = kept[key];
-    if (key === LOGBOOK_KEY && (local !== null || theirs !== undefined)) {
-      const merged = mergeLogbooks(theirs, local);
+    const merged = local !== null || theirs !== undefined ? mergeAccountValue(key, theirs, local) : null;
+    if (merged !== null) {
       if (merged !== local) store.setItem(key, merged);
       if (merged !== theirs) send[key] = merged;
     } else if (theirs !== undefined) {
@@ -46,7 +60,7 @@ export function reconcile(store: KeyStore, kept: Record<string, string>): { send
 /** What changed in storage since last sent: a value per key, null when removed. */
 export function changes(store: KeyStore, sent: Record<string, string>): Record<string, string | null> {
   const changed: Record<string, string | null> = {};
-  for (const key of ACCOUNT_KEYS) {
+  for (const key of keysOf(store, Object.keys(sent))) {
     const local = store.getItem(key);
     if (local !== (sent[key] ?? null)) changed[key] = local;
   }

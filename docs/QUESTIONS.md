@@ -5,6 +5,47 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### The map fills in as you drive (this commit)
+
+- **Asked:** idea 1 of `docs/OVERTHEHILL.md`. Decided before building: unseen ground pale (the
+  relief, contours and lakes still faintly there), roads, paths, buildings and places hidden
+  until seen; seeing by line of sight over the real ground, blocked by hills and forest; the
+  driven trail not saved; each driver their own map.
+- **Done:**
+  - Every 25 m driven (at most once a second) the game looks round 1.5 km from the driver's
+    eyes (2.5 m up) over the map's 8 m heights and the tree heights from the canopy mask. Hills
+    hide what is behind them; trees let sight through for about 80 m, then are a wall. In a wood
+    you see some 100 m, on the open fjäll and over lakes the full 1.5 km.
+  - Standing within 30 m of a summit, viewpoint or lift top looks 5 km round, once per visit.
+  - The drone sees from where it flies; the fly camera (F) does not.
+  - Huts and lodges always show. Places already in the logbook show 300 m round them the first
+    time, so nobody starts blank.
+  - The proving ground is always whole. Settings → Map: "Fills in as you go" or "Whole".
+  - Kept per region in the browser (`spar.seen.<region>`, about 2 kB for 3 % of Vålådalen)
+    and with the account, merged across devices.
+  - Seen share in the F3 read-out and the logbook; the map's trip list says how many are found.
+  - `?seen=none` forgets a region, `?seen=all` sees all of it.
+  - A look takes about 4 ms (33 ms from a summit) and is spread over frames, at most 2 ms each.
+- **To try:** drive from Ottsjö along the lake, then up to a summit or a viewpoint, and open the
+  map (M). Do it twice, with a reload between.
+- **Open:**
+  - Are 1.5 km and 5 km right, and the 80 m into a wood?
+  - Is the pale too pale or not pale enough?
+  - The edge of what is seen is soft but a little speckled along forest edges. Fine?
+  - Over a lake the seen area ends in a sharp arc at 1.5 km. Should open water reach further?
+  - Should the summits that the map finds itself (the spot heights) count as lookouts too? Now
+    only summits from the map data do.
+
+### Ideas from Over the Hill (`docs/OVERTHEHILL.md`)
+
+- **Asked:** explore overthehill.app (the fan wiki for Over the Hill) and write down what Spår
+  could take from it, thinking broader since our world is real map data.
+- **Done:** `docs/OVERTHEHILL.md`: what they do with numbers, 17 ideas turned to Spår, a list
+  only real data allows (weight-limited bridges, gates, ice roads, midnight sun), and an order.
+- **Decided:** the map that fills in first (built, above).
+- **Open:** what next? Suggested: more kinds of places, then camping at a shelter until dawn.
+  Upgrades: earned by doing, or simply free choices in the garage (no money, by the pillars)?
+
 ### Trees that hold (this commit)
 
 - **Asked:** "The bigger trees fall too easy. Even a car at pretty high speed wouldn't knock

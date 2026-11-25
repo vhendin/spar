@@ -19,3 +19,4 @@ export * from './sky/weather';
 export * from './season';
 export * from './sweref';
 export * from './account';
+export * from './seen';

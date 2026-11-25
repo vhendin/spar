@@ -1,10 +1,11 @@
-// What is kept for each logged-in driver: the browser values under ACCOUNT_KEYS, one JSON
+// What is kept for each logged-in driver: the browser values under ACCOUNT_KEYS (and what has
+// been seen of each region), one JSON
 // file per account in the accounts folder, named by a hash of the email.
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ACCOUNT_VALUE_MAX, isAccountKey, LOGBOOK_KEY, mergeLogbooks } from '@spar/shared';
+import { ACCOUNT_VALUE_MAX, isAccountKey, mergeAccountValue } from '@spar/shared';
 
 export type AccountValues = Record<string, string>;
 
@@ -74,7 +75,7 @@ export class AccountStore {
           delete file.values[key];
           continue;
         }
-        const kept = key === LOGBOOK_KEY ? mergeLogbooks(file.values[key], value) : value;
+        const kept = mergeAccountValue(key, file.values[key], value) ?? value;
         file.values[key] = kept;
         if (kept !== value) back[key] = kept;
       }

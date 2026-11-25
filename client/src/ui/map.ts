@@ -2,10 +2,14 @@
 // lines the world is built from. It shows where the vehicle is and where it has been, and
 // is where a destination is chosen: click anywhere, or pick a place, a summit or a start
 // point from the list. Start points can also be jumped to.
+//
+// It fills in as the region is seen (`seen.ts`): ground not yet seen is pale, and the lines and
+// places on it are left out, unless the whole map is asked for.
 
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { paintGround, summits, type MapRasters, type Summit } from './mapImage';
+import { SeenGrid } from './seen';
 import { headingAt, type StartStore } from './starts';
 import { builder, closeButton, coarsePointer } from './dom';
 
@@ -24,6 +28,11 @@ const PIN = { own: { fill: '#8e3b2d', line: 'rgba(142,59,45,0.85)' }, shared: { 
 const DESTINATION_COLORS: Record<string, string> = {
   peak: '#5a3c26', hut: '#b0472c', shelter: '#8a5a2b', viewpoint: '#2c6fb0', lodge: '#7a3d8f', camp: '#2f6f4f', sight: '#c28a12', lift: '#3a3f47',
 };
+/** Kinds of destination always on the map, seen or not: the huts and lodges people walk to. */
+const LANDMARKS = new Set(['hut', 'lodge']);
+/** The pale over ground not yet seen: birch, most of the way. */
+const FOG = { r: 236, g: 235, b: 230, a: 190 };
+
 const DESTINATION_GROUPS: [string, string[]][] = [
   ['Summits', ['peak']],
   ['Huts, lodges and camp sites', ['hut', 'lodge', 'camp']],
@@ -128,6 +137,17 @@ export class MapScreen {
   private sideAt = 0;
   /** Waiting for a click on the map to place a new start point. */
   private placing = false;
+  /** What the driver has seen of the region; only that is drawn, unless `whole`. */
+  readonly seen: SeenGrid;
+  /** Draws the whole region, seen or not (the Map setting). */
+  whole = false;
+  /** One pixel per seen cell: opaque where seen (to cut the lines to), and the pale where not. */
+  private seenMask: HTMLCanvasElement | null = null;
+  private fog: HTMLCanvasElement | null = null;
+  private maskPixels: ImageData | null = null;
+  private fogPixels: ImageData | null = null;
+  /** Scratch canvases the lines are drawn into before being cut to what is seen. */
+  private readonly layers = new WeakMap<HTMLCanvasElement, CanvasRenderingContext2D>();
 
   constructor(
     parent: HTMLElement,
@@ -136,6 +156,7 @@ export class MapScreen {
     private readonly actions: MapActions,
     private readonly starts: StartStore,
   ) {
+    this.seen = new SeenGrid(index.size);
     this.root = document.createElement('div');
     this.root.id = 'map';
     this.canvas = document.createElement('canvas');
@@ -248,6 +269,111 @@ export class MapScreen {
     return r.heights[j * r.n + i]!;
   }
 
+  /** Whether the map shows what is at a point: it has been seen, or the whole map is shown. */
+  shows(x: number, z: number): boolean {
+    return this.whole || this.seen.has(x, z);
+  }
+
+  private showsDestination(p: { x: number; z: number; kind: string }): boolean {
+    return LANDMARKS.has(p.kind) || this.shows(p.x, p.z);
+  }
+
+  /**
+   * Looks round from an eye at height `eye` over (x, z), `range` metres out (rays `from` up to
+   * `to`, for a look done in parts), and marks what is in sight as seen. Returns the cells
+   * newly seen; 0 until the map's rasters have loaded.
+   */
+  look(x: number, z: number, eye: number, range: number, from?: number, to?: number): number {
+    return this.rasters ? this.seen.look(this.rasters, x, z, eye, range, from, to) : 0;
+  }
+
+  /** Whether the heights for looking round have loaded. */
+  get ready(): boolean {
+    return this.rasters !== null;
+  }
+
+  /** Brings the pictures of what is seen up to date with the grid. */
+  private syncSeen(): void {
+    const g = this.seen;
+    let rect = g.takeChanged();
+    if (!this.seenMask || !this.fog) {
+      const make = (): HTMLCanvasElement => {
+        const c = document.createElement('canvas');
+        c.width = c.height = g.n;
+        return c;
+      };
+      this.seenMask = make();
+      this.fog = make();
+      this.maskPixels = new ImageData(g.n, g.n);
+      this.fogPixels = new ImageData(g.n, g.n);
+      rect = [0, 0, g.n - 1, g.n - 1];
+    }
+    if (!rect) return;
+    const mask = this.maskPixels!.data, fog = this.fogPixels!.data;
+    for (let j = rect[1]; j <= rect[3]; j++) {
+      for (let i = rect[0]; i <= rect[2]; i++) {
+        const k = j * g.n + i, o = k * 4;
+        const on = g.cells[k] === 1;
+        mask[o] = mask[o + 1] = mask[o + 2] = 255;
+        mask[o + 3] = on ? 255 : 0;
+        fog[o] = FOG.r;
+        fog[o + 1] = FOG.g;
+        fog[o + 2] = FOG.b;
+        fog[o + 3] = on ? 0 : FOG.a;
+      }
+    }
+    const w = rect[2] - rect[0] + 1, h = rect[3] - rect[1] + 1;
+    this.seenMask.getContext('2d')!.putImageData(this.maskPixels!, 0, 0, rect[0], rect[1], w, h);
+    this.fog.getContext('2d')!.putImageData(this.fogPixels!, 0, 0, rect[0], rect[1], w, h);
+  }
+
+  /** The pale over what is not yet seen, drawn in world units under `c`'s transform. */
+  private drawFog(c: CanvasRenderingContext2D): void {
+    if (this.whole || !this.fog) return;
+    const span = this.seen.n * this.seen.cell;
+    c.imageSmoothingEnabled = true;
+    c.drawImage(this.fog, 0, 0, span, span);
+  }
+
+  /**
+   * Draws lines into `c` cut to what has been seen, with soft edges: `draw` paints into a
+   * scratch canvas under `c`'s transform, the seen cells (placed in world units by `world`)
+   * cut it, and the rest goes onto `c`.
+   */
+  private masked(c: CanvasRenderingContext2D, world: DOMMatrix, draw: (c: CanvasRenderingContext2D) => void): void {
+    const mask = this.seenMask;
+    if (this.whole || !mask) {
+      draw(c);
+      return;
+    }
+    const target = c.canvas as HTMLCanvasElement;
+    let l = this.layers.get(target);
+    if (!l) {
+      l = document.createElement('canvas').getContext('2d')!;
+      this.layers.set(target, l);
+    }
+    if (l.canvas.width !== target.width || l.canvas.height !== target.height) {
+      l.canvas.width = target.width;
+      l.canvas.height = target.height;
+    }
+    l.setTransform(1, 0, 0, 1, 0, 0);
+    l.clearRect(0, 0, l.canvas.width, l.canvas.height);
+    l.setTransform(c.getTransform());
+    l.lineCap = l.lineJoin = 'round';
+    draw(l);
+    l.setLineDash([]);
+    l.setTransform(world);
+    l.globalCompositeOperation = 'destination-in';
+    l.imageSmoothingEnabled = true;
+    const span = this.seen.n * this.seen.cell;
+    l.drawImage(mask, 0, 0, span, span);
+    l.globalCompositeOperation = 'source-over';
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(l.canvas, 0, 0);
+    c.restore();
+  }
+
   /** Call every frame with where the vehicle is, so the trail follows it. */
   record(x: number, z: number): void {
     const t = this.trail;
@@ -326,19 +452,22 @@ export class MapScreen {
       c.imageSmoothingEnabled = true;
       c.drawImage(this.image, 0, 0, this.index.size + this.rasters.spacing, this.index.size + this.rasters.spacing);
     }
+    this.syncSeen();
+    this.drawFog(c);
     c.lineCap = c.lineJoin = 'round';
-    const line = (points: number[][], close = false): void => {
-      c.beginPath();
-      points.forEach(([x, z], i) => (i === 0 ? c.moveTo(x!, z!) : c.lineTo(x!, z!)));
-      if (close) c.closePath();
-    };
     const boxes = this.boxes();
-    c.strokeStyle = '#3f86c2';
-    this.vectors.waterways.forEach((w, i) => {
-      if (!near(boxes.water[i]!)) return;
-      c.lineWidth = w.kind === 'river' ? 10 : 3 / s;
-      line(w.points);
-      c.stroke();
+    this.masked(c, c.getTransform(), (c) => {
+      const line = (points: number[][], close = false): void => {
+        c.beginPath();
+        points.forEach(([x, z], i) => (i === 0 ? c.moveTo(x!, z!) : c.lineTo(x!, z!)));
+        if (close) c.closePath();
+      };
+      c.strokeStyle = '#3f86c2';
+      this.vectors.waterways.forEach((w, i) => {
+        if (!near(boxes.water[i]!)) return;
+        c.lineWidth = w.kind === 'river' ? 10 : 3 / s;
+        line(w.points);
+        c.stroke();
     });
     c.fillStyle = '#5b4e45';
     this.vectors.buildings.forEach((b, i) => {
@@ -365,6 +494,7 @@ export class MapScreen {
         c.stroke();
       });
     }
+    });
     // Where the vehicle has been.
     const t = this.trail;
     if (t.length >= 4) {
@@ -389,7 +519,7 @@ export class MapScreen {
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     for (const p of this.vectors.places) {
-      if (Math.hypot(p.x - state.x, p.z - state.z) > range / 2) continue;
+      if (Math.hypot(p.x - state.x, p.z - state.z) > range / 2 || !this.shows(p.x, p.z)) continue;
       const [px, py] = at(p.x, p.z);
       c.font = '600 11px Inter, system-ui, sans-serif';
       c.lineWidth = 3;
@@ -545,8 +675,8 @@ export class MapScreen {
   private picks(): MapPick[] {
     const r = this.rasters;
     return [
-      ...(this.vectors.destinations ?? []).map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'destination', sort: p.kind })),
-      ...this.vectors.places.map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'place' })),
+      ...(this.vectors.destinations ?? []).filter((p) => this.showsDestination(p)).map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'destination', sort: p.kind })),
+      ...this.vectors.places.filter((p) => this.shows(p.x, p.z)).map((p): MapPick => ({ name: p.name, x: p.x, z: p.z, kind: 'place' })),
       ...this.tops.map((t): MapPick => ({ name: `Summit ${t.height.toFixed(0)} m`, x: t.x * (r?.spacing ?? 1), z: t.y * (r?.spacing ?? 1), kind: 'summit' })),
       ...this.starts.list.map((s): MapPick => ({ name: s.name, x: s.x, z: s.z, kind: 'spawn' })),
       ...this.vectors.spawns.map((s): MapPick => ({ name: s.name, x: s.x, z: s.z, kind: 'spawn' })),
@@ -636,9 +766,10 @@ export class MapScreen {
     const reached = this.actions.reached();
     const all = this.vectors.destinations ?? [];
     if (all.length) {
-      add('div', `Trips · ${all.filter((p) => reached.has(p.name)).length} of ${all.length} reached`, box, 'label');
+      const found = this.whole ? '' : ` · ${all.filter((p) => this.showsDestination(p)).length} found`;
+      add('div', `Trips · ${all.filter((p) => reached.has(p.name)).length} of ${all.length} reached${found}`, box, 'label');
       for (const [title, kinds] of DESTINATION_GROUPS) {
-        const group = all.filter((p) => kinds.includes(p.kind));
+        const group = all.filter((p) => kinds.includes(p.kind) && this.showsDestination(p));
         if (!group.length) continue;
         add('div', title, box, 'sublabel');
         const list = add('div', '', box, 'list');
@@ -649,9 +780,10 @@ export class MapScreen {
       }
     }
 
-    add('div', 'Places', box, 'label');
+    const known = this.vectors.places.filter((p) => this.shows(p.x, p.z));
+    if (known.length) add('div', 'Places', box, 'label');
     const places = add('div', '', box, 'list');
-    for (const p of [...this.vectors.places].sort((a, b) => a.name.localeCompare(b.name, 'sv'))) {
+    for (const p of known.sort((a, b) => a.name.localeCompare(b.name, 'sv'))) {
       button(p.name, () => this.choose({ name: p.name, x: p.x, z: p.z }), places, d?.name === p.name ? 'on' : '');
     }
     if (this.tops.length) {
@@ -751,85 +883,96 @@ export class MapScreen {
       c.textAlign = 'center';
       c.fillText('Drawing the map…', x0 + size / 2, y0 + size / 2);
     }
+    // The pale over what is not yet seen, placed in world units.
+    this.syncSeen();
+    const dpr = c.getTransform().a;
+    const world = new DOMMatrix([dpr * s, 0, 0, dpr * s, dpr * x0, dpr * y0]);
+    c.save();
+    c.setTransform(world);
+    this.drawFog(c);
+    c.restore();
     c.strokeStyle = 'rgba(0,0,0,0.5)';
     c.lineWidth = 1;
     c.strokeRect(x0, y0, size, size);
 
-    const line = (points: number[][], close = false): void => {
-      c.beginPath();
-      points.forEach(([x, z], i) => {
-        const [sx, sy] = this.toScreen(x!, z!);
-        if (i === 0) c.moveTo(sx, sy);
-        else c.lineTo(sx, sy);
-      });
-      if (close) c.closePath();
-    };
     c.lineCap = c.lineJoin = 'round';
+    this.masked(c, world, (c) => {
+      const line = (points: number[][], close = false): void => {
+        c.beginPath();
+        points.forEach(([x, z], i) => {
+          const [sx, sy] = this.toScreen(x!, z!);
+          if (i === 0) c.moveTo(sx, sy);
+          else c.lineTo(sx, sy);
+        });
+        if (close) c.closePath();
+      };
+      c.lineCap = c.lineJoin = 'round';
 
-    // Water.
-    c.strokeStyle = '#3f86c2';
-    for (const w2 of this.vectors.waterways) {
-      c.lineWidth = w2.kind === 'river' ? Math.max(2, 12 * s) : Math.max(1, 3 * s);
-      line(w2.points);
-      c.stroke();
-    }
-    // Buildings, when there is room for them.
-    if (s > 0.12) {
-      c.fillStyle = '#5b4e45';
-      for (const b of this.vectors.buildings) {
-        line(b.outline, true);
-        c.fill();
-      }
-    }
-    if (s > 0.25) {
-      c.strokeStyle = 'rgba(60,60,60,0.7)';
-      c.lineWidth = 1;
-      for (const p of this.vectors.powerLines) {
-        line(p.points);
+      // Water.
+      c.strokeStyle = '#3f86c2';
+      for (const w2 of this.vectors.waterways) {
+        c.lineWidth = w2.kind === 'river' ? Math.max(2, 12 * s) : Math.max(1, 3 * s);
+        line(w2.points);
         c.stroke();
       }
-    }
-    // Lifts: a dark line from station to station, a dot at each end.
-    if (s > 0.06 && this.vectors.lifts?.length) {
-      c.strokeStyle = c.fillStyle = '#26221f';
-      for (const l of this.vectors.lifts) {
-        c.lineWidth = l.kind === 'magic_carpet' ? 1 : 1.6;
-        line(l.points);
-        c.stroke();
-        for (const end of [l.points[0]!, l.points[l.points.length - 1]!]) {
-          const [x, y] = this.toScreen(end[0]!, end[1]!);
-          c.beginPath();
-          c.arc(x, y, 2.4, 0, Math.PI * 2);
+      // Buildings, when there is room for them.
+      if (s > 0.12) {
+        c.fillStyle = '#5b4e45';
+        for (const b of this.vectors.buildings) {
+          line(b.outline, true);
           c.fill();
         }
       }
-    }
-    // Paths and trails dashed, then the roads cased and filled: asphalt orange, gravel white.
-    c.setLineDash([4, 3]);
-    c.strokeStyle = '#6b4a33';
-    c.lineWidth = 1.2;
-    for (const r of this.vectors.roads) {
-      if (r.drivable && r.kind !== 'track') continue;
-      line(r.points);
-      c.stroke();
-    }
-    c.setLineDash([]);
-    const roads = this.vectors.roads.filter((r) => r.drivable);
-    const width = (r: (typeof roads)[number]): number => Math.max(r.surface === 'asphalt' ? 3 : r.kind === 'track' ? 1.6 : 2.2, (r.width ?? 4) * s);
-    for (const pass of [0, 1]) {
-      for (const r of roads) {
-        const track = r.kind === 'track';
-        if (pass === 0) {
-          c.strokeStyle = r.surface === 'asphalt' ? '#7a3b1e' : '#5d4c3d';
-          c.lineWidth = width(r) + (track ? 1.2 : 2);
-        } else {
-          c.strokeStyle = r.surface === 'asphalt' ? '#ee8d3e' : track ? '#e9dcc0' : '#fffaf0';
-          c.lineWidth = width(r);
+      if (s > 0.25) {
+        c.strokeStyle = 'rgba(60,60,60,0.7)';
+        c.lineWidth = 1;
+        for (const p of this.vectors.powerLines) {
+          line(p.points);
+          c.stroke();
         }
+      }
+      // Lifts: a dark line from station to station, a dot at each end.
+      if (s > 0.06 && this.vectors.lifts?.length) {
+        c.strokeStyle = c.fillStyle = '#26221f';
+        for (const l of this.vectors.lifts) {
+          c.lineWidth = l.kind === 'magic_carpet' ? 1 : 1.6;
+          line(l.points);
+          c.stroke();
+          for (const end of [l.points[0]!, l.points[l.points.length - 1]!]) {
+            const [x, y] = this.toScreen(end[0]!, end[1]!);
+            c.beginPath();
+            c.arc(x, y, 2.4, 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+      }
+      // Paths and trails dashed, then the roads cased and filled: asphalt orange, gravel white.
+      c.setLineDash([4, 3]);
+      c.strokeStyle = '#6b4a33';
+      c.lineWidth = 1.2;
+      for (const r of this.vectors.roads) {
+        if (r.drivable && r.kind !== 'track') continue;
         line(r.points);
         c.stroke();
       }
-    }
+      c.setLineDash([]);
+      const roads = this.vectors.roads.filter((r) => r.drivable);
+      const width = (r: (typeof roads)[number]): number => Math.max(r.surface === 'asphalt' ? 3 : r.kind === 'track' ? 1.6 : 2.2, (r.width ?? 4) * s);
+      for (const pass of [0, 1]) {
+        for (const r of roads) {
+          const track = r.kind === 'track';
+          if (pass === 0) {
+            c.strokeStyle = r.surface === 'asphalt' ? '#7a3b1e' : '#5d4c3d';
+            c.lineWidth = width(r) + (track ? 1.2 : 2);
+          } else {
+            c.strokeStyle = r.surface === 'asphalt' ? '#ee8d3e' : track ? '#e9dcc0' : '#fffaf0';
+            c.lineWidth = width(r);
+          }
+          line(r.points);
+          c.stroke();
+        }
+      }
+    });
 
     // Where the vehicle has been.
     const t = this.trail;
@@ -877,6 +1020,7 @@ export class MapScreen {
     // Destinations: a dot in the colour of their kind, ringed once reached; named when zoomed in.
     const reached = this.actions.reached();
     for (const p of this.vectors.destinations ?? []) {
+      if (!this.showsDestination(p)) continue;
       const [sx, sy] = this.toScreen(p.x, p.z);
       c.fillStyle = DESTINATION_COLORS[p.kind] ?? '#444';
       c.strokeStyle = '#fff';
@@ -895,6 +1039,7 @@ export class MapScreen {
       if (s >= 0.25 || (s >= 0.08 && !/ (of|at) /.test(p.name))) label(p.name, sx, sy + 13, '11px Inter, system-ui, sans-serif');
     }
     for (const p of this.vectors.places) {
+      if (!this.shows(p.x, p.z)) continue;
       const [sx, sy] = this.toScreen(p.x, p.z);
       const big = p.kind === 'village' || p.kind === 'town';
       if (p.kind === 'locality' && s < 0.12) continue;
@@ -995,12 +1140,14 @@ async function loadRasters(index: RegionIndex): Promise<MapRasters> {
   const heights = new Float32Array(n * n);
   const biome = new Uint8Array(n * n);
   const surface = new Uint8Array(n * n);
+  const canopy = new Uint8Array(n * n);
   const hs = index.heights.samples, apron = index.heights.apron, side = hs + 2 * apron;
   const enc = index.heights.encoding;
   const ms = index.masks.samples;
   const plane = ms * ms;
   const channel = (name: string): number => index.masks.channels.findIndex((c) => c.name === name);
-  const bc = channel('biome'), sc = channel('surface');
+  const bc = channel('biome'), sc = channel('surface'), cc = channel('canopy');
+  const canopyScale = cc >= 0 ? (index.masks.channels[cc]!.scale ?? 0.25) : 0;
   const mstep = ml.spacing / spacing;
   const jobs: Promise<void>[] = [];
   for (let ty = 0; ty < hl.count; ty++) {
@@ -1030,6 +1177,7 @@ async function loadRasters(index: RegionIndex): Promise<MapRasters> {
                 if (gx < n && gy < n) {
                   biome[gy * n + gx] = data[bc * plane + at]!;
                   surface[gy * n + gx] = data[sc * plane + at]!;
+                  if (cc >= 0) canopy[gy * n + gx] = data[cc * plane + at]!;
                 }
               }
             }
@@ -1039,5 +1187,5 @@ async function loadRasters(index: RegionIndex): Promise<MapRasters> {
     }
   }
   await Promise.all(jobs);
-  return { n, spacing, heights, biome, surface };
+  return { n, spacing, heights, biome, surface, canopy, canopyScale };
 }

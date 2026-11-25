@@ -11,6 +11,9 @@ export interface MapRasters {
   /** Biome and surface class ids from the masks, same layout. */
   biome: Uint8Array;
   surface: Uint8Array;
+  /** Height of the trees from the canopy mask, in units of `canopyScale` metres (0 if none). */
+  canopy: Uint8Array;
+  canopyScale: number;
 }
 
 /** Biome ids in the region index, by name. */

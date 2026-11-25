@@ -44,6 +44,7 @@ import { VehicleAudio, type Impact } from './audio/vehicleAudio';
 import { bearing, Compass } from './ui/compass';
 import { Guide, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
+import { EYE, Explorer } from './explore';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { signIn } from './account';
@@ -174,6 +175,8 @@ interface World {
   winchView: WinchView;
   sound: VehicleAudio;
   map: MapScreen;
+  /** Looks round as the vehicle goes, filling in the map. */
+  explorer: Explorer;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
@@ -700,6 +703,7 @@ async function start(): Promise<void> {
         `E ${(index.origin.easting + p.x).toFixed(0)} N ${(index.origin.northing - p.z).toFixed(0)} · ${p.y.toFixed(0)} m` +
           (ground === null ? '' : ` (ground ${ground.toFixed(0)} m)`) +
           (flying ? ` · speed ${fly.speed.toFixed(0)} m/s` : ''),
+        `seen ${(world.map.seen.share * 100).toFixed(1)} % of the region` + (world.map.whole ? ' (whole map shown)' : ''),
         `terrain ${terrain.stats.nodes} patches · ${(terrain.stats.triangles / 1000).toFixed(0)}k triangles` +
           (terrain.stats.loading ? ` · loading ${terrain.stats.loading}` : '') +
           ` · ${index.heights.source.name} ${index.heights.source.resolution} m`,
@@ -924,6 +928,8 @@ async function start(): Promise<void> {
     }, starts);
     // The minimap needs the map's picture from the start.
     map.prepare();
+    map.whole = settings.map === 1;
+    const explorer = new Explorer(map, index.name, vectors.destinations ?? [], trips.reached(index.name), params.get('seen'));
     const goToRegion = (name: string): void => {
       try {
         localStorage.setItem(REGION_KEY, name);
@@ -987,7 +993,7 @@ async function start(): Promise<void> {
     start.setPlayers(others.list());
     start.setAddresses(welcome.addresses ?? []);
     start.setAccount(account?.email ?? null);
-    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
     ground.onBreak = (x, z) => connection?.send({ type: 'ice_hole', region: index.name, hole: { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 } });
@@ -1224,6 +1230,7 @@ async function start(): Promise<void> {
         title: world?.index.title ?? '',
         entries: trips.entries.filter((e) => e.region === world?.index.name),
         places: placesToReach,
+        seen: world && !world.map.whole ? world.map.seen.share : null,
       }),
       players: () => ({ list: others.list(), region: world?.index.title ?? '', titleOf: (name) => regionTitles.get(name) ?? name }),
       join: (id) => joinFriend(id),
@@ -1270,6 +1277,12 @@ async function start(): Promise<void> {
           case 'objectRange':
             if (world?.features) world.features.rangeScale = settings.objectRange;
             break;
+          case 'map':
+            if (world) {
+              world.map.whole = settings.map === 1;
+              world.map.refresh();
+            }
+            break;
         }
       },
       restart: rebuild,
@@ -1279,10 +1292,14 @@ async function start(): Promise<void> {
     gamepad,
   );
 
-  // Switching to another tab or window pauses too.
+  // Switching to another tab or window pauses too, and keeps what has been seen.
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && world) pause();
+    if (document.hidden && world) {
+      world.explorer.save();
+      pause();
+    }
   });
+  window.addEventListener('pagehide', () => world?.explorer.save());
 
   window.addEventListener('keyup', (e) => {
     if (e.code === 'Tab') minimap.expand(false);
@@ -2129,6 +2146,11 @@ async function start(): Promise<void> {
         trips.tick(dt, tripFrom ? Math.min(50, Math.hypot(where.x - tripFrom.x, where.z - tripFrom.z)) : 0, now);
         tripFrom = { x: where.x, z: where.z };
       } else tripFrom = null;
+      // Seeing the region, from the driver's seat or from the drone.
+      if (!w.unplaced && !flying && !starting) {
+        if (drone.flown) w.explorer.update(now, drone.p.x, drone.p.z, drone.p.y);
+        else w.explorer.update(now, where.x, where.z, (w.map.heightAt(where.x, where.z) ?? w.sim.body.translation().y) + EYE);
+      }
       if (!w.unplaced && !flying) {
         w.map.record(where.x, where.z);
         // Remembered now and then, for "Where you left off" next time.

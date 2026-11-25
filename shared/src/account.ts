@@ -1,8 +1,11 @@
 // What follows a logged-in driver from browser to browser: the browser's own stored values
 // under these keys, kept on the server per account. The logbook is merged rather than
-// replaced, so arrivals made on two devices are all kept.
+// replaced, so arrivals made on two devices are all kept; so is what has been seen of each
+// region.
 
-/** The browser storage keys kept per account. */
+import { mergeSeen } from './seen';
+
+/** The browser storage keys kept per account, besides one per region for what has been seen. */
 export const ACCOUNT_KEYS = [
   'spar.name',
   'spar.color',
@@ -24,8 +27,21 @@ export const LOGBOOK_MAX = 500;
 /** Longest value kept under one key, in characters. */
 export const ACCOUNT_VALUE_MAX = 300_000;
 
-export function isAccountKey(key: string): key is AccountKey {
-  return (ACCOUNT_KEYS as readonly string[]).includes(key);
+/** What has been seen of each region is kept under a key per region, `spar.seen.<region>`. */
+const SEEN_KEY = /^spar\.seen\.[a-z0-9_-]{1,64}$/;
+
+export function isAccountKey(key: string): boolean {
+  return (ACCOUNT_KEYS as readonly string[]).includes(key) || SEEN_KEY.test(key);
+}
+
+/**
+ * Two values of a key that is merged rather than replaced (the logbook, what has been seen),
+ * as one; null for any other key, where the newer value simply wins.
+ */
+export function mergeAccountValue(key: string, kept: string | null | undefined, incoming: string | null | undefined): string | null {
+  if (key === LOGBOOK_KEY) return mergeLogbooks(kept, incoming);
+  if (SEEN_KEY.test(key)) return mergeSeen(kept, incoming);
+  return null;
 }
 
 interface Entry {
