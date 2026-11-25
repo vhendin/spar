@@ -15,13 +15,17 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   without bars (a web app manifest and icon). A phone held upright is asked to turn sideways.
   The page no longer zooms or scrolls under a finger. A touch screen with nothing chosen yet
   starts on the low graphics preset.
+- **Tried on an iPhone 17 (home-screen app):** it ran, but the picture was squashed and had
+  black bars at both sides. Turned sideways, the window's resize came before the new layout, so
+  the picture kept the upright shape; it now follows the canvas's own size (a ResizeObserver).
+  The picture now fills the whole screen (`viewport-fit=cover`), and what sits at the edges
+  (minimap, gauges, chat, the drone's corner view, the map's side panel) keeps inside the safe
+  area, clear of the Dynamic Island and the home bar.
 - **Next:** touch driving (stick, pedals, handbrake, pause, pinch to zoom); then the other
   buttons (winch, camera, 4×4, map, drone, lights); then tilt steering.
 - **Open:**
   - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
     jump out to Safari? The manifest is fetched with the login cookie for that reason.
-  - The notch: the page keeps clear of it (no `viewport-fit=cover`), leaving black bars at the
-    sides on an iPhone in landscape. Fill them later, keeping buttons inside the safe area?
   - How a phone copes: is low smooth, and does the phone get hot?
 - **To try:** P on the laptop; on a phone at the public address, the corner button (Android),
   or Add to Home Screen (iPhone).

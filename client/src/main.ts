@@ -368,11 +368,28 @@ async function start(): Promise<void> {
   // ?ghosts=4 brings made-up drivers along behind our vehicle, for trying the game with company.
   const ghosts = params.has('ghosts') ? new Ghosts(Number(params.get('ghosts')) || 4, params.get('region') ?? stored(REGION_KEY) ?? '') : null;
 
+  // The picture follows the canvas's own size on the page. On a phone turned sideways the
+  // window's `resize` comes before the page is laid out again, still with the upright size (the
+  // picture came out squashed), so a ResizeObserver on the canvas, which reports after layout.
+  const view = { width: window.innerWidth, height: window.innerHeight, safeRight: 0, safeBottom: 0 };
+  // The safe area (clear of a phone's island and home bar) in pixels, read off an empty element.
+  const safeProbe = document.createElement('div');
+  safeProbe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding-right:var(--safe-r);padding-bottom:var(--safe-b)';
+  document.body.append(safeProbe);
   const resize = (): void => {
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const width = canvas.clientWidth || window.innerWidth;
+    const height = canvas.clientHeight || window.innerHeight;
+    const probe = getComputedStyle(safeProbe);
+    view.safeRight = parseFloat(probe.paddingRight) || 0;
+    view.safeBottom = parseFloat(probe.paddingBottom) || 0;
+    if (width === view.width && height === view.height && camera.aspect === width / height) return;
+    view.width = width;
+    view.height = height;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
   };
+  new ResizeObserver(resize).observe(canvas);
   window.addEventListener('resize', resize);
   resize();
 
@@ -577,9 +594,11 @@ async function start(): Promise<void> {
   };
   /** The vehicle seen from behind, small in the bottom right corner, while the drone is out. */
   const drawInset = (w: World): void => {
-    const width = Math.round(Math.min(320, window.innerWidth * 0.3));
+    const width = Math.round(Math.min(320, view.width * 0.3));
     const height = Math.round(width * 0.62);
-    const margin = 16;
+    // Clear of a phone's island and home bar, as the corners of the page are.
+    const right = 16 + view.safeRight;
+    const margin = Math.max(16, view.safeBottom);
     const g = w.view.group;
     const yaw = yawOf(w);
     const x = g.position.x - Math.sin(yaw) * 9, z = g.position.z - Math.cos(yaw) * 9;
@@ -588,20 +607,20 @@ async function start(): Promise<void> {
     insetCamera.lookAt(g.position.x, g.position.y + 1, g.position.z);
     insetCamera.aspect = width / height;
     insetCamera.updateProjectionMatrix();
-    const left = window.innerWidth - width - margin;
+    const left = view.width - width - right;
     const autoClear = renderer.autoClear;
     renderer.autoClear = false;
     // The renderer counts from the top of the canvas.
-    const top = window.innerHeight - height - margin;
+    const top = view.height - height - margin;
     renderer.setViewport(left, top, width, height);
     renderer.setScissor(left, top, width, height);
     renderer.setScissorTest(true);
     renderer.clearDepth();
     renderer.render(scene, insetCamera);
     renderer.setScissorTest(false);
-    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setViewport(0, 0, view.width, view.height);
     renderer.autoClear = autoClear;
-    Object.assign(droneInset.style, { display: 'block', left: `${left}px`, bottom: `${margin}px`, width: `${width}px`, height: `${height}px` });
+    Object.assign(droneInset.style, { display: 'block', right: `${right}px`, left: '', bottom: `${margin}px`, width: `${width}px`, height: `${height}px` });
   };
   let hintUntil = 0;
 
