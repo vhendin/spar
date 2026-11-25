@@ -7,7 +7,7 @@ import { formatDistance } from './map';
 import { fillPlayers, type PlayerLine } from './players';
 import { canFullscreen, isFullscreen, isIPhoneBrowser, onFullscreenChange, toggleFullscreen } from '../fullscreen';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
-import { builder, closeButton, coarsePointer } from './dom';
+import { backButton, builder, closeButton, coarsePointer } from './dom';
 
 export interface MenuActions {
   resume(): void;
@@ -197,6 +197,13 @@ export class Menu {
       this.page = page;
       this.render();
     };
+    // A page under the main one goes back with the ← (opened by itself, the × does that).
+    if (this.page !== 'main' && !this.exit) {
+      backButton(box, () => {
+        this.rebind(null);
+        go('main');
+      });
+    }
 
     if (this.page === 'main') {
       add('h1', 'Spår');
@@ -267,7 +274,6 @@ export class Menu {
           add('td', formatDistance(e.metres), tr, 'num');
         }
       }
-      button('Back', () => go('main'), add('div', '', box, 'foot'), 'back');
       return;
     }
 
@@ -303,16 +309,12 @@ export class Menu {
         add('td', label, tr);
       }
       if (!onTouch) touchTable();
-      const row = add('div', '', box, 'row');
-      button('Back', () => {
-        this.rebind(null);
-        go('main');
-      }, row, 'back');
+      const row = add('div', '', box, 'row foot');
       button('Reset gamepad', () => {
         this.rebind(null);
         pad.reset();
         this.render();
-      }, row, 'back');
+      }, row);
       return;
     }
 
@@ -352,9 +354,7 @@ export class Menu {
 
     const pending = NEEDS_RESTART.some((k) => s[k] !== this.built[k]);
     add('p', pending ? '* Takes effect when the world is rebuilt. The vehicle stays where it is, but knocked-down trees stand up again.' : '* Takes effect when the world is rebuilt.', box, 'hint');
-    const foot = add('div', '', box, 'row');
-    button('Back', () => go('main'), foot, 'back');
-    if (pending) button('Rebuild now', () => this.actions.restart(), foot, 'primary');
+    if (pending) button('Rebuild now', () => this.actions.restart(), add('div', '', box, 'row foot'), 'primary');
   }
 }
 

@@ -29,6 +29,11 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   minimap. The five copies of the menus' building helpers are one (ui/dom.ts).
 - **To try (step 1):** each panel on the phone and closing it with the ×; Time and weather while
   driving; the menus in a short laptop window.
+- **Tried (step 1):** the picture behind the menu went back to the computer's layout (big dials,
+  big minimap at the bottom left); and no Back button at the bottom, but a ← at the top left
+  (the × closes). Done: the touch layout stays while the menu or map is open; the menu's pages
+  and the garage go back with a ← beside their title, and the Back buttons at the bottom are
+  gone (a page opened by itself from the start screen has only the ×).
 - **Open:** menus driven by the gamepad (D-pad, A, B), as its own step later?
 
 ### Phones: fullscreen and touch controls (this commit: step 4 of 4)

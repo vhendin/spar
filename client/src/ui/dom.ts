@@ -1,6 +1,6 @@
 // Small helpers for building the menus and panels by hand: an element with text and a class, a
-// button that does not let its click through to what is behind, and the close (×) button every
-// paper panel has in its top right corner.
+// button that does not let its click through to what is behind, and the close (×) and back (←)
+// buttons in a paper panel's top corners.
 
 export interface Builder {
   /** Adds a `tag` to `parent` (the builder's box by default), with text and a class if given. */
@@ -46,6 +46,22 @@ export function closeButton(parent: HTMLElement, onClick?: () => void, title = '
       onClick();
     });
   }
+  parent.prepend(b);
+  return b;
+}
+
+/** The ← in a panel's top left corner, back to where it was opened from. Put first in the panel. */
+export function backButton(parent: HTMLElement, onClick: () => void, title = 'Back'): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.className = 'go-back';
+  b.type = 'button';
+  b.title = title;
+  b.setAttribute('aria-label', title);
+  b.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M13.5 8H3M7.5 3.5L3 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onClick();
+  });
   parent.prepend(b);
   return b;
 }

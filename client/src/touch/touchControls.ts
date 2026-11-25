@@ -201,6 +201,9 @@ export class TouchControls implements TouchDrive {
   poll(wanted: boolean, scene: TouchScene = { drone: false, winch: 'idle' }): void {
     const s = this.setting();
     this.show(wanted && (s > 0 || (s === 0 && this.touching)));
+    // The layout for a touch screen (the small readout, the minimap at the top) stays while the
+    // menu or the map is open over the driving, so the picture behind does not change.
+    document.body.classList.toggle('touch', this.inUse);
     this.drone = scene.drone;
     this.root.dataset.steering = this.tilting ? 'tilt' : 'stick';
     const key = `${scene.drone ? 'drone' : 'drive'} ${scene.winch}`;
@@ -242,7 +245,6 @@ export class TouchControls implements TouchDrive {
     if (on === this.shown) return;
     this.shown = on;
     this.root.style.display = on ? '' : 'none';
-    document.body.classList.toggle('touch', on);
     if (!on) {
       // Fingers still down when the menu or map opens are let go of.
       for (const release of [...this.releases.values()]) release();

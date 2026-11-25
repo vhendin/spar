@@ -270,6 +270,13 @@ kbd {
   color: var(--ink-soft); background: var(--paper); border: 1px solid transparent; border-radius: 50%; cursor: pointer;
 }
 :is(#menu, #start, #areas, #map, #world, #garage, #credits) button.close:hover { color: var(--ink); background: var(--wash-hover); border-color: transparent; }
+/* The ← in the top left corner, back to the page before; the title follows beside it. */
+:is(#menu, #garage) button.go-back {
+  float: left; position: sticky; top: 0; z-index: 1; width: 34px; height: 34px; margin: -4px 10px 0 -12px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink); background: var(--paper); border: 1px solid transparent; border-radius: 50%; cursor: pointer;
+}
+:is(#menu, #garage) button.go-back:hover { background: var(--wash-hover); border-color: transparent; }
 #menu input, #start input.name, #areas input.name, #map input.start-name {
   box-sizing: border-box; padding: 7px 10px; font: inherit; color: var(--ink);
   background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(47, 59, 51, 0.24); border-radius: var(--radius);
@@ -297,8 +304,6 @@ kbd {
 #menu table.log td:first-child { font: 17px/1.25 var(--serif); }
 #menu table.log td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 #menu table.log .best { color: var(--falu); font-weight: 600; }
-#menu .back { margin-top: 18px; }
-#menu .row .back { margin-top: 0; }
 #menu p.hint { margin: 14px 0 12px; font-size: 12px; }
 #menu table.keys { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
 #menu table.keys td { padding: 5px 0; vertical-align: top; border-bottom: 1px solid var(--rule); }
@@ -506,8 +511,8 @@ kbd {
 @media (max-width: 520px) { #garage .box { padding: 18px 16px; } }
 
 /* Touch controls over the driving (touch/touchControls.ts): a thumb stick on the left, pedals
-   and the handbrake on the right, pause in the top left. While they show, the body has the
-   class "touch", and the gauges and minimap move out of their way. */
+   and the handbrake on the right, pause in the top left. While they are in use the body has the
+   class "touch" (kept while the menu or map is open), and the gauges and minimap move aside. */
 #touch { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
 #touch > *, #touch .pedals > * { pointer-events: auto; touch-action: none; }
 #touch .stick-zone { position: absolute; left: 0; bottom: 0; width: 42%; height: 64%; }
@@ -618,8 +623,8 @@ body.touch #drone-help { top: 90px; bottom: auto; white-space: normal; width: ma
 
 /* A finger, not a mouse: buttons big enough to hit (44 px, as the phones themselves use). */
 @media (pointer: coarse) {
-  :is(#menu, #start, #map, #world, #garage) button:not(.link, .card, .close, .swatches button) { min-height: 44px; }
-  :is(#menu, #start, #areas, #map, #world, #garage, #credits) button.close { width: 44px; height: 44px; }
+  :is(#menu, #start, #map, #world, #garage) button:not(.link, .card, .close, .go-back, .swatches button) { min-height: 44px; }
+  :is(#menu, #start, #areas, #map, #world, #garage, #credits) button.close, :is(#menu, #garage) button.go-back { width: 44px; height: 44px; }
   #start .swatches button, #menu .swatches button { width: 36px; height: 36px; }
   #world input[type=range] { height: 32px; }
 }

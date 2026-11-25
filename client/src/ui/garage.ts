@@ -8,7 +8,7 @@ import { buildVehicleMeshes } from '../vehicle/body';
 import { painted } from '../vehicle/view';
 import { extrasText, gearsText, locksText, vehicleStats, type VehicleStats } from '../vehicle/stats';
 import { describeVehicle } from './startMenu';
-import { builder, closeButton } from './dom';
+import { backButton, builder } from './dom';
 
 export interface GarageOptions {
   /** The vehicle shown first: the one chosen or driven. */
@@ -264,7 +264,7 @@ export class Garage {
     const box = this.box;
     box.replaceChildren();
     const { add, button } = builder(box);
-    closeButton(box, () => this.close());
+    backButton(box, () => this.close());
 
     const head = add('div', '', box, 'head');
     add('h2', 'Vehicles', head);
@@ -312,6 +312,5 @@ export class Garage {
     const foot = add('div', '', box, 'foot');
     const current = def.name === this.options?.current;
     button(current ? 'Keep this one' : (this.options?.chooseLabel ?? 'Choose'), () => this.choose(), foot, 'primary');
-    button('Back', () => this.close(), foot);
   }
 }
