@@ -1,0 +1,14 @@
+{
+  "name": "viewpoint",
+  "title": "Bench at a viewpoint (utsiktsplats)",
+  "generator": "poi",
+  "params": { "shape": "viewpoint" },
+  "colors": {
+    "wood": ["#7a6a55", "#6e5f4c", "#857257"],
+    "post": ["#5a4a3a", "#4e4034"],
+    "sign": ["#7a3b22", "#6b3420"],
+    "letters": ["#e8e0c8"]
+  },
+  "range": 600,
+  "collider": true
+}

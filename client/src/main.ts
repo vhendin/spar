@@ -5,6 +5,7 @@ import * as THREE from 'three/webgpu';
 import { parseLocalTime, seasonAt, type RegionIndex, type SeasonCalendar, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
 import { fillCredits } from './credits';
 import { Features } from './features/features';
+import { poiFeatures } from './features/poi';
 import { FlyCamera } from './flyCamera';
 import { Connection, type ConnectionState } from './net';
 import { WorldPanel } from './worldPanel';
@@ -817,10 +818,15 @@ async function start(): Promise<void> {
     );
     if (latestWorld) environment.setWorld(latestWorld, performance.now());
 
+    // What stands at the places worth driving to (a shelter, a cairn, a hut), which the map has
+    // only as points: built with the other objects, and kept clear of trees.
+    const pois = poiFeatures(vectors.destinations ?? [], vectors.buildings ?? [], vectors.roads ?? [], welcome.seed);
+
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
     if (params.get('plants') !== '0') {
-      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough, seasonAt(CALENDAR, seasonStep(environment.dayOfYear())), (vectors.buildings ?? []).map((b) => b.outline));
+      const bare = [...(vectors.buildings ?? []), ...pois.buildings].map((b): number[][] => b.outline).concat(pois.clear);
+      vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough, seasonAt(CALENDAR, seasonStep(environment.dayOfYear())), bare);
       scene.add(vegetation.group);
       // ?atlas=1 stands the far-tree pictures up in front of the start position.
       if (params.get('atlas') === '1') {
@@ -830,10 +836,11 @@ async function start(): Promise<void> {
       }
     }
 
-    // ?objects=0 leaves out buildings, power lines, fences and log piles.
+    // ?objects=0 leaves out buildings, power lines, fences, log piles and what stands at places.
     let features: Features | null = null;
     if (params.get('objects') !== '0') {
-      features = new Features(index, vectors, welcome.seed, seeThrough);
+      const withPois = { ...vectors, buildings: [...(vectors.buildings ?? []), ...pois.buildings], objects: [...(vectors.objects ?? []), ...pois.objects] };
+      features = new Features(index, withPois, welcome.seed, seeThrough);
       features.rangeScale = settings.objectRange;
       scene.add(features.group);
     }

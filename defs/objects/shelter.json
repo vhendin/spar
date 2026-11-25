@@ -1,0 +1,15 @@
+{
+  "name": "shelter",
+  "title": "Lean-to shelter with a fire ring (vindskydd)",
+  "generator": "poi",
+  "params": { "shape": "shelter", "width": [3.6, 4.4], "depth": [2.4, 2.8], "back": [0.9, 1.1], "front": [1.9, 2.2] },
+  "colors": {
+    "wood": ["#7a6a55", "#6e5f4c", "#857257", "#6a5a48"],
+    "roof": ["#2d2c2a", "#3a3936", "#4c5a32", "#56603a"],
+    "floor": ["#9a8668", "#8f7c5f"],
+    "stone": ["#77756f", "#6a6964", "#85827a", "#5f5e5a"],
+    "char": ["#2a2522", "#3b3029"]
+  },
+  "range": 900,
+  "collider": true
+}

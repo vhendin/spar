@@ -1,5 +1,5 @@
-// Streams and draws the man-made objects of a region: buildings, power lines, fences and
-// log piles. Each tile is built once in a worker; every object kind in it is one mesh,
+// Streams and draws the man-made objects of a region: buildings, power lines, fences, log
+// piles, lifts, and what stands at the places worth driving to (features/poi.ts). Each tile is built once in a worker; every object kind in it is one mesh,
 // shown up to that kind's own distance. Stretches of wooden fence knocked over stay over,
 // tipped about their foot, and are no longer solid.
 

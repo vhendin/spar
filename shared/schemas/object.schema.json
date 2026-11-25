@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ObjectDef",
-  "description": "One kind of man-made object, built by a procedural generator where the region's vectors place it (buildings, power lines, fences, log piles, lifts). Lives in defs/objects/<name>.json.",
+  "description": "One kind of man-made object, built by a procedural generator where the region's vectors place it (buildings, power lines, fences, log piles, lifts, and what stands at the places worth driving to). Lives in defs/objects/<name>.json.",
   "type": "object",
   "additionalProperties": false,
   "required": ["name", "title", "generator", "params", "colors", "range"],
   "properties": {
     "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
     "title": { "description": "English name, with the Swedish name in brackets.", "type": "string" },
-    "generator": { "description": "Which generator builds it.", "type": "string", "enum": ["building", "pole", "fence", "log_pile", "lift"] },
+    "generator": { "description": "Which generator builds it.", "type": "string", "enum": ["building", "pole", "fence", "log_pile", "lift", "poi"] },
     "params": {
       "description": "Shape parameters read by the generator, in metres and degrees. A [min, max] pair is drawn anew for every object.",
       "type": "object",

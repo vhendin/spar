@@ -1,0 +1,14 @@
+{
+  "name": "camp_site",
+  "title": "Camp site: fire ring, tables and a tent (tältplats)",
+  "generator": "poi",
+  "params": { "shape": "camp" },
+  "colors": {
+    "wood": ["#7a6a55", "#6e5f4c", "#857257"],
+    "tent": ["#c0562c", "#3f6b45", "#2f5f8a", "#c79a2b"],
+    "stone": ["#77756f", "#6a6964", "#85827a"],
+    "char": ["#2a2522", "#3b3029"]
+  },
+  "range": 700,
+  "collider": true
+}

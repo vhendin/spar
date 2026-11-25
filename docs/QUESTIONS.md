@@ -5,6 +5,28 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Something to see at the places (this commit)
+
+- **Asked:** "I arrived at a shelter, and there was no shelter." The places worth driving to
+  were only points from the map data; unless the place was also mapped as a building, nothing
+  stood there.
+- **Done:** built in the browser from the points already downloaded (no new import needed):
+  - shelter: a lean-to of logs on a plank floor, open at the front under a roof sloping to the
+    back, a fire ring in front and a log to sit on;
+  - summit: a cairn of stones;
+  - viewpoint: a bench facing downhill, and a small brown sign;
+  - camp site: a fire ring, two picnic tables and a ridge tent;
+  - sight: an information board with a little roof;
+  - hut: a small cabin, lodge: a two-storey house (the usual building generator);
+  - lift tops: nothing more (the station is there).
+  A place with a mapped building within 8 m is left as it is. Each faces the nearest road or
+  path within 120 m, so a shelter's open side greets whoever arrives; otherwise it faces
+  downhill. Trees and bushes keep off them; the vehicle and the drone hit them.
+- **To try:** the shelter you missed, and a summit, a viewpoint and a hut.
+- **Open:** a viewpoint could get a railing or a tower where the map says so; a lodge could be
+  bigger, or several buildings; a wind shelter (vindskydd) mapped as a closed building looks
+  like a shed.
+
 ### Menus fitted to a phone, and tidied up (this commit: step 1 of 4)
 
 - **Asked:** fit the menus to a phone screen; part of a bigger overhaul, since things were added

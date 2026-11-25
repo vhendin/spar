@@ -6,6 +6,7 @@ import { building } from './generators/building';
 import { fence } from './generators/fence';
 import { lift } from './generators/lift';
 import { logPile } from './generators/logPile';
+import { poi } from './generators/poi';
 import { powerLine } from './generators/pole';
 import { inBox, type TileJob } from './layout';
 import { FeatureMesh, type GroundFn, type Solid } from './mesh';
@@ -73,6 +74,7 @@ export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: n
   for (const o of job.objects) {
     const def = defs[o.kind];
     if (def?.generator === 'log_pile') logPile(o, def, seed, ground, mesh(o.kind));
+    else if (def?.generator === 'poi') poi(o, def, seed, ground, mesh(o.kind));
   }
 
   const parts: BuiltPart[] = [];
