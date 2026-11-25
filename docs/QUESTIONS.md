@@ -34,6 +34,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   (the × closes). Done: the touch layout stays while the menu or map is open; the menu's pages
   and the garage go back with a ← beside their title, and the Back buttons at the bottom are
   gone (a page opened by itself from the start screen has only the ×).
+- **Tried (the fixes):** "It's fine for now."
 - **Open:** menus driven by the gamepad (D-pad, A, B), as its own step later?
 
 ### Phones: fullscreen and touch controls (this commit: step 4 of 4)
