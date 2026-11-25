@@ -5,6 +5,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Trees that hold (this commit)
+
+- **Asked:** "The bigger trees fall too easy. Even a car at pretty high speed wouldn't knock
+  down a tree. The car would wreck." Trunks up to 30 cm gave way, a 15 cm one at about 10 km/h,
+  and the crash jolt itself counted as a push, so a forest was punched through at speed.
+- **Done:** only trunks up to 20 cm give way (a spruce some 7 m tall); what it takes rises
+  steeply: 6 cm at walking pace, 10 cm at ~13 km/h, 15 cm at ~33 km/h, 20 cm at ~63 km/h
+  (for a 2.4 t vehicle; a lighter one needs more speed), each hit taking most of the speed it
+  needed. Pushing over in low range counts only while nearly still against the trunk. What
+  breaks goes by the trunk as drawn, so saplings are not as strong as the thicker collider
+  they get. Anything bigger stops the vehicle dead.
+- **Open:** there is no damage. A hard hit on a grown tree stops the vehicle but leaves it
+  whole; should a crash wreck it (bent, slower, a breakdown to recover from)?
+- **To try:** driving into a forest at speed; pushing a small tree over in low range.
+
 ### Something to see at the places (this commit)
 
 - **Asked:** "I arrived at a shelter, and there was no shelter." The places worth driving to

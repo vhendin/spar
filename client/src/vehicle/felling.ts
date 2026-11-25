@@ -1,21 +1,28 @@
-// Small trees give way. A trunk the vehicle hits snaps or is flattened when the vehicle
+// Young trees give way. A trunk the vehicle hits snaps or is flattened when the vehicle
 // brings enough energy for a trunk that thick, or pushes on it hard enough for long enough;
-// the vehicle then carries on, slowed by what breaking it took. Thick trunks stay put.
+// the vehicle then carries on, slowed by what breaking it took. Grown trees stay put: a
+// vehicle hitting one stops, as it would in a forest.
 // Stretches of wooden fence go the same way, with what it takes to break them given.
 // No rendering in here, so it runs in tests.
 
 import type RAPIER from '@dimforge/rapier3d-compat';
 
-/** Trunks thicker than this (metres across) never give way. */
-export const MAX_BREAKABLE = 0.3;
-/** Energy in joules to break a trunk `d` metres across: about 10 km/h for 15 cm in a 2.4 t vehicle. */
-export const breakEnergy = (d: number): number => 8.6e6 * d ** 3.6;
+/** Trunks thicker than this (metres across, a spruce some 7 m tall) never give way. */
+export const MAX_BREAKABLE = 0.2;
+/**
+ * Energy in joules to break a trunk `d` metres across. In a 2.4 t vehicle: a 6 cm sapling at
+ * walking pace, 10 cm at about 13 km/h, 15 cm at 33 km/h and 20 cm at 63 km/h, each taking
+ * most of the speed it needed.
+ */
+export const breakEnergy = (d: number): number => 5.2e8 * d ** 4.5;
 /**
  * Steady force in newtons that pushes a trunk over: 15 cm takes low range, 10 cm does not.
  * Measured as an average over about PUSH_TIME seconds, so a single jolt does not count.
  */
 export const pushForce = (d: number): number => 1.6e6 * d ** 2.5;
 const PUSH_TIME = 0.4;
+/** Only a vehicle closing slower than this (m/s) is pushing; faster, it is a hit, judged on energy. */
+const PUSH_SPEED = 1.5;
 /** Contacts weaker than this are not reported at all. */
 const LISTEN = 200;
 
@@ -106,7 +113,8 @@ export class Felling {
       const closing = Math.abs(v.x * nx + v.z * nz);
       const energy = 0.5 * mass * closing * closing;
       const needed = tree.energy ?? breakEnergy(tree.diameter);
-      tree.pushed += (e.totalForceMagnitude() - tree.pushed) * Math.min(1, dt / PUSH_TIME);
+      const push = closing < PUSH_SPEED ? e.totalForceMagnitude() : 0;
+      tree.pushed += (push - tree.pushed) * Math.min(1, dt / PUSH_TIME);
       if (energy <= needed && tree.pushed < (tree.push ?? pushForce(tree.diameter))) return;
       // It goes. The vehicle keeps its speed less what the breaking took.
       if (energy > needed) {

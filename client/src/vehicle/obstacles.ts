@@ -264,10 +264,12 @@ export class Obstacles {
         const half = Math.min(size, 6) / 2 + 0.2;
         const radius = Math.max(0.07, radiusPerHeight * size);
         let desc = this.R.ColliderDesc.cylinder(half, radius).setTranslation(px, py + half - 0.4, pz);
-        const breakable = this.felling && Felling.breakable(radius * 2);
+        // What it takes to break goes by the trunk as drawn, not the thicker collider of a sapling.
+        const trunk = 2 * radiusPerHeight * size;
+        const breakable = this.felling && Felling.breakable(trunk);
         if (breakable) desc = this.felling!.listen(desc, this.R);
         const collider = this.add(key, desc, UNIT_CYLINDER, [radius, half, radius], drawn, 'tree');
-        if (breakable) this.felling!.track(collider, { key, diameter: radius * 2 });
+        if (breakable) this.felling!.track(collider, { key, diameter: trunk });
       } else {
         if (size < MIN_ROCK) return;
         const radius = radiusPerHeight * size;
