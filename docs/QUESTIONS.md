@@ -5,7 +5,28 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Winch speed (this commit)
+### Phones: fullscreen and touch controls (this commit: step 1 of 4)
+
+- **Asked:** touch controls for phones, and fullscreen. Both Android and iPhone; a thumb stick
+  to steer with tilt as a choice; every action on a button; fullscreen on the laptop too.
+- **Done so far (step 1):** P or the menu's Fullscreen button, and a corner button on touch
+  screens, put the page fullscreen (on a phone also turned sideways and kept so). iPhone Safari
+  cannot do that for a page: the menu says to add Spår to the home screen, which opens it
+  without bars (a web app manifest and icon). A phone held upright is asked to turn sideways.
+  The page no longer zooms or scrolls under a finger. A touch screen with nothing chosen yet
+  starts on the low graphics preset.
+- **Next:** touch driving (stick, pedals, handbrake, pause, pinch to zoom); then the other
+  buttons (winch, camera, 4×4, map, drone, lights); then tilt steering.
+- **Open:**
+  - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
+    jump out to Safari? The manifest is fetched with the login cookie for that reason.
+  - The notch: the page keeps clear of it (no `viewport-fit=cover`), leaving black bars at the
+    sides on an iPhone in landscape. Fill them later, keeping buttons inside the safe area?
+  - How a phone copes: is low smooth, and does the phone get hot?
+- **To try:** P on the laptop; on a phone at the public address, the corner button (Android),
+  or Add to Home Screen (iPhone).
+
+### Winch speed
 
 - **Asked:** the winch is really slow.
 - **Found:** the cable came in at 0.5 m/s with no load, and the speed fell in a straight line

@@ -67,7 +67,10 @@ export function presetOf(s: Settings): PresetName | null {
 
 const isPreset = (name: string | null): name is PresetName => name !== null && (PRESET_NAMES as readonly string[]).includes(name);
 
-/** ?quality=low|medium|high wins for this visit, then what was chosen on this computer, then medium. */
+/**
+ * ?quality=low|medium|high wins for this visit, then what was chosen on this computer, then
+ * medium (low on a touch screen).
+ */
 export function loadSettings(params: URLSearchParams): Settings {
   const asked = params.get('quality');
   if (isPreset(asked)) return { ...PRESETS[asked] };
@@ -84,7 +87,9 @@ export function loadSettings(params: URLSearchParams): Settings {
   } catch {
     // Storage can be off, or hold something unreadable; the default will do.
   }
-  return { ...PRESETS.medium };
+  // A phone or tablet (a finger, not a mouse) starts low: it has less to draw with, and gets warm.
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  return { ...PRESETS[touch ? 'low' : 'medium'] };
 }
 
 export function saveSettings(s: Settings): void {

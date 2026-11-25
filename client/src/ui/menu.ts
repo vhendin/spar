@@ -5,6 +5,7 @@ import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../ve
 import { formatDuration, type LogEntry } from '../trips';
 import { formatDistance } from './map';
 import { fillPlayers, type PlayerLine } from './players';
+import { canFullscreen, isFullscreen, isIPhoneBrowser, onFullscreenChange, toggleFullscreen } from '../fullscreen';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
 
 export interface MenuActions {
@@ -58,6 +59,7 @@ const CONTROLS: [string, string][] = [
   ['T', 'Time and weather'],
   ['Enter', 'Chat with the others'],
   ['C', 'Credits'],
+  ['P', 'Fullscreen'],
   ['Esc', 'Menu and pause'],
 ];
 
@@ -82,6 +84,10 @@ export class Menu {
     // Clicking beside the box resumes, like Esc.
     root.addEventListener('click', (e) => {
       if (e.target === root) this.actions.resume();
+    });
+    // The fullscreen button says which way it goes.
+    onFullscreenChange(() => {
+      if (this.open && this.page === 'main') this.render();
     });
   }
 
@@ -185,6 +191,14 @@ export class Menu {
       button('Logbook', () => go('logbook'), list);
       button('Settings', () => go('settings'), list);
       button('Controls', () => go('controls'), list);
+      if (canFullscreen()) {
+        const full = button(isFullscreen() ? 'Leave fullscreen' : 'Fullscreen', () => {
+          toggleFullscreen();
+        }, list);
+        full.title = 'P';
+      } else if (isIPhoneBrowser()) {
+        add('p', 'For full screen: Share, then Add to Home Screen, and start Spår from there.', box, 'hint');
+      }
       if (this.actions.vehicles.length > 1) {
         add('div', 'Vehicle', box, 'label');
         const row = add('div', '', box, 'row');

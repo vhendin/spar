@@ -44,6 +44,31 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night)
 canvas { display: block; width: 100%; height: 100%; }
 body { font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 
+/* Touch screens: no page zoom on a double tap, no pulling the page about, no text picked up or
+   callouts from a held finger (except where something is typed). The game's canvas takes every
+   touch itself. */
+html, body { overscroll-behavior: none; touch-action: manipulation; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+#view { touch-action: none; }
+
+/* Fullscreen, on touch screens (P on a keyboard). */
+#fullscreen {
+  position: fixed; top: 10px; right: 10px; z-index: 40; width: 44px; height: 44px; padding: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--on-glass); background: var(--glass);
+  border: 1px solid var(--glass-rule); border-radius: 10px; backdrop-filter: blur(4px); cursor: pointer;
+}
+
+/* A phone held upright: the game wants it sideways. */
+#turn { display: none; }
+@media (orientation: portrait) and (pointer: coarse) and (max-width: 600px) {
+  #turn {
+    position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center;
+    padding: 32px; text-align: center; font: 26px/1.3 var(--serif); color: var(--birch); background: var(--night);
+  }
+  #turn span { font: 14px/1.4 var(--sans); color: var(--fog); }
+}
+
 /* Keys, wherever they are named. */
 kbd {
   display: inline-block; min-width: 1.1em; padding: 0 6px; text-align: center;
