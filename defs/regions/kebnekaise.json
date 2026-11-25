@@ -1,0 +1,10 @@
+{
+  "name": "kebnekaise",
+  "title": "Kebnekaise",
+  "crs": "EPSG:3006",
+  "origin": {
+    "easting": 645645,
+    "northing": 7538108
+  },
+  "size": 4096
+}

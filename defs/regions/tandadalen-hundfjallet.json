@@ -1,0 +1,10 @@
+{
+  "name": "tandadalen-hundfjallet",
+  "title": "Tandådalen-Hundfjället",
+  "crs": "EPSG:3006",
+  "origin": {
+    "easting": 388938,
+    "northing": 6787133
+  },
+  "size": 6144
+}

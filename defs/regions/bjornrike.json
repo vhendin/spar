@@ -1,0 +1,10 @@
+{
+  "name": "bjornrike",
+  "title": "Björnrike",
+  "crs": "EPSG:3006",
+  "origin": {
+    "easting": 444422,
+    "northing": 6923592
+  },
+  "size": 4096
+}

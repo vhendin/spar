@@ -1,0 +1,10 @@
+{
+  "name": "jarvso",
+  "title": "Järvsö",
+  "crs": "EPSG:3006",
+  "origin": {
+    "easting": 559687,
+    "northing": 6844243
+  },
+  "size": 2048
+}
