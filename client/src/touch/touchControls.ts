@@ -1,8 +1,14 @@
 // Touch controls for phones and tablets, over the driving: a thumb stick that appears wherever
 // the left thumb lands (it steers), pedals at the right edge (the higher the finger, the more
 // pedal), a handbrake beside them (a double tap when stopped parks, as with the key) and a
-// pause button. Dragging anywhere else on the picture looks round, and two fingers pinch the
-// camera nearer or further (ChaseCamera).
+// pause button. Along the top right: camera view, back on the wheels, winch and drone. Over the
+// pedals, while the winch is in use: hook on, next and cancel while choosing; In and Out (held)
+// and unhook while hooked. Dragging anywhere else on the picture looks round, and two fingers
+// pinch the camera nearer or further (ChaseCamera). The lamps on the dash and the minimap are
+// buttons too (main.ts).
+//
+// With the drone out the stick slides it and climbs, the pedals fly it forward and back, and
+// the buttons that belong to the vehicle go away.
 //
 // Shown when the screen is touched, hidden again when a key or the gamepad is used, unless the
 // setting says always or never. One-shot buttons are asked for like the gamepad's, as tapped
@@ -14,6 +20,24 @@ import { knob, pedalValue, stickAxis } from './stick';
 
 /** The setting: 0 automatic (shown after a touch, hidden after a key), 1 always, −1 never. */
 export type TouchSetting = number;
+
+/** The one-shot buttons: the gamepad's actions, and Next while choosing an anchor. */
+export type TouchAction = PadAction | 'winchNext';
+
+/** What is going on, for which buttons show. */
+export interface TouchScene {
+  /** The drone is being flown. */
+  drone: boolean;
+  winch: 'idle' | 'choosing' | 'hooked';
+}
+
+const ICONS = {
+  camera: '<path d="M4 8h3l2-2.5h6L17 8h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  right: '<path d="M18.5 9A7.5 7.5 0 1 0 19.5 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.5 4v5.5H14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  winch: '<path d="M12 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11c-3.5 0-4.5 2.5-4.5 4.5a4.5 4.5 0 0 0 9 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16.5 15.5l1.6-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  drone: '<rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor"/><path d="M10 10 6.5 6.5M14 10l3.5-3.5M10 14l-3.5 3.5M14 14l3.5 3.5" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="6" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  pause: '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/>',
+};
 
 interface Track {
   down(e: PointerEvent): void;
@@ -32,14 +56,19 @@ export class TouchControls implements TouchDrive {
   throttle = 0;
   brake = 0;
   handbrake = false;
+  lift = 0;
   private presses: number[] = [];
-  private taps = new Set<PadAction>();
-  private tappedNow = new Set<PadAction>();
+  private taps = new Set<TouchAction>();
+  private tappedNow = new Set<TouchAction>();
+  private readonly holding = new Set<'winchIn' | 'winchOut'>();
+  private scene = '';
   /** Every finger on a control, so all can be let go when the controls hide. */
   private readonly releases = new Map<number, () => void>();
 
   private readonly stickBase: HTMLDivElement;
   private readonly stickKnob: HTMLDivElement;
+  private readonly brakeLabel: HTMLDivElement;
+  private readonly throttleLabel: HTMLDivElement;
 
   constructor(private readonly setting: () => TouchSetting) {
     this.touching = matchMedia('(pointer: coarse)').matches;
@@ -73,6 +102,7 @@ export class TouchControls implements TouchDrive {
         this.stickBase.classList.remove('on');
         this.stickKnob.style.transform = '';
         this.steer = null;
+        this.lift = 0;
       },
     });
 
@@ -90,14 +120,27 @@ export class TouchControls implements TouchDrive {
         hand.classList.remove('on');
       },
     });
-    this.pedal(this.el('div', 'pedal brake', pedals, 'Brake'), (v) => (this.brake = v));
-    this.pedal(this.el('div', 'pedal throttle', pedals, 'Drive'), (v) => (this.throttle = v));
+    this.brakeLabel = this.el('div', 'pedal brake', pedals, 'Brake');
+    this.throttleLabel = this.el('div', 'pedal throttle', pedals, 'Drive');
+    this.pedal(this.brakeLabel, (v) => (this.brake = v));
+    this.pedal(this.throttleLabel, (v) => (this.throttle = v));
 
-    // Pause, in the top left corner.
-    const pause = this.el('button', 'round pause', root);
-    pause.setAttribute('aria-label', 'Menu and pause');
-    pause.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
-    this.button(pause, 'menu');
+    // The winch's buttons over the pedals, while choosing an anchor or hooked on.
+    const winch = this.el('div', 'winch-row');
+    this.button(this.el('button', 'choosing', winch, 'Hook on'), 'winch');
+    this.button(this.el('button', 'choosing', winch, 'Next'), 'winchNext');
+    this.button(this.el('button', 'choosing', winch, 'Cancel'), 'winchOut');
+    this.hold(this.el('button', 'hooked hold', winch, 'In'), 'winchIn');
+    this.hold(this.el('button', 'hooked hold', winch, 'Out'), 'winchOut');
+    this.button(this.el('button', 'hooked', winch, 'Unhook'), 'winch');
+
+    // Pause in the top left corner; the views, back on the wheels, winch and drone top right.
+    this.button(this.icon(root, 'round pause', 'pause', 'Menu and pause'), 'menu');
+    const row = this.el('div', 'actions');
+    this.button(this.icon(row, 'round vehicle', 'camera', 'Camera: chase, orbit, cab'), 'camera');
+    this.button(this.icon(row, 'round vehicle', 'right', 'Back on the wheels'), 'right');
+    this.button(this.icon(row, 'round vehicle', 'winch', 'Winch: choose an anchor'), 'winch');
+    this.button(this.icon(row, 'round', 'drone', 'Drone: launch, back to driving'), 'drone');
 
     root.style.display = 'none';
   }
@@ -107,16 +150,33 @@ export class TouchControls implements TouchDrive {
     this.touching = false;
   }
 
-  /** Once a frame: whether the driving is on screen; collects the taps since the last frame. */
-  poll(wanted: boolean): void {
+  /**
+   * Once a frame: whether the driving is on screen, and what is going on (which buttons
+   * show); collects the taps since the last frame.
+   */
+  poll(wanted: boolean, scene: TouchScene = { drone: false, winch: 'idle' }): void {
     const s = this.setting();
     this.show(wanted && (s > 0 || (s === 0 && this.touching)));
+    const key = `${scene.drone ? 'drone' : 'drive'} ${scene.winch}`;
+    if (key !== this.scene) {
+      this.scene = key;
+      this.root.dataset.mode = scene.drone ? 'drone' : 'drive';
+      this.root.dataset.winch = scene.drone ? 'idle' : scene.winch;
+      this.throttleLabel.textContent = scene.drone ? 'Forward' : 'Drive';
+      this.brakeLabel.textContent = scene.drone ? 'Back' : 'Brake';
+      // A hold button that went away is let go of.
+      if (scene.winch !== 'hooked') this.holding.clear();
+    }
     this.tappedNow = this.taps;
     this.taps = new Set();
   }
 
-  tapped(action: PadAction): boolean {
+  tapped(action: TouchAction): boolean {
     return this.tappedNow.has(action);
+  }
+
+  held(action: 'winchIn' | 'winchOut'): boolean {
+    return this.holding.has(action);
   }
 
   /** Handbrake presses since the last call, as event times (ms), for the double tap that parks. */
@@ -148,8 +208,9 @@ export class TouchControls implements TouchDrive {
   private stickMoved(dx: number, dy: number): void {
     const [kx, ky] = knob(dx, dy);
     this.stickKnob.style.transform = `translate(${kx}px, ${ky}px)`;
-    // Thumb to the left steers left, which is positive.
+    // Thumb to the left steers left, which is positive; up climbs (the drone).
     this.steer = -stickAxis(dx);
+    this.lift = -stickAxis(dy);
   }
 
   private pedal(el: HTMLElement, set: (v: number) => void): void {
@@ -170,7 +231,28 @@ export class TouchControls implements TouchDrive {
     });
   }
 
-  private button(el: HTMLElement, action: PadAction): void {
+  /** A button that does something for as long as it is held. */
+  private hold(el: HTMLElement, action: 'winchIn' | 'winchOut'): void {
+    this.track(el, {
+      down: () => {
+        this.holding.add(action);
+        el.classList.add('on');
+      },
+      up: () => {
+        this.holding.delete(action);
+        el.classList.remove('on');
+      },
+    });
+  }
+
+  private icon(parent: HTMLElement, cls: string, icon: keyof typeof ICONS, label: string): HTMLButtonElement {
+    const b = this.el('button', cls, parent);
+    b.setAttribute('aria-label', label);
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22">${ICONS[icon]}</svg>`;
+    return b;
+  }
+
+  private button(el: HTMLElement, action: TouchAction): void {
     this.track(el, {
       down: () => {
         this.taps.add(action);

@@ -17,6 +17,8 @@ export interface MenuActions {
   resetVehicle(): void;
   toStart(): void;
   credits(): void;
+  /** A line to the others: for a touch screen, which has no Enter key. */
+  chat(): void;
   /** Vehicles to choose from, and the one being driven. */
   vehicles: { name: string; title: string }[];
   vehicle(): string;
@@ -71,6 +73,12 @@ const TOUCH: [string, string][] = [
   ['Drag', 'Look around (anywhere else on the picture)'],
   ['Pinch', 'Camera nearer or further'],
   ['Pause button', 'Top left: this menu'],
+  ['Minimap', 'Tap it for the map; there, drag to move and pinch to zoom'],
+  ['Top right', 'Camera view, back on the wheels, winch, drone'],
+  ['Lamps on the dash', 'Tap LOW, CRAWL, AIR, DIFF or LIGHTS to switch them'],
+  ['Winch', 'Drag to aim, then Hook on (or Next, Cancel). Hooked: hold In or Out'],
+  ['Drone', 'The stick slides and climbs, the pedals go forward and back, a drag looks round'],
+  ['Say something', 'In this menu: a line to the others'],
 ];
 
 export class Menu {
@@ -201,6 +209,7 @@ export class Menu {
       button('Logbook', () => go('logbook'), list);
       button('Settings', () => go('settings'), list);
       button('Controls', () => go('controls'), list);
+      if (matchMedia('(pointer: coarse)').matches) button('Say something', () => this.actions.chat(), list);
       if (canFullscreen()) {
         const full = button(isFullscreen() ? 'Leave fullscreen' : 'Fullscreen', () => {
           toggleFullscreen();

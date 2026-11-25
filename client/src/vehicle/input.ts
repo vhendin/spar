@@ -12,8 +12,12 @@ export interface TouchDrive {
   throttle: number;
   brake: number;
   handbrake: boolean;
+  /** The stick up (+) and down (−), −1..1, 0 with no thumb on it: the drone climbs with it. */
+  lift: number;
   /** Handbrake presses since the last call, as event times (ms). */
   takeHandbrakePresses(): number[];
+  /** Whether a hold button is down: winding the winch in or out. */
+  held(action: 'winchIn' | 'winchOut'): boolean;
 }
 
 const held = (down: Set<string>, ...codes: string[]): boolean => codes.some((c) => down.has(c));
@@ -139,6 +143,14 @@ export class DriveInput {
       climb -= dead(g.pad.axes[1] ?? 0);
       turn -= dead(g.pad.axes[2] ?? 0);
     }
+    // On a touch screen the stick slides and climbs and the pedals go forward and back; a drag
+    // on the picture turns (main.ts).
+    const tc = this.touch;
+    if (tc?.shown) {
+      forward += tc.throttle - tc.brake;
+      strafe += tc.steer ?? 0;
+      climb += tc.lift;
+    }
     const unit = (x: number): number => Math.max(-1, Math.min(1, x));
     return { forward: unit(forward), turn: unit(turn), strafe: unit(strafe), climb: unit(climb) };
   }
@@ -149,12 +161,13 @@ export class DriveInput {
     return Math.abs(y) < 0.12 ? 0 : y;
   }
 
-  /** The winch's hold-down controls: I winds in, K pays out. */
+  /** The winch's hold-down controls: I winds in, K pays out (or the touch buttons In and Out). */
   winch(): WinchControls {
     const g = this.gamepad;
+    const tc = this.touch?.shown ? this.touch : null;
     return {
-      pull: this.down.has('KeyI') || (g.pad !== null && g.held('winchIn')),
-      slack: this.down.has('KeyK') || (g.pad !== null && g.held('winchOut')),
+      pull: this.down.has('KeyI') || (g.pad !== null && g.held('winchIn')) || !!tc?.held('winchIn'),
+      slack: this.down.has('KeyK') || (g.pad !== null && g.held('winchOut')) || !!tc?.held('winchOut'),
     };
   }
 }

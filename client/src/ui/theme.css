@@ -519,6 +519,32 @@ kbd {
 }
 #touch .round.on { background: rgba(201, 164, 74, 0.6); }
 #touch .pause { top: 10px; left: calc(10px + var(--safe-l)); }
+#touch .actions { position: absolute; top: 10px; right: calc(10px + var(--safe-r)); display: flex; gap: 8px; pointer-events: none; }
+#touch .actions .round { position: static; width: 46px; height: 46px; pointer-events: auto; touch-action: none; }
+#touch[data-mode="drone"] .vehicle, #touch[data-mode="drone"] .winch-row { display: none; }
+#touch[data-mode="drone"] .handbrake { visibility: hidden; }
+#touch .winch-row {
+  position: absolute; right: calc(14px + var(--safe-r)); bottom: calc(max(14px, var(--safe-b)) + 226px);
+  display: none; gap: 8px; pointer-events: none;
+}
+#touch[data-winch="choosing"] .winch-row, #touch[data-winch="hooked"] .winch-row { display: flex; }
+#touch .winch-row button {
+  display: none; height: 44px; min-width: 58px; padding: 0 12px; pointer-events: auto; touch-action: none;
+  font: 600 11px/1 var(--sans); letter-spacing: 0.1em; text-transform: uppercase; color: var(--on-glass);
+  background: var(--glass); border: 1px solid var(--glass-rule); border-radius: 12px; backdrop-filter: blur(4px);
+}
+#touch[data-winch="choosing"] .winch-row .choosing, #touch[data-winch="hooked"] .winch-row .hooked { display: block; }
+#touch .winch-row .hold { min-width: 72px; }
+#touch .winch-row button.on { background: rgba(201, 164, 74, 0.6); }
 body.touch #hint { display: none; }
+body.touch #compass { width: min(460px, 36vw); }
 body.touch #dash { right: calc(206px + var(--safe-r)); width: min(250px, 30vw); }
-body.touch #minimap { top: 62px; bottom: auto; left: calc(10px + var(--safe-l)); width: min(140px, 22vw); height: min(140px, 22vw); }
+body.touch #dash .lamps { flex-wrap: wrap; gap: 5px; }
+body.touch #dash .lamps span[data-tap] { pointer-events: auto; padding: 6px 9px; touch-action: none; }
+body.touch #minimap {
+  top: 62px; bottom: auto; left: calc(10px + var(--safe-l)); width: min(140px, 22vw); height: min(140px, 22vw);
+  z-index: 9; pointer-events: auto; touch-action: none;
+}
+/* The winch's and the drone's words go to the top, clear of the stick, the dash and the pedals. */
+body.touch #winch-help { top: 54px; bottom: auto; }
+body.touch #drone-help { top: 90px; bottom: auto; white-space: normal; width: max-content; max-width: 56vw; text-align: center; }

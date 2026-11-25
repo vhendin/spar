@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Phones: fullscreen and touch controls (this commit: step 2 of 4)
+### Phones: fullscreen and touch controls (this commit: step 3 of 4)
 
 - **Asked:** touch controls for phones, and fullscreen. Both Android and iPhone; a thumb stick
   to steer with tilt as a choice; every action on a button; fullscreen on the laptop too.
@@ -33,12 +33,30 @@ ones move to the bottom with the answer, so the reasoning stays findable.
     Settings → Touch controls: Automatic, Always or Never.
   - While they show, the gauges move left of the pedals and the minimap moves to the top left.
     The key hint line is hidden.
-- **Next:** the other buttons (winch, camera, 4×4, map, drone, lights); then tilt steering.
+- **Tried (step 2):** works very well. Suggested: a tap on the minimap for the map; the dash's
+  lamps (diff locks, low range…) as buttons; time of day can stay in the menu; the menu needs
+  fitting to a small screen.
+- **Step 3, the rest of the buttons** (following those suggestions instead of a 4×4 tray):
+  - Top right: camera view, back on the wheels, winch, drone.
+  - The lamps on the dash are buttons: LOW, CRAWL (next speed, then off), AIR (up to the
+    highest level, then down to the lowest), each DIFF on its own, LIGHTS (auto, on, off).
+  - The minimap is always shown with the touch controls (near, if hidden by choice), and a tap
+    opens the map; there one finger drags, two pinch to zoom, a tap picks a spot.
+  - Winch: while choosing, Hook on, Next and Cancel over the pedals (a drag aims); hooked, In
+    and Out held, and Unhook.
+  - Drone: the stick slides and climbs, the pedals go forward and back, a drag on the picture
+    turns it and tilts its camera; the vehicle's buttons go away meanwhile.
+  - The menu has Say something on a touch screen (no Enter key). Prompts, the winch's and the
+    drone's help name the buttons instead of keys, and sit at the top.
+- **Next:** tilt steering (step 4).
 - **Open:**
   - The stick: is the curve right for a thumb (1.5, as the gamepad's)? Should the steering
     come back to straight at once when the thumb lifts, as now, or ease back?
   - Pedals felt by height (0.3 at the foot, full from three quarters up), or just on and off?
   - Sizes and places: pedals 84 px wide, the stick 112 px across; the gauges made smaller.
+  - The lamps as buttons are small (about 26 px tall); big enough to hit?
+  - No touch way to the far minimap, to hide it, or back to the start (the menu has that).
+  - The menu on a small screen: fit it to a phone, as its own step after these?
   - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
     jump out to Safari? The manifest is fetched with the login cookie for that reason.
   - How a phone copes: is low smooth, and does the phone get hot?

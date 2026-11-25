@@ -3,6 +3,7 @@
 // lamps for the range, the differential locks, the headlights and the parking brake, and while
 // the winch is hooked on, its pull and the cable out.
 // Drawn once as SVG; each frame only turns the needles and switches lamps.
+// On a touch screen the lamps are buttons: a tap switches what they show.
 
 import { engineTorque, isElectric, peakPower, type VehicleDef } from '@spar/shared';
 import type { VehicleSim } from '../vehicle/sim';
@@ -80,6 +81,9 @@ export interface WinchGauge {
   length: number;
 }
 
+/** A lamp tapped on a touch screen: what to switch. */
+export type LampTap = { kind: 'range' | 'crawl' | 'ride' | 'lights' } | { kind: 'lock'; axle: number };
+
 export class Dashboard {
   readonly root: HTMLDivElement;
   private readonly svg: SVGSVGElement;
@@ -100,7 +104,7 @@ export class Dashboard {
   private loadShown = 0;
   private readonly winch: { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement };
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, private readonly tap: (what: LampTap) => void = () => {}) {
     this.root = document.createElement('div');
     this.root.id = 'dash';
     this.svg = el('svg', { viewBox: '0 0 360 180', class: 'dials' });
@@ -142,21 +146,29 @@ export class Dashboard {
     this.lamps?.range.parentElement?.remove();
     const row = document.createElement('div');
     row.className = 'lamps';
-    const lamp = (text: string, title: string): HTMLSpanElement => {
+    const lamp = (text: string, title: string, tap?: LampTap): HTMLSpanElement => {
       const s = document.createElement('span');
       s.textContent = text;
       s.title = title;
+      if (tap) {
+        s.dataset.tap = tap.kind;
+        s.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.tap(tap);
+        });
+      }
       row.append(s);
       return s;
     };
-    const range = lamp('LOW', 'Low range (L)');
+    const range = lamp('LOW', 'Low range (L)', { kind: 'range' });
     if (d.ranges.low === undefined) range.style.display = 'none';
-    const crawl = lamp('CRAWL', 'Crawl control in low range (X; Shift+X off)');
+    const crawl = lamp('CRAWL', 'Crawl control in low range (X; Shift+X off)', { kind: 'crawl' });
     if (!d.crawl) crawl.style.display = 'none';
-    const ride = lamp('AIR', 'Air suspension height (Z higher; Shift+Z lower)');
+    const ride = lamp('AIR', 'Air suspension height (Z higher; Shift+Z lower)', { kind: 'ride' });
     if (!def.chassis.airSuspension) ride.style.display = 'none';
-    const locks = def.axles.map((axle, a) => (axle.differential === 'lockable' ? lamp(`DIFF ${a + 1}`, `Differential lock, axle ${a + 1} (${a + 1})`) : null)).filter((s): s is HTMLSpanElement => s !== null);
-    const lights = lamp('LIGHTS', 'Headlights (H)');
+    const locks = def.axles.map((axle, a) => (axle.differential === 'lockable' ? lamp(`DIFF ${a + 1}`, `Differential lock, axle ${a + 1} (${a + 1})`, { kind: 'lock', axle: a }) : null)).filter((s): s is HTMLSpanElement => s !== null);
+    const lights = lamp('LIGHTS', 'Headlights (H)', { kind: 'lights' });
     const parked = lamp('P', 'Parking brake');
     parked.classList.add('brake');
     this.lamps = { range, crawl, ride, locks, lights, parked };

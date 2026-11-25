@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOUBLE_TAP_MS, DriveInput, type TouchDrive } from './input';
 import { PadControls } from './gamepad';
 
-function fakeTouch(): TouchDrive & { pressAt(ms: number): void } {
+function fakeTouch(): TouchDrive & { pressAt(ms: number): void; holding: Set<string> } {
   const presses: number[] = [];
+  const holding = new Set<string>();
   return {
-    shown: true, steer: null, throttle: 0, brake: 0, handbrake: false,
+    shown: true, steer: null, throttle: 0, brake: 0, handbrake: false, lift: 0, holding,
     takeHandbrakePresses: () => presses.splice(0),
     pressAt: (ms) => void presses.push(ms),
+    held: (a) => holding.has(a),
   };
 }
 
@@ -49,5 +51,26 @@ describe('driving from the touch controls', () => {
     touch.throttle = 0.5;
     input.read(1 / 60, 0);
     expect(input.park.parked).toBe(false);
+  });
+
+  it('flies the drone: the stick slides and climbs, the pedals go forward and back', () => {
+    const touch = fakeTouch();
+    const input = new DriveInput(new PadControls(), touch);
+    Object.assign(touch, { steer: 0.5, lift: -0.25, throttle: 0.8, brake: 0.2 });
+    const d = input.drone();
+    expect(d.strafe).toBeCloseTo(0.5);
+    expect(d.climb).toBeCloseTo(-0.25);
+    expect(d.forward).toBeCloseTo(0.6);
+    expect(d.turn).toBe(0);
+  });
+
+  it('winds the winch while In or Out is held', () => {
+    const touch = fakeTouch();
+    const input = new DriveInput(new PadControls(), touch);
+    expect(input.winch()).toEqual({ pull: false, slack: false });
+    touch.holding.add('winchIn');
+    expect(input.winch()).toEqual({ pull: true, slack: false });
+    touch.shown = false;
+    expect(input.winch()).toEqual({ pull: false, slack: false });
   });
 });

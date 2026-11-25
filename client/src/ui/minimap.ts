@@ -1,7 +1,8 @@
 // The minimap in the corner: the map around the vehicle, turned so ahead is up. N steps
 // through near, far and hidden; the choice is remembered on this computer. Held open (Tab),
 // it grows to a large map at the same scale, so it shows more around the vehicle rather
-// than the same in bigger print; hidden, it opens at the near scale.
+// than the same in bigger print; hidden, it opens at the near scale. On a touch screen it is
+// always there (near, if hidden) and a tap on it opens the map.
 
 import type { MapScreen, MapState } from './map';
 
@@ -21,12 +22,20 @@ export class Minimap {
   private big = false;
   /** The size it was last drawn at. */
   private drawn = 0;
+  /** Shown even when hidden by choice: the touch controls are on, and it is their way to the map. */
+  always = false;
 
-  constructor(parent: HTMLElement) {
+  constructor(parent: HTMLElement, tapped: () => void = () => {}) {
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'minimap';
     this.ctx = this.canvas.getContext('2d')!;
     parent.append(this.canvas);
+    // Only a touch screen lets pointers through to it (theme.css).
+    this.canvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      tapped();
+    });
     try {
       const saved = Number(localStorage.getItem(KEY));
       if (Number.isInteger(saved) && saved >= 0 && saved < RANGES.length) this.zoom = saved;
@@ -55,7 +64,7 @@ export class Minimap {
   }
 
   update(dt: number, map: MapScreen, state: MapState, show: boolean): void {
-    const chosen = RANGES[this.zoom]!;
+    const chosen = RANGES[this.zoom] || (this.always ? RANGES[0]! : 0);
     const visible = show && (chosen > 0 || this.big);
     this.canvas.style.display = visible ? 'block' : 'none';
     if (!visible) return;

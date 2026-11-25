@@ -21,7 +21,7 @@ import { driverEye } from './vehicle/body';
 import { Felling } from './vehicle/felling';
 import { GroundStore } from './vehicle/groundStore';
 import { DriveInput } from './vehicle/input';
-import { buttonName, PadControls } from './vehicle/gamepad';
+import { buttonName, PadControls, type PadAction } from './vehicle/gamepad';
 import { Obstacles } from './vehicle/obstacles';
 import { driveReadout } from './vehicle/overlay';
 import { VehicleSim } from './vehicle/sim';
@@ -336,7 +336,10 @@ async function start(): Promise<void> {
   // The own destination at the shared one's place is reached with it, and logged once, as shared.
   guide.onArrive = (d) => (shared && samePlace(shared.destination, d) ? (trips.begin(null), '') : arrive(d, 'own'));
   scene.add(guide.beacon, sharedGuide.beacon);
-  const minimap = new Minimap(document.body);
+  // On a touch screen a tap on the minimap opens the map.
+  const minimap = new Minimap(document.body, () => {
+    if (world && !paused && !starting && !flying) toggleMap();
+  });
   // The other drivers, and the chat with them.
   const others = new Others(scene, Object.values(VEHICLES));
   others.audio = audio;
@@ -470,6 +473,12 @@ async function start(): Promise<void> {
     drowned: 'Water in the engine · winch out with <kbd>E</kbd>; it starts again a few seconds after leaving the water',
     shorted: 'Water in the electrics · winch out with <kbd>E</kbd>; the motors come back a few seconds after leaving the water',
   };
+  /** The same with the touch controls showing: their buttons instead of keys. */
+  const TOUCH_PROMPTS: typeof PROMPTS = {
+    overturned: 'Overturned · tap the round arrow, top right, to get back on the wheels',
+    drowned: 'Water in the engine · winch out (the hook, top right); it starts again a few seconds after leaving the water',
+    shorted: 'Water in the electrics · winch out (the hook, top right); the motors come back a few seconds after leaving the water',
+  };
   let prompted = '';
   document.body.append(prompt);
   const startRoot = document.createElement('div');
@@ -477,7 +486,24 @@ async function start(): Promise<void> {
   document.body.append(startRoot);
   // The vehicle menu, over the start screen or the menu.
   const garage = new Garage(document.body, Object.values(VEHICLES).sort((a, b) => a.title.localeCompare(b.title)), params.get('renderer') === 'webgl');
-  const dash = new Dashboard(document.body);
+  // On a touch screen the dash's lamps are its buttons for the range, crawl, air, locks and lights.
+  /** Which way a tap on AIR goes: up to the highest level, then down to the lowest, and so on. */
+  let rideDown = false;
+  const dash = new Dashboard(document.body, (lamp) => {
+    const w = world;
+    if (!w || paused || starting || flying || drone.flown || w.unplaced) return;
+    if (lamp.kind === 'range') toggleRange(w);
+    else if (lamp.kind === 'crawl') crawlKey(w, false);
+    else if (lamp.kind === 'lights') lamps = lamps === null ? true : lamps ? false : null;
+    else if (lamp.kind === 'lock') toggleLock(w, lamp.axle);
+    else {
+      const air = w.sim.def.chassis.airSuspension;
+      if (!air) return;
+      if (w.sim.ride >= air.levels.length - 1) rideDown = true;
+      else if (w.sim.ride <= 0) rideDown = false;
+      rideKey(w, rideDown);
+    }
+  });
   dash.visible = false;
 
   // The scouting drone, launched with Q from the vehicle's roof while it stands still. While it
@@ -542,6 +568,28 @@ async function start(): Promise<void> {
     drone.look(-e.movementX * 0.0022);
     tiltDrone(e.movementY * 0.0022);
   });
+  // On a touch screen a finger dragged over the picture turns the drone and tilts its camera.
+  let droneFinger: { id: number; x: number; y: number } | null = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || droneFinger || !droneLooking()) return;
+    droneFinger = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const f = droneFinger;
+    if (!f || f.id !== e.pointerId) return;
+    if (droneLooking()) {
+      drone.look(-(e.clientX - f.x) * 0.004);
+      tiltDrone((e.clientY - f.y) * 0.004);
+    }
+    f.x = e.clientX;
+    f.y = e.clientY;
+  });
+  const droneFingerUp = (e: PointerEvent): void => {
+    if (droneFinger?.id === e.pointerId) droneFinger = null;
+  };
+  canvas.addEventListener('pointerup', droneFingerUp);
+  canvas.addEventListener('pointercancel', droneFingerUp);
   const roofLocal = new THREE.Vector3();
   const roofWorld = new THREE.Vector3();
   const vehicleForward = new THREE.Vector3();
@@ -585,7 +633,9 @@ async function start(): Promise<void> {
         + `<span class="${warn === 'range' || drone.reason === 'range' ? 'warn' : ''}">${formatDistance(drone.distance(roof))} away</span>`
         + `<span class="${warn === 'battery' || drone.reason === 'battery' ? 'warn' : ''}">battery ${clock}</span>`;
       if (warn) readout += `<span class="warn">${warn === 'range' ? 'near the end of its range' : 'battery low soon'}</span>`;
-      help = pad
+      help = touch.shown
+        ? 'Drone · the stick slides and climbs · pedals forward and back · drag to look round · the drone button brings it home'
+        : pad
         ? `Drone · triggers forward and back · left stick sideways and climb · right stick looks round · <kbd>${key}</kbd> back to driving`
         : `Drone · <kbd>W</kbd> <kbd>S</kbd> forward and back · <kbd>A</kbd> <kbd>D</kbd> sideways · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · ${document.pointerLockElement === canvas ? 'mouse looks round' : 'click to look round with the mouse'} · <kbd>${key}</kbd> back to driving (it flies home)`;
     } else if (!paused && !starting && now < droneNote.until) help = droneNote.text;
@@ -1159,6 +1209,10 @@ async function start(): Promise<void> {
         resume();
       },
       credits: () => showCredits(true),
+      chat: () => {
+        resume();
+        chat.open();
+      },
       logbook: () => ({
         title: world?.index.title ?? '',
         entries: trips.entries.filter((e) => e.region === world?.index.name),
@@ -1690,12 +1744,16 @@ async function start(): Promise<void> {
       if (w.winch.state === 'choosing') {
         const picked = w.winch.pickedAnchor;
         const on = picked?.kind === 'vehicle' && picked.vehicle ? `${nameOf(picked.vehicle)}'s ${(picked.local?.[2] ?? 0) >= 0 ? 'front' : 'rear'} · ` : '';
-        html = w.winch.choices.length
+        html = touch.shown
+          ? w.winch.choices.length ? `Winch · ${on}drag to aim, or Next · Hook on` : 'Nothing to hook the winch to within reach ahead'
+          : w.winch.choices.length
           ? `Winch · ${on}${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('K', 'winchOut')} cancel`
           : `Nothing to hook the winch to within reach ahead · ${key('K', 'winchOut')} cancel`;
       } else if (w.winch.state === 'hooked') {
         const on = towing.hookedTo(towing.me);
-        html = `Winch${on ? ` on ${nameOf(on)}` : ''} · hold ${key('I', 'winchIn')} to winch in · ${key('K', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
+        html = touch.shown
+          ? `Winch${on ? ` on ${nameOf(on)}` : ''} · hold In to winch in, Out to pay out`
+          : `Winch${on ? ` on ${nameOf(on)}` : ''} · hold ${key('I', 'winchIn')} to winch in · ${key('K', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
       } else {
         // Another driver's cable on ours.
         const by = towing.lines.find((c) => c.to === towing.me)?.from;
@@ -1723,7 +1781,13 @@ async function start(): Promise<void> {
     gamepad.poll();
     // The touch controls show while driving, if touch is in use; a gamepad button puts them away.
     if (gamepad.pressed) touch.keysUsed();
-    touch.poll(!!world && !paused && !starting && !flying && !world.map.open && !garage.open);
+    const ws = world?.winch.state;
+    touch.poll(!!world && !paused && !starting && !flying && !world.map.open && !garage.open, {
+      drone: drone.flown,
+      winch: ws === 'choosing' ? 'choosing' : ws === 'hooked' || ws === 'carrying' ? 'hooked' : 'idle',
+    });
+    minimap.always = touch.shown;
+    const tapped = (a: PadAction): boolean => gamepad.tapped(a) || touch.tapped(a);
     const menuTapped = gamepad.tapped('menu') || touch.tapped('menu');
     if (menuTapped && garage.open) garage.choose();
     else if (menuTapped && world) {
@@ -1734,21 +1798,22 @@ async function start(): Promise<void> {
     }
     const w0 = world;
     if (w0 && !paused && !starting) {
-      if (gamepad.tapped('map')) toggleMap();
-      if (gamepad.tapped('minimap')) minimap.cycle();
-      if (!flying && !w0.map.open && !w0.unplaced && gamepad.tapped('drone')) droneKey(w0);
+      if (tapped('map')) toggleMap();
+      if (tapped('minimap')) minimap.cycle();
+      if (!flying && !w0.map.open && !w0.unplaced && tapped('drone')) droneKey(w0);
       if (!flying && !w0.map.open && !drone.flown) {
-        if (gamepad.tapped('right')) resetVehicle(w0);
-        if (gamepad.tapped('toStart')) toStart(w0);
-        if (gamepad.tapped('camera')) chase.cycle();
-        if (gamepad.tapped('lights')) lamps = lamps === null ? true : lamps ? false : null;
-        if (gamepad.tapped('range')) toggleRange(w0);
-        if (gamepad.tapped('crawl')) crawlKey(w0, false);
-        if (gamepad.tapped('rideUp')) rideKey(w0, false);
-        if (gamepad.tapped('rideDown')) rideKey(w0, true);
-        if (gamepad.tapped('winch') && !w0.unplaced) winchKey(w0);
-        if (gamepad.tapped('winchOut') && w0.winch.state === 'choosing') w0.winch.cancel();
-        if (gamepad.tapped('locks')) {
+        if (tapped('right')) resetVehicle(w0);
+        if (tapped('toStart')) toStart(w0);
+        if (tapped('camera')) chase.cycle();
+        if (tapped('lights')) lamps = lamps === null ? true : lamps ? false : null;
+        if (tapped('range')) toggleRange(w0);
+        if (tapped('crawl')) crawlKey(w0, false);
+        if (tapped('rideUp')) rideKey(w0, false);
+        if (tapped('rideDown')) rideKey(w0, true);
+        if (tapped('winch') && !w0.unplaced) winchKey(w0);
+        if (tapped('winchOut') && w0.winch.state === 'choosing') w0.winch.cancel();
+        if (touch.tapped('winchNext') && w0.winch.state === 'choosing') w0.winch.next();
+        if (tapped('locks')) {
           // All lockable axles together: lock them all, or free them all if they already are.
           const lockable = w0.sim.def.axles.map((a, i) => (a.differential === 'lockable' ? i : -1)).filter((i) => i >= 0);
           const lock = lockable.some((i) => !w0.sim.locks[i]);
@@ -2072,8 +2137,9 @@ async function start(): Promise<void> {
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;
       overturned = lying && !paused ? overturned + dt : lying ? overturned : 0;
       const say = paused || w.map.open || w.unplaced || flying ? '' : overturned > 1.5 ? 'overturned' : w.sim.drowned ? (w.sim.def.drivetrain.motor === 'electric' ? 'shorted' : 'drowned') : '';
-      if (say && say !== prompted) prompt.innerHTML = PROMPTS[say];
-      if (say) prompted = say;
+      const sayKey = say && `${say}${touch.shown ? ' touch' : ''}`;
+      if (say && sayKey !== prompted) prompt.innerHTML = (touch.shown ? TOUCH_PROMPTS : PROMPTS)[say];
+      if (say) prompted = sayKey;
       prompt.style.opacity = say ? '1' : '0';
 
       dash.visible = !flying && !drone.flown && !w.unplaced;

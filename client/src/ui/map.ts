@@ -148,34 +148,70 @@ export class MapScreen {
 
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const [x, z] = this.toWorld(e.offsetX, e.offsetY);
-      this.scale = Math.min(MAX_ZOOM, Math.max(this.fit() * 0.8, this.scale * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
-      // Keep the point under the cursor where it is.
-      const [x2, z2] = this.toWorld(e.offsetX, e.offsetY);
-      this.cx += x - x2;
-      this.cz += z - z2;
+      this.zoomAt(e.offsetX, e.offsetY, e.deltaY < 0 ? 1.2 : 1 / 1.2);
     }, { passive: false });
+    // One finger (or the mouse) drags, a tap or click without moving picks a spot; two fingers
+    // pinch to zoom round the point between them.
+    const fingers = new Map<number, { x: number; y: number }>();
+    let spread = 0;
+    const pair = (): { x: number; y: number; d: number } | null => {
+      const [a, b] = [...fingers.values()];
+      return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) } : null;
+    };
     this.canvas.addEventListener('pointerdown', (e) => {
       this.canvas.setPointerCapture(e.pointerId);
-      this.drag = { x: e.offsetX, y: e.offsetY, cx: this.cx, cz: this.cz, moved: false };
+      fingers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (fingers.size === 1) this.drag = { x: e.offsetX, y: e.offsetY, cx: this.cx, cz: this.cz, moved: false };
+      else {
+        // A pinch is not a tap, and the drag starts again when one finger is left.
+        this.drag = null;
+        spread = pair()?.d ?? 0;
+      }
     });
     this.canvas.addEventListener('pointermove', (e) => {
+      const finger = fingers.get(e.pointerId);
+      if (finger) {
+        finger.x = e.offsetX;
+        finger.y = e.offsetY;
+      }
+      if (fingers.size >= 2) {
+        const p = pair();
+        if (p && spread > 0 && p.d > 0) this.zoomAt(p.x, p.y, p.d / spread);
+        spread = p?.d ?? 0;
+        return;
+      }
       const [x, z] = this.toWorld(e.offsetX, e.offsetY);
-      this.hover = { x, z };
+      if (e.pointerType === 'mouse') this.hover = { x, z };
       const d = this.drag;
       if (!d) return;
-      if (Math.hypot(e.offsetX - d.x, e.offsetY - d.y) > 4) d.moved = true;
+      if (Math.hypot(e.offsetX - d.x, e.offsetY - d.y) > (e.pointerType === 'touch' ? 10 : 4)) d.moved = true;
       if (d.moved) {
         this.cx = d.cx - (e.offsetX - d.x) / this.scale;
         this.cz = d.cz - (e.offsetY - d.y) / this.scale;
       }
     });
     this.canvas.addEventListener('pointerleave', () => (this.hover = null));
-    this.canvas.addEventListener('pointerup', (e) => {
+    const up = (e: PointerEvent): void => {
+      const was = fingers.size;
+      fingers.delete(e.pointerId);
       const d = this.drag;
       this.drag = null;
-      if (d && !d.moved) this.click(e.offsetX, e.offsetY);
-    });
+      if (d && !d.moved && was === 1 && e.type === 'pointerup') this.click(e.offsetX, e.offsetY);
+      // The finger left after a pinch drags on from where it is.
+      const [rest] = [...fingers.values()];
+      if (rest && fingers.size === 1) this.drag = { x: rest.x, y: rest.y, cx: this.cx, cz: this.cz, moved: true };
+    };
+    this.canvas.addEventListener('pointerup', up);
+    this.canvas.addEventListener('pointercancel', up);
+  }
+
+  /** Zooms by `factor`, keeping the point under (px, py) where it is. */
+  private zoomAt(px: number, py: number, factor: number): void {
+    const [x, z] = this.toWorld(px, py);
+    this.scale = Math.min(MAX_ZOOM, Math.max(this.fit() * 0.8, this.scale * factor));
+    const [x2, z2] = this.toWorld(px, py);
+    this.cx += x - x2;
+    this.cz += z - z2;
   }
 
   get open(): boolean {
@@ -685,7 +721,9 @@ export class MapScreen {
     const foot = add('div', '', box, 'foot');
     button('Centre on vehicle', () => this.centre(), foot);
     button('Close', () => this.actions.close(), foot);
-    add('p', 'Drag to move, wheel to zoom. Click a spot to drive there; click the pin again to clear it. M or Esc closes.', box, 'hint');
+    add('p', matchMedia('(pointer: coarse)').matches
+      ? 'Drag to move, pinch to zoom. Tap a spot to drive there; tap the pin again to clear it.'
+      : 'Drag to move, wheel to zoom. Click a spot to drive there; click the pin again to clear it. M or Esc closes.', box, 'hint');
   }
 
   /** Whether open water covers a spot, by the map's land cover. */
