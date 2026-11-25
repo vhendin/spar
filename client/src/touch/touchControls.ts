@@ -1,6 +1,6 @@
 // Touch controls for phones and tablets, over the driving: a thumb stick that appears wherever
-// the left thumb lands (it steers), pedals at the right edge (the higher the finger, the more
-// pedal), a handbrake beside them (a double tap when stopped parks, as with the key) and a
+// the left thumb lands (it steers), two small pedals at the right edge (the higher the finger,
+// the more pedal), a handbrake lever over the brake (a double tap when stopped parks, as with the key) and a
 // pause button. Along the top right: camera view, back on the wheels, winch and drone. Over the
 // pedals, while the winch is in use: hook on, next and cancel while choosing; In and Out (held)
 // and unhook while hooked. Dragging anywhere else on the picture looks round, and two fingers
@@ -36,6 +36,7 @@ const ICONS = {
   right: '<path d="M18.5 9A7.5 7.5 0 1 0 19.5 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19.5 4v5.5H14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   winch: '<path d="M12 3v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 11c-3.5 0-4.5 2.5-4.5 4.5a4.5 4.5 0 0 0 9 0" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16.5 15.5l1.6-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   drone: '<rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor"/><path d="M10 10 6.5 6.5M14 10l3.5-3.5M10 14l-3.5 3.5M14 14l3.5 3.5" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="6" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="18" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  handbrake: '<path d="M7 19.5 16.5 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="7" cy="19.5" r="2" fill="currentColor"/><path d="M14.8 8.8 18.2 4" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>',
   pause: '<rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/>',
 };
 
@@ -108,7 +109,9 @@ export class TouchControls implements TouchDrive {
 
     // The pedals and the handbrake, at the right edge.
     const pedals = this.el('div', 'pedals');
-    const hand = this.el('div', 'handbrake', pedals, 'Handbrake');
+    const hand = this.el('div', 'handbrake', pedals);
+    hand.setAttribute('aria-label', 'Handbrake');
+    hand.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22">${ICONS.handbrake}</svg>`;
     this.track(hand, {
       down: (e) => {
         this.handbrake = true;

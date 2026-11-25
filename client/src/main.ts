@@ -1787,6 +1787,7 @@ async function start(): Promise<void> {
       winch: ws === 'choosing' ? 'choosing' : ws === 'hooked' || ws === 'carrying' ? 'hooked' : 'idle',
     });
     minimap.always = touch.shown;
+    chase.raise = touch.shown ? 0.12 : 0;
     const tapped = (a: PadAction): boolean => gamepad.tapped(a) || touch.tapped(a);
     const menuTapped = gamepad.tapped('menu') || touch.tapped('menu');
     if (menuTapped && garage.open) garage.choose();

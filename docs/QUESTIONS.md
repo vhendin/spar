@@ -60,6 +60,12 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
     jump out to Safari? The manifest is fetched with the login cookie for that reason.
   - How a phone copes: is low smooth, and does the phone get hot?
+  - Step 3 feedback: the gauges, pedals and minimap hid the car. Done (this commit, before
+    tilt): the lamps in one row low in the middle (34 px tall), a small digital readout
+    above them (gear, km/h, rev bar with the red zone), pedals 66×84 and 54×132 that look
+    like pedals (ribbed, leaning back), still felt by height; the handbrake a round lever
+    button over the brake; minimap 110 px; top buttons 40 px; the chase camera a little
+    higher on touch. Open: is the shorter pedal still easy to feel? Is the car clear now?
 - **To try:** P on the laptop; on a phone at the public address, the corner button (Android),
   or Add to Home Screen (iPhone).
 

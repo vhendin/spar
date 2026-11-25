@@ -30,6 +30,8 @@ export class ChaseCamera {
   mode: CameraMode = 'chase';
   /** Metres from the vehicle; the mouse wheel changes it. */
   distance = 9;
+  /** Extra height behind, as a part of the distance: on a touch screen the vehicle sits higher in the picture, above the controls. */
+  raise = 0;
   /** The point the camera keeps in view: the middle of the vehicle. */
   readonly target = new THREE.Vector3();
 
@@ -177,7 +179,7 @@ export class ChaseCamera {
     }
 
     const pivot = this.aim.copy(vehicle.position).addScaledVector(UP, 1.5);
-    const rise = 0.1 + this.distance * 0.28;
+    const rise = 0.1 + this.distance * (0.28 + this.raise);
     const reach = Math.hypot(this.distance, rise);
     if (this.seedOrbit) {
       // Start the orbit from wherever the camera is now.

@@ -3,7 +3,8 @@
 // lamps for the range, the differential locks, the headlights and the parking brake, and while
 // the winch is hooked on, its pull and the cable out.
 // Drawn once as SVG; each frame only turns the needles and switches lamps.
-// On a touch screen the lamps are buttons: a tap switches what they show.
+// On a touch screen the lamps are buttons (a tap switches what they show), and the dials give
+// way to a small digital readout: gear, speed and a rev bar.
 
 import { engineTorque, isElectric, peakPower, type VehicleDef } from '@spar/shared';
 import type { VehicleSim } from '../vehicle/sim';
@@ -103,12 +104,18 @@ export class Dashboard {
   private speedShown = 0;
   private loadShown = 0;
   private readonly winch: { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement };
+  /** The small digital readout shown instead of the dials on a touch screen. */
+  private readonly readout: { gear: HTMLSpanElement; speed: HTMLSpanElement; fill: HTMLDivElement; red: HTMLDivElement };
 
   constructor(parent: HTMLElement, private readonly tap: (what: LampTap) => void = () => {}) {
     this.root = document.createElement('div');
     this.root.id = 'dash';
+    const readout = document.createElement('div');
+    readout.className = 'readout';
+    readout.innerHTML = '<span class="gear"></span><span class="speed"></span><span class="unit">km/h</span><div class="rev"><div class="red"></div><div class="fill"></div></div>';
+    this.readout = { gear: readout.querySelector('.gear')!, speed: readout.querySelector('.speed')!, fill: readout.querySelector('.fill')!, red: readout.querySelector('.red')! };
     this.svg = el('svg', { viewBox: '0 0 360 180', class: 'dials' });
-    this.root.append(this.svg);
+    this.root.append(readout, this.svg);
     const winch = document.createElement('div');
     winch.className = 'winch';
     winch.innerHTML = '<span class="label">WINCH</span><div class="bar"><div class="fill"></div></div><span class="value"></span>';
@@ -134,6 +141,8 @@ export class Dashboard {
       this.tach = dial(this.svg, 90, this.tachMax, 1000, 250, (v) => String(v / 1000), d.redline);
       el('text', { x: 90, y: 136, class: 'unit' }, this.svg).textContent = '×1000 rpm';
     }
+    // The readout's bar: red from the redline up (none for a motor's power).
+    this.readout.red.style.left = this.powerMax > 0 ? '100%' : `${((d.redline / this.tachMax) * 100).toFixed(1)}%`;
     this.gear = el('text', { x: 90, y: 104, class: 'gear' }, this.svg);
     this.range = el('text', { x: 90, y: 62, class: 'range' }, this.svg);
 
@@ -195,6 +204,11 @@ export class Dashboard {
     this.range.textContent = d.range === 'low' ? 'LOW' : '';
     const digits = kmh.toFixed(0);
     if (this.speed.textContent !== digits) this.speed.textContent = digits;
+    const r = this.readout;
+    if (r.gear.textContent !== gear) r.gear.textContent = gear;
+    r.gear.classList.toggle('shifting', d.shifting > 0);
+    if (r.speed.textContent !== digits) r.speed.textContent = digits;
+    r.fill.style.width = `${(this.rpmShown * 100).toFixed(1)}%`;
 
     const l = this.lamps!;
     l.range.classList.toggle('on', d.range === 'low');

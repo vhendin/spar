@@ -207,6 +207,18 @@ kbd {
 #dash .winch .fill { height: 100%; width: 0; background: var(--mustard); }
 #dash .winch.stall .fill { background: var(--falu); }
 #dash .winch .value { min-width: 78px; text-align: right; font-variant-numeric: tabular-nums; letter-spacing: 0; font-size: 11px; }
+/* The digital readout, shown instead of the dials on a touch screen. */
+#dash .readout {
+  display: none; grid-template-columns: auto auto auto; align-items: baseline; column-gap: 6px; row-gap: 4px;
+  padding: 3px 12px 6px; border-radius: 12px; background: var(--glass); border: 1px solid var(--glass-rule);
+}
+#dash .readout .gear { color: var(--birch); font: 22px/1 var(--serif); min-width: 14px; text-align: center; }
+#dash .readout .gear.shifting { color: var(--fog); opacity: 0.6; }
+#dash .readout .speed { color: var(--birch); font: 600 20px/1 var(--sans); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+#dash .readout .unit { color: var(--fog); font: 500 10px/1 var(--sans); letter-spacing: 0.06em; }
+#dash .readout .rev { grid-column: 1 / -1; position: relative; height: 4px; min-width: 96px; border-radius: 2px; background: rgba(236, 235, 230, 0.14); overflow: hidden; }
+#dash .readout .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--mustard); }
+#dash .readout .red { position: absolute; top: 0; bottom: 0; right: 0; background: var(--falu); opacity: 0.7; }
 
 #minimap {
   position: fixed; left: calc(16px + var(--safe-l)); bottom: max(16px, var(--safe-b)); width: min(190px, 30vw); height: min(190px, 30vw); display: none; z-index: 5;
@@ -502,29 +514,36 @@ kbd {
 }
 #touch .pedals {
   position: absolute; right: calc(14px + var(--safe-r)); bottom: max(14px, var(--safe-b)); pointer-events: none;
-  display: grid; grid-template-columns: 84px 84px; grid-template-rows: 56px 150px; gap: 10px;
+  display: grid; grid-template-columns: 66px 54px; grid-template-rows: 40px 84px; gap: 8px; align-items: end;
 }
-#touch .pedals > div {
-  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; box-sizing: border-box;
-  font: 600 10px/1 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--on-glass);
-  background: var(--glass); border: 1px solid var(--glass-rule); border-radius: 14px; backdrop-filter: blur(4px);
+/* Pedals that look like pedals: ribbed rubber, leaning back a little (narrower at the top). */
+#touch .pedals > .pedal {
+  height: 100%; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 7px; box-sizing: border-box;
+  font: 600 9px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--on-glass);
+  background: repeating-linear-gradient(to bottom, rgba(236, 235, 230, 0.16) 0 3px, transparent 3px 10px) 0 6px / 100% calc(100% - 26px) no-repeat, var(--glass);
+  border: 1px solid var(--glass-rule); border-radius: 9px 9px 14px 14px; backdrop-filter: blur(4px);
+  transform: perspective(260px) rotateX(16deg); transform-origin: 50% 100%;
 }
-#touch .pedals > div.on { background: rgba(201, 164, 74, 0.6); }
-#touch .handbrake { grid-column: 1; grid-row: 1; align-items: center !important; padding-bottom: 0 !important; }
+#touch .pedals > .pedal.on { background-color: rgba(201, 164, 74, 0.6); }
+#touch .handbrake {
+  grid-column: 1; grid-row: 1; justify-self: center; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+  color: var(--on-glass); background: var(--glass); border: 1px solid var(--glass-rule); border-radius: 50%; backdrop-filter: blur(4px);
+}
+#touch .handbrake.on { background: rgba(201, 164, 74, 0.6); }
 #touch .brake { grid-column: 1; grid-row: 2; }
 #touch .throttle { grid-column: 2; grid-row: 1 / 3; }
 #touch .round {
-  position: absolute; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center;
+  position: absolute; width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center;
   color: var(--on-glass); background: var(--glass); border: 1px solid var(--glass-rule); border-radius: 50%; backdrop-filter: blur(4px);
 }
 #touch .round.on { background: rgba(201, 164, 74, 0.6); }
 #touch .pause { top: 10px; left: calc(10px + var(--safe-l)); }
 #touch .actions { position: absolute; top: 10px; right: calc(10px + var(--safe-r)); display: flex; gap: 8px; pointer-events: none; }
-#touch .actions .round { position: static; width: 46px; height: 46px; pointer-events: auto; touch-action: none; }
+#touch .actions .round { position: static; width: 40px; height: 40px; pointer-events: auto; touch-action: none; }
 #touch[data-mode="drone"] .vehicle, #touch[data-mode="drone"] .winch-row { display: none; }
 #touch[data-mode="drone"] .handbrake { visibility: hidden; }
 #touch .winch-row {
-  position: absolute; right: calc(14px + var(--safe-r)); bottom: calc(max(14px, var(--safe-b)) + 226px);
+  position: absolute; right: calc(14px + var(--safe-r)); bottom: calc(max(14px, var(--safe-b)) + 144px);
   display: none; gap: 8px; pointer-events: none;
 }
 #touch[data-winch="choosing"] .winch-row, #touch[data-winch="hooked"] .winch-row { display: flex; }
@@ -537,12 +556,22 @@ kbd {
 #touch .winch-row .hold { min-width: 72px; }
 #touch .winch-row button.on { background: rgba(201, 164, 74, 0.6); }
 body.touch #hint { display: none; }
-body.touch #compass { width: min(460px, 36vw); }
-body.touch #dash { right: calc(206px + var(--safe-r)); width: min(250px, 30vw); }
-body.touch #dash .lamps { flex-wrap: wrap; gap: 5px; }
-body.touch #dash .lamps span[data-tap] { pointer-events: auto; padding: 6px 9px; touch-action: none; }
+body.touch #compass { width: min(420px, 34vw); }
+/* The instruments: a small readout over one row of lamp buttons, low in the middle, clear of
+   the car, the stick and the pedals. */
+body.touch #dash {
+  left: 50%; right: auto; transform: translateX(-50%); bottom: max(8px, var(--safe-b)); z-index: 9;
+  width: max-content; max-width: calc(100vw - 2 * (180px + var(--safe-r)));
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+body.touch #dash svg { display: none; }
+body.touch #dash .readout { display: grid; order: 0; }
+body.touch #dash .winch { order: 1; width: 230px; margin: 0; }
+body.touch #dash .lamps { order: 2; flex-wrap: wrap; gap: 6px; margin: 0; }
+body.touch #dash .lamps span { padding: 8px 11px; font-size: 11px; }
+body.touch #dash .lamps span[data-tap] { pointer-events: auto; touch-action: none; }
 body.touch #minimap {
-  top: 62px; bottom: auto; left: calc(10px + var(--safe-l)); width: min(140px, 22vw); height: min(140px, 22vw);
+  top: 58px; bottom: auto; left: calc(10px + var(--safe-l)); width: min(110px, 18vw); height: min(110px, 18vw);
   z-index: 9; pointer-events: auto; touch-action: none;
 }
 /* The winch's and the drone's words go to the top, clear of the stick, the dash and the pedals. */
