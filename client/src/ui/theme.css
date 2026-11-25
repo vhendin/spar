@@ -43,6 +43,8 @@
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
+  /* What a centred panel may be wide: the window less a margin and the safe area. */
+  --room: calc(100vw - 32px - var(--safe-l) - var(--safe-r));
 }
 
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night); }
@@ -261,6 +263,13 @@ kbd {
 }
 #menu button.link:hover, #start button.link:hover, #map button.link:hover { background: none; color: var(--ink); }
 #areas button:disabled { opacity: 0.45; cursor: default; }
+/* The × in a panel's top right corner (ui/dom.ts), staying in view while the panel scrolls. */
+:is(#menu, #start, #areas, #map, #world, #garage, #credits) button.close {
+  float: right; position: sticky; top: 0; z-index: 1; width: 34px; height: 34px; margin: -10px -14px 0 8px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-soft); background: var(--paper); border: 1px solid transparent; border-radius: 50%; cursor: pointer;
+}
+:is(#menu, #start, #areas, #map, #world, #garage, #credits) button.close:hover { color: var(--ink); background: var(--wash-hover); border-color: transparent; }
 #menu input, #start input.name, #areas input.name, #map input.start-name {
   box-sizing: border-box; padding: 7px 10px; font: inherit; color: var(--ink);
   background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(47, 59, 51, 0.24); border-radius: var(--radius);
@@ -273,15 +282,15 @@ kbd {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10;
   background: rgba(28, 34, 48, 0.35); backdrop-filter: blur(4px);
 }
-#menu .box { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; padding: 26px 30px; }
-#menu h2:not(:first-child) { margin-top: 26px; }
+#menu .box { width: min(440px, var(--room)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 26px 30px; }
+#menu h2:not(:first-of-type) { margin-top: 26px; }
 #menu .sub { margin: 6px 0 18px; }
 #menu .list { display: flex; flex-direction: column; gap: 6px; }
 #menu .list button { padding: 11px 16px; font-size: 15px; text-align: left; }
 #menu .label { margin: 16px 0 6px; }
 #menu .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 #menu .foot { margin-top: 20px; }
-#menu .box:has(table.log) { width: min(640px, calc(100vw - 32px)); }
+#menu .box:has(table.log) { width: min(640px, var(--room)); }
 #menu table.log { width: 100%; border-collapse: collapse; font-size: 13px; }
 #menu table.log th { text-align: left; font: 500 11px/1.4 var(--sans); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); padding: 4px 6px 6px 0; }
 #menu table.log td { padding: 6px 6px 6px 0; border-top: 1px solid var(--rule); vertical-align: top; }
@@ -302,14 +311,14 @@ kbd {
   position: fixed; inset: 0; display: none; z-index: 30; cursor: pointer; align-items: center; justify-content: center;
   background: rgba(28, 34, 48, 0.45); backdrop-filter: blur(4px);
 }
-#credits > div { max-width: 640px; max-height: calc(100vh - 32px); overflow-y: auto; padding: 30px 36px; font-size: 14px; line-height: 1.6; }
+#credits > div { max-width: min(640px, var(--room)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 30px 36px; font-size: 14px; line-height: 1.6; }
 #credits h1 { font-size: 52px; margin-bottom: 8px; }
 #credits h2 { margin: 22px 0 6px; }
 #credits ul { margin: 0; padding-left: 18px; }
 #credits p.hint { margin-top: 22px; font-size: 13px; }
 
 /* Time and weather (T) */
-#world { position: fixed; bottom: max(10px, var(--safe-b)); right: calc(10px + var(--safe-r)); display: none; width: 340px; z-index: 20; padding: 16px 20px 10px; font-size: 13px; }
+#world { position: fixed; bottom: max(10px, var(--safe-b)); right: calc(10px + var(--safe-r)); display: none; width: 340px; max-height: calc(100dvh - 20px); overflow-y: auto; box-sizing: border-box; z-index: 20; padding: 16px 20px 10px; font-size: 13px; }
 #world h2 { font-size: 26px; margin-bottom: 4px; }
 #world .label { margin: 12px 0 5px; }
 #world .row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
@@ -323,7 +332,7 @@ kbd {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 12;
   background: linear-gradient(90deg, rgba(28, 34, 48, 0.45), rgba(28, 34, 48, 0.05));
 }
-#start .box { width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; padding: 30px 34px 26px; }
+#start .box { width: min(780px, var(--room)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 30px 34px 26px; }
 #start h1 { font-size: 88px; }
 #start .eyebrow { margin-bottom: 4px; }
 #start .sub { margin: 10px 0 22px; max-width: 30em; font: 22px/1.25 var(--serif); color: var(--ink); }
@@ -360,7 +369,7 @@ kbd {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 13;
   background: rgba(28, 34, 48, 0.45);
 }
-#areas .box { display: flex; flex-direction: column; width: min(1100px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px)); padding: 22px 26px; }
+#areas .box { display: flex; flex-direction: column; width: min(1100px, var(--room)); height: min(720px, calc(100dvh - 32px)); padding: 22px 26px; }
 #areas h2 { margin: 0 0 12px; }
 #areas .body { flex: 1; display: flex; gap: 20px; min-height: 0; }
 #areas .map { flex: 1; min-width: 0; border-radius: var(--radius); }
@@ -457,7 +466,7 @@ kbd {
   background: rgba(28, 34, 48, 0.45); backdrop-filter: blur(4px);
 }
 #garage .box {
-  box-sizing: border-box; width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; padding: 20px 28px 18px;
+  box-sizing: border-box; width: min(980px, var(--room)); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 20px 28px 18px;
   color: var(--ink); background: var(--paper); border: 1px solid rgba(47, 59, 51, 0.12); border-radius: 10px;
   box-shadow: 0 18px 50px rgba(28, 34, 48, 0.35); font: 14px/1.45 var(--sans);
 }
@@ -476,7 +485,7 @@ kbd {
 #garage .columns { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-start; }
 #garage .column { flex: 1 1 340px; min-width: 0; }
 #garage .columns { user-select: none; }
-#garage canvas.stage { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: calc(100vh - 230px); object-fit: contain; border-radius: 8px; cursor: grab; touch-action: none; background: #9fa497; }
+#garage canvas.stage { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: calc(100dvh - 230px); object-fit: contain; border-radius: 8px; cursor: grab; touch-action: none; background: #9fa497; }
 #garage canvas.stage:active { cursor: grabbing; }
 #garage .title { margin-top: 10px; font: 28px/1.1 var(--serif); color: var(--spruce); }
 #garage .detail { color: var(--ink-soft); font-size: 13px; }
@@ -579,3 +588,43 @@ body.touch #minimap {
 /* The winch's and the drone's words go to the top, clear of the stick, the dash and the pedals. */
 body.touch #winch-help { top: 54px; bottom: auto; }
 body.touch #drone-help { top: 90px; bottom: auto; white-space: normal; width: max-content; max-width: 56vw; text-align: center; }
+
+/* A short screen (a phone on its side, a small window): the panels tighten up and drop what is
+   only there for the mood, so more fits without scrolling. */
+@media (max-height: 500px) {
+  #menu .box { padding: 16px 22px; max-height: calc(100dvh - 16px); }
+  #menu h1 { font-size: 42px; }
+  #menu h2 { font-size: 24px; }
+  #menu h2:not(:first-of-type) { margin-top: 16px; }
+  #menu .sub { margin: 2px 0 10px; }
+  #menu .label { margin: 10px 0 5px; }
+  #menu .list button { padding: 8px 14px; }
+  #menu .foot { margin-top: 12px; }
+  #menu p.hint { margin: 8px 0; }
+  #start .box { padding: 16px 22px; max-height: calc(100dvh - 16px); }
+  #start h1 { font-size: 46px; }
+  #start .sub, #start .motto { display: none; }
+  #start .label { margin: 10px 0 5px; }
+  #start .foot { margin-top: 14px; padding-top: 12px; }
+  #credits > div { padding: 18px 24px; max-height: calc(100dvh - 16px); }
+  #credits h1 { font-size: 38px; }
+  #garage .box { padding: 14px 20px; max-height: calc(100dvh - 16px); }
+  #garage canvas.stage { max-height: calc(100dvh - 150px); }
+  #world { padding: 12px 16px 8px; }
+  #world h2 { font-size: 22px; }
+  #world .label { margin: 8px 0 4px; }
+  #map .side { width: 290px; padding: 14px calc(16px + var(--safe-r)) 14px 16px; }
+}
+
+/* A finger, not a mouse: buttons big enough to hit (44 px, as the phones themselves use). */
+@media (pointer: coarse) {
+  :is(#menu, #start, #map, #world, #garage) button:not(.link, .card, .close, .swatches button) { min-height: 44px; }
+  :is(#menu, #start, #areas, #map, #world, #garage, #credits) button.close { width: 44px; height: 44px; }
+  #start .swatches button, #menu .swatches button { width: 36px; height: 36px; }
+  #world input[type=range] { height: 32px; }
+}
+
+/* With the touch controls showing, Time and weather opens beside the minimap (clear of the
+   pedals), and the chat sits under the minimap. */
+body.touch #world { top: 10px; bottom: auto; right: auto; left: calc(20px + min(110px, 18vw) + var(--safe-l)); }
+body.touch #chat { top: calc(68px + min(110px, 18vw)); bottom: auto; left: calc(10px + var(--safe-l)); width: min(360px, 40vw); }

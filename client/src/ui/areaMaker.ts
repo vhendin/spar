@@ -6,6 +6,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fromSweref, toSweref } from '@spar/shared';
 import type { RegionListing } from '../terrain/region';
+import { builder } from './dom';
 
 interface AreasInfo {
   enabled: boolean;
@@ -91,21 +92,7 @@ export class AreaMaker {
   private render(): void {
     const box = this.box;
     box.replaceChildren();
-    const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
-      const e = document.createElement(tag);
-      if (text) e.textContent = text;
-      if (cls) e.className = cls;
-      parent.append(e);
-      return e;
-    };
-    const button = (text: string, onClick: () => void, parent: HTMLElement, cls = ''): HTMLButtonElement => {
-      const b = add('button', text, parent, cls);
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onClick();
-      });
-      return b;
-    };
+    const { add, button } = builder(box);
 
     add('h2', 'New area');
     const body = add('div', '', box, 'body');

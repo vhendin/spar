@@ -8,6 +8,7 @@ import { buildVehicleMeshes } from '../vehicle/body';
 import { painted } from '../vehicle/view';
 import { extrasText, gearsText, locksText, vehicleStats, type VehicleStats } from '../vehicle/stats';
 import { describeVehicle } from './startMenu';
+import { builder, closeButton } from './dom';
 
 export interface GarageOptions {
   /** The vehicle shown first: the one chosen or driven. */
@@ -262,21 +263,8 @@ export class Garage {
 
     const box = this.box;
     box.replaceChildren();
-    const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
-      const e = document.createElement(tag);
-      if (text) e.textContent = text;
-      if (cls) e.className = cls;
-      parent.append(e);
-      return e;
-    };
-    const button = (text: string, onClick: () => void, parent: HTMLElement, cls = ''): HTMLButtonElement => {
-      const b = add('button', text, parent, cls);
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onClick();
-      });
-      return b;
-    };
+    const { add, button } = builder(box);
+    closeButton(box, () => this.close());
 
     const head = add('div', '', box, 'head');
     add('h2', 'Vehicles', head);

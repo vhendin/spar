@@ -5,6 +5,32 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Menus fitted to a phone, and tidied up (this commit: step 1 of 4)
+
+- **Asked:** fit the menus to a phone screen; part of a bigger overhaul, since things were added
+  along the way.
+- **Found:** sideways the iPhone gives about 756 × 402 clear of the notch, and height runs out.
+  The pause menu is about 950 px tall, the start screen 780 px wide with Drive at the bottom, the
+  map's side panel takes nearly half the width, Time and weather sits on the pedals with no
+  close for a finger, buttons are 26–32 px tall.
+- **Decided:** one design on the laptop and the phone (only more compact on a short screen); the
+  start screen in tabs (Area · Start · Vehicle · Driver) with Drive always shown; moving through
+  menus with a gamepad later, separately.
+- **Steps:** (1) one paper "sheet" with a close button for every panel, compact and
+  finger-sized CSS, shared DOM helpers, Time and weather and the chat moved clear of the touch
+  controls; (2) the pause menu in two panes, Settings in tabs, Controls slimmed; (3) the start
+  screen; (4) the map as a drawer, the garage side by side, the logbook as cards.
+- **Step 1:** every paper panel (menu, map, Time and weather, garage, credits) has a × in its
+  top right corner that stays in view while it scrolls; the map's Close button went into it.
+  On a short screen (under 500 px high: a phone on its side, a small window) the panels tighten
+  up and drop the lead line and motto; with a finger, buttons are 44 px tall. Panels keep clear
+  of the notch and use the height the iPhone really shows. With the touch controls, Time and
+  weather opens beside the minimap instead of over the pedals, and the chat sits under the
+  minimap. The five copies of the menus' building helpers are one (ui/dom.ts).
+- **To try (step 1):** each panel on the phone and closing it with the ×; Time and weather while
+  driving; the menus in a short laptop window.
+- **Open:** menus driven by the gamepad (D-pad, A, B), as its own step later?
+
 ### Phones: fullscreen and touch controls (this commit: step 4 of 4)
 
 - **Asked:** touch controls for phones, and fullscreen. Both Android and iPhone; a thumb stick
@@ -57,7 +83,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   With tilt, the stick's corner drags the view like the rest of the picture; flying the drone,
   the stick is back.
 - **Tried (step 4):** works really well; the angles and feel can be tweaked later.
-- **Next:** the menu fitted to a phone screen, if wanted.
+- **Next:** the menu fitted to a phone screen: planned, see "Menus fitted to a phone".
 - **Open:**
   - The stick: is the curve right for a thumb (1.5, as the gamepad's)? Should the steering
     come back to straight at once when the thumb lifts, as now, or ease back?
@@ -65,7 +91,6 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Sizes and places: pedals 84 px wide, the stick 112 px across; the gauges made smaller.
   - The lamps as buttons are small (about 26 px tall); big enough to hit?
   - No touch way to the far minimap, to hide it, or back to the start (the menu has that).
-  - The menu on a small screen: fit it to a phone, as its own step after these?
   - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
     jump out to Safari? The manifest is fetched with the login cookie for that reason.
   - How a phone copes: is low smooth, and does the phone get hot?

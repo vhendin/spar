@@ -5,6 +5,7 @@ import { isElectric, peakPower, type RegionIndex, type RegionVectors, type Vehic
 import type { RegionListing } from '../terrain/region';
 import type { StartStore } from './starts';
 import { fillPlayers, PAINTS, paintSwatches, type PlayerLine } from './players';
+import { builder } from './dom';
 
 export interface StartPoint {
   name: string;
@@ -218,21 +219,7 @@ export class StartMenu {
     const box = this.box;
     box.replaceChildren();
     this.regionCards.clear();
-    const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
-      const e = document.createElement(tag);
-      if (text) e.textContent = text;
-      if (cls) e.className = cls;
-      parent.append(e);
-      return e;
-    };
-    const button = (text: string, onClick: () => void, parent: HTMLElement, cls = ''): HTMLButtonElement => {
-      const b = add('button', text, parent, cls);
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onClick();
-      });
-      return b;
-    };
+    const { add, button } = builder(box);
 
     add('h1', 'Spår');
     add('p', 'A quiet off-road game about Swedish backroads, weather and slow light.', box, 'sub');

@@ -3,6 +3,7 @@
 
 import type { ClientMessage } from '@spar/shared';
 import type { Environment } from './sky/environment';
+import { closeButton, coarsePointer } from './ui/dom';
 
 type SetWorld = Extract<ClientMessage, { type: 'set_world' }>;
 
@@ -71,6 +72,7 @@ export class WorldPanel {
       return div;
     };
     root.append(title);
+    closeButton(root, () => this.toggle());
 
     const time = row('Time of day');
     this.slider = Object.assign(document.createElement('input'), { type: 'range', min: '0', max: '24', step: '0.25' });
@@ -168,7 +170,7 @@ export class WorldPanel {
     }
     this.note.textContent = env.frozen
       ? 'The URL (?time= or ?weather=) holds this view still, so changes here do not show on this screen.'
-      : 'Changes reach every player. T or Esc closes, [ and ] move the clock an hour.';
+      : coarsePointer() ? 'Changes reach every player.' : 'Changes reach every player. T or Esc closes, [ and ] move the clock an hour.';
   }
 
   private button(label: string, onClick: () => void): HTMLButtonElement {

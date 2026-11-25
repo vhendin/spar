@@ -7,6 +7,7 @@ import type { RegionIndex, RegionVectors } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { paintGround, summits, type MapRasters, type Summit } from './mapImage';
 import { headingAt, type StartStore } from './starts';
+import { builder, closeButton, coarsePointer } from './dom';
 
 export interface Destination {
   name: string;
@@ -605,21 +606,8 @@ export class MapScreen {
   private renderSide(): void {
     const box = this.side;
     box.replaceChildren();
-    const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
-      const e = document.createElement(tag);
-      if (text) e.textContent = text;
-      if (cls) e.className = cls;
-      parent.append(e);
-      return e;
-    };
-    const button = (text: string, onClick: () => void, parent: HTMLElement, cls = ''): HTMLButtonElement => {
-      const b = add('button', text, parent, cls);
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onClick();
-      });
-      return b;
-    };
+    const { add, button } = builder(box);
+    closeButton(box, () => this.actions.close());
     add('h2', this.index.title);
     add('div', 'Destination', box, 'label');
     const d = this.state.destination;
@@ -720,8 +708,7 @@ export class MapScreen {
     }
     const foot = add('div', '', box, 'foot');
     button('Centre on vehicle', () => this.centre(), foot);
-    button('Close', () => this.actions.close(), foot);
-    add('p', matchMedia('(pointer: coarse)').matches
+    add('p', coarsePointer()
       ? 'Drag to move, pinch to zoom. Tap a spot to drive there; tap the pin again to clear it.'
       : 'Drag to move, wheel to zoom. Click a spot to drive there; click the pin again to clear it. M or Esc closes.', box, 'hint');
   }

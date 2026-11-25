@@ -1,6 +1,7 @@
 // The credits screen (C): who made the data the world is built from, and the software it runs on.
 
 import type { RegionIndex } from '@spar/shared';
+import { closeButton, coarsePointer } from './ui/dom';
 
 /** Software in the game itself, with its licence. */
 const SOFTWARE = [
@@ -32,6 +33,8 @@ export function fillCredits(panel: HTMLElement, index: RegionIndex | null): void
   const software = add('ul', '');
   for (const line of SOFTWARE) add('li', line, software);
   add('p', 'Every tree, rock, house and fence is generated in your browser from these data; nothing comes from the internet while you play.');
-  add('p', 'Click, C or Esc to close.').className = 'hint';
+  add('p', coarsePointer() ? 'Tap anywhere to close.' : 'Click, C or Esc to close.').className = 'hint';
+  // Any click closes the credits, so the × needs nothing of its own.
+  closeButton(box);
   panel.replaceChildren(box);
 }

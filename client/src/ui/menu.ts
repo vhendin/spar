@@ -7,6 +7,7 @@ import { formatDistance } from './map';
 import { fillPlayers, type PlayerLine } from './players';
 import { canFullscreen, isFullscreen, isIPhoneBrowser, onFullscreenChange, toggleFullscreen } from '../fullscreen';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
+import { builder, closeButton, coarsePointer } from './dom';
 
 export interface MenuActions {
   resume(): void;
@@ -187,21 +188,10 @@ export class Menu {
     }
     const box = this.box;
     box.replaceChildren();
-    const add = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', parent: HTMLElement = box, cls = ''): HTMLElementTagNameMap[K] => {
-      const e = document.createElement(tag);
-      if (text) e.textContent = text;
-      if (cls) e.className = cls;
-      parent.append(e);
-      return e;
-    };
-    const button = (text: string, onClick: () => void, parent: HTMLElement = box, cls = ''): HTMLButtonElement => {
-      const b = add('button', text, parent, cls);
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onClick();
-      });
-      return b;
-    };
+    const { add, button } = builder(box);
+    closeButton(box, () => {
+      if (!this.leave()) this.actions.resume();
+    });
     const go = (page: typeof this.page): void => {
       if (page === 'main' && this.leave()) return;
       this.page = page;
@@ -218,7 +208,7 @@ export class Menu {
       button('Logbook', () => go('logbook'), list);
       button('Settings', () => go('settings'), list);
       button('Controls', () => go('controls'), list);
-      if (matchMedia('(pointer: coarse)').matches) button('Say something', () => this.actions.chat(), list);
+      if (coarsePointer()) button('Say something', () => this.actions.chat(), list);
       if (canFullscreen()) {
         const full = button(isFullscreen() ? 'Leave fullscreen' : 'Fullscreen', () => {
           toggleFullscreen();
@@ -292,7 +282,7 @@ export class Menu {
         }
       };
       // On a phone or tablet the touch controls come first.
-      const onTouch = matchMedia('(pointer: coarse)').matches;
+      const onTouch = coarsePointer();
       if (onTouch) touchTable();
       add('h2', 'Keyboard');
       const table = add('table', '', box, 'keys');
