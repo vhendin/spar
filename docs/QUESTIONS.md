@@ -27,6 +27,16 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   bigger, or several buildings; a wind shelter (vindskydd) mapped as a closed building looks
   like a shed.
 
+### Drone on the phone (this commit)
+
+- **Asked:** the drone's touch controls felt odd (the stick slid and climbed, the pedals flew
+  forward and back). Wanted, in the user's words: "Left stick strafes (left/right) and goes
+  forwards and back. On the right is up/down and you can swipe to turn."
+- **Done:** the stick flies forward, back and sideways; the two pedals become Up and Down
+  (analogue, as when driving); a swipe on the picture turns it and tilts its camera, as before.
+  Keyboard and gamepad are unchanged.
+- **To try:** flying it on the phone; the swipe's turning speed.
+
 ### Menus fitted to a phone, and tidied up (this commit: step 1 of 4)
 
 - **Asked:** fit the menus to a phone screen; part of a bigger overhaul, since things were added

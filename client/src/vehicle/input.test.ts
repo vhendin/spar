@@ -53,14 +53,14 @@ describe('driving from the touch controls', () => {
     expect(input.park.parked).toBe(false);
   });
 
-  it('flies the drone: the stick slides and climbs, the pedals go forward and back', () => {
+  it('flies the drone: the stick goes forward, back and sideways, the pedals up and down', () => {
     const touch = fakeTouch();
     const input = new DriveInput(new PadControls(), touch);
     Object.assign(touch, { steer: 0.5, lift: -0.25, throttle: 0.8, brake: 0.2 });
     const d = input.drone();
     expect(d.strafe).toBeCloseTo(0.5);
-    expect(d.climb).toBeCloseTo(-0.25);
-    expect(d.forward).toBeCloseTo(0.6);
+    expect(d.forward).toBeCloseTo(-0.25);
+    expect(d.climb).toBeCloseTo(0.6);
     expect(d.turn).toBe(0);
   });
 

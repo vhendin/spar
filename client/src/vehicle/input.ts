@@ -12,7 +12,7 @@ export interface TouchDrive {
   throttle: number;
   brake: number;
   handbrake: boolean;
-  /** The stick up (+) and down (−), −1..1, 0 with no thumb on it: the drone climbs with it. */
+  /** The stick up (+) and down (−), −1..1, 0 with no thumb on it: the drone flies forward with it. */
   lift: number;
   /** Handbrake presses since the last call, as event times (ms). */
   takeHandbrakePresses(): number[];
@@ -143,13 +143,13 @@ export class DriveInput {
       climb -= dead(g.pad.axes[1] ?? 0);
       turn -= dead(g.pad.axes[2] ?? 0);
     }
-    // On a touch screen the stick slides and climbs and the pedals go forward and back; a drag
-    // on the picture turns (main.ts).
+    // On a touch screen the stick flies it forward, back and sideways, the pedals are Up and
+    // Down, and a swipe on the picture turns (main.ts).
     const tc = this.touch;
     if (tc?.shown) {
-      forward += tc.throttle - tc.brake;
+      forward += tc.lift;
       strafe += tc.steer ?? 0;
-      climb += tc.lift;
+      climb += tc.throttle - tc.brake;
     }
     const unit = (x: number): number => Math.max(-1, Math.min(1, x));
     return { forward: unit(forward), turn: unit(turn), strafe: unit(strafe), climb: unit(climb) };

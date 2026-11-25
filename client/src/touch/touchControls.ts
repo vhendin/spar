@@ -10,8 +10,8 @@
 // Steering can instead be tilting the phone (Settings, Steering: Tilt; touch/tilt.ts): then the
 // stick's corner is free, and a drag there looks round like anywhere else.
 //
-// With the drone out the stick slides it and climbs, the pedals fly it forward and back, and
-// the buttons that belong to the vehicle go away.
+// With the drone out the stick flies it forward, back and sideways, the pedals become Up and
+// Down, a swipe on the picture turns it, and the buttons that belong to the vehicle go away.
 //
 // Shown when the screen is touched, hidden again when a key or the gamepad is used, unless the
 // setting says always or never. One-shot buttons are asked for like the gamepad's, as tapped
@@ -211,8 +211,8 @@ export class TouchControls implements TouchDrive {
       this.scene = key;
       this.root.dataset.mode = scene.drone ? 'drone' : 'drive';
       this.root.dataset.winch = scene.drone ? 'idle' : scene.winch;
-      this.throttleLabel.textContent = scene.drone ? 'Forward' : 'Drive';
-      this.brakeLabel.textContent = scene.drone ? 'Back' : 'Brake';
+      this.throttleLabel.textContent = scene.drone ? 'Up' : 'Drive';
+      this.brakeLabel.textContent = scene.drone ? 'Down' : 'Brake';
       // A hold button that went away is let go of.
       if (scene.winch !== 'hooked') this.holding.clear();
     }
@@ -256,7 +256,7 @@ export class TouchControls implements TouchDrive {
   private stickMoved(dx: number, dy: number): void {
     const [kx, ky] = knob(dx, dy);
     this.stickKnob.style.transform = `translate(${kx}px, ${ky}px)`;
-    // Thumb to the left steers left, which is positive; up climbs (the drone).
+    // Thumb to the left steers left, which is positive; up flies the drone forward.
     this.stickSteer = -stickAxis(dx);
     this.lift = -stickAxis(dy);
   }

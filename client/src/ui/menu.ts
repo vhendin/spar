@@ -79,7 +79,7 @@ const TOUCH: [string, string][] = [
   ['Top right', 'Camera view, back on the wheels, winch, drone'],
   ['Lamps on the dash', 'Tap LOW, CRAWL, AIR, DIFF or LIGHTS to switch them'],
   ['Winch', 'Drag to aim, then Hook on (or Next, Cancel). Hooked: hold In or Out'],
-  ['Drone', 'The stick slides and climbs, the pedals go forward and back, a drag looks round'],
+  ['Drone', 'The stick flies forward, back and sideways, the pedals are Up and Down, a swipe turns and tilts'],
   ['Say something', 'In this menu: a line to the others'],
 ];
 

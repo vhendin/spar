@@ -635,7 +635,7 @@ async function start(): Promise<void> {
         + `<span class="${warn === 'battery' || drone.reason === 'battery' ? 'warn' : ''}">battery ${clock}</span>`;
       if (warn) readout += `<span class="warn">${warn === 'range' ? 'near the end of its range' : 'battery low soon'}</span>`;
       help = touch.shown
-        ? 'Drone · the stick slides and climbs · pedals forward and back · drag to look round · the drone button brings it home'
+        ? 'Drone · the stick flies forward, back and sideways · Up and Down on the right · swipe to turn and tilt · the drone button brings it home'
         : pad
         ? `Drone · triggers forward and back · left stick sideways and climb · right stick looks round · <kbd>${key}</kbd> back to driving`
         : `Drone · <kbd>W</kbd> <kbd>S</kbd> forward and back · <kbd>A</kbd> <kbd>D</kbd> sideways · <kbd>Space</kbd> up · <kbd>Shift</kbd> down · ${document.pointerLockElement === canvas ? 'mouse looks round' : 'click to look round with the mouse'} · <kbd>${key}</kbd> back to driving (it flies home)`;
