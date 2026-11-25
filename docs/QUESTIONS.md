@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Phones: fullscreen and touch controls (this commit: step 1 of 4)
+### Phones: fullscreen and touch controls (this commit: step 2 of 4)
 
 - **Asked:** touch controls for phones, and fullscreen. Both Android and iPhone; a thumb stick
   to steer with tilt as a choice; every action on a button; fullscreen on the laptop too.
@@ -21,9 +21,24 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   The picture now fills the whole screen (`viewport-fit=cover`), and what sits at the edges
   (minimap, gauges, chat, the drone's corner view, the map's side panel) keeps inside the safe
   area, clear of the Dynamic Island and the home bar.
-- **Next:** touch driving (stick, pedals, handbrake, pause, pinch to zoom); then the other
-  buttons (winch, camera, 4×4, map, drone, lights); then tilt steering.
+- **Step 2, touch driving:**
+  - A thumb stick appears wherever the left thumb lands on the lower left, and steers. The
+    response is the gamepad stick's curve, with a small dead zone.
+  - Drive and Brake pedals sit at the right edge, pressed harder the higher the finger. A
+    handbrake sits above Brake: a double tap when stopped parks, as with the key.
+  - A pause button sits in the top left.
+  - Dragging elsewhere on the picture looks round, and two fingers pinch the camera nearer or
+    further.
+  - The controls show after a touch of the screen and go away on a key or a gamepad button.
+    Settings → Touch controls: Automatic, Always or Never.
+  - While they show, the gauges move left of the pedals and the minimap moves to the top left.
+    The key hint line is hidden.
+- **Next:** the other buttons (winch, camera, 4×4, map, drone, lights); then tilt steering.
 - **Open:**
+  - The stick: is the curve right for a thumb (1.5, as the gamepad's)? Should the steering
+    come back to straight at once when the thumb lifts, as now, or ease back?
+  - Pedals felt by height (0.3 at the foot, full from three quarters up), or just on and off?
+  - Sizes and places: pedals 84 px wide, the stick 112 px across; the gauges made smaller.
   - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
     jump out to Safari? The manifest is fetched with the login cookie for that reason.
   - How a phone copes: is low smooth, and does the phone get hot?

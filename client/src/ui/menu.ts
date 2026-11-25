@@ -63,6 +63,16 @@ const CONTROLS: [string, string][] = [
   ['Esc', 'Menu and pause'],
 ];
 
+/** The touch controls (touch/touchControls.ts), where they are and what they do. */
+const TOUCH: [string, string][] = [
+  ['Left thumb', 'Steer: put it down anywhere on the lower left and slide sideways'],
+  ['Drive, Brake', 'The pedals on the right: the higher up the pedal, the more. Brake also reverses'],
+  ['Handbrake', 'Above the brake. Tap twice when stopped to park'],
+  ['Drag', 'Look around (anywhere else on the picture)'],
+  ['Pinch', 'Camera nearer or further'],
+  ['Pause button', 'Top left: this menu'],
+];
+
 export class Menu {
   private page: 'main' | 'settings' | 'controls' | 'logbook' = 'main';
   private readonly box: HTMLDivElement;
@@ -254,6 +264,18 @@ export class Menu {
     }
 
     if (this.page === 'controls') {
+      const touchTable = (): void => {
+        add('h2', 'Touch');
+        const t = add('table', '', box, 'keys');
+        for (const [where, what] of TOUCH) {
+          const tr = add('tr', '', t);
+          add('td', where, tr, 'key');
+          add('td', what, tr);
+        }
+      };
+      // On a phone or tablet the touch controls come first.
+      const onTouch = matchMedia('(pointer: coarse)').matches;
+      if (onTouch) touchTable();
       add('h2', 'Keyboard');
       const table = add('table', '', box, 'keys');
       for (const [key, what] of CONTROLS) {
@@ -272,6 +294,7 @@ export class Menu {
         button(waiting ? 'Press a button…' : buttonName(pad.bindings[id]), () => this.rebind(waiting ? null : id), cell, waiting ? 'on bind' : 'bind');
         add('td', label, tr);
       }
+      if (!onTouch) touchTable();
       const row = add('div', '', box, 'row');
       button('Back', () => {
         this.rebind(null);
@@ -304,6 +327,7 @@ export class Menu {
     for (const key of Object.keys(CHOICES) as (keyof Settings)[]) {
       const choice = CHOICES[key];
       if (key === 'volume') add('h2', 'Sound');
+      if (key === 'touch') add('h2', 'Touch');
       add('div', choice.label + (NEEDS_RESTART.includes(key) ? ' *' : ''), box, 'label');
       const row = add('div', '', box, 'row');
       // A value set elsewhere (an old preset, say) shows as the nearest choice.

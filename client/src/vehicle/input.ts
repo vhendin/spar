@@ -3,6 +3,19 @@ import type { VehicleInput } from './sim';
 import type { WinchControls } from './winch';
 import type { DroneControls } from './drone';
 
+/** What the touch controls give the driving (client/src/touch/touchControls.ts). */
+export interface TouchDrive {
+  /** On screen now. */
+  shown: boolean;
+  /** −1..1 (left positive) while a thumb is on the stick, else null. */
+  steer: number | null;
+  throttle: number;
+  brake: number;
+  handbrake: boolean;
+  /** Handbrake presses since the last call, as event times (ms). */
+  takeHandbrakePresses(): number[];
+}
+
 const held = (down: Set<string>, ...codes: string[]): boolean => codes.some((c) => down.has(c));
 
 /** Two handbrake presses within this many milliseconds put the vehicle in park. */
@@ -37,7 +50,8 @@ export class ParkLatch {
   }
 }
 
-/** Reads the driver's controls from the keyboard and, when one is plugged in, a gamepad. */
+/** Reads the driver's controls from the keyboard and, when one is plugged in, a gamepad, and from
+ * the touch controls when they show. */
 export class DriveInput {
   private readonly down = new Set<string>();
   private steer = 0;
@@ -46,7 +60,10 @@ export class DriveInput {
   private taps: number[] = [];
   private padHeld = false;
 
-  constructor(private readonly gamepad: PadControls) {
+  constructor(
+    private readonly gamepad: PadControls,
+    private readonly touch: TouchDrive | null = null,
+  ) {
     window.addEventListener('keydown', (e) => {
       this.down.add(e.code);
       if (e.code === 'Space' && !e.repeat) this.taps.push(e.timeStamp);
@@ -84,6 +101,16 @@ export class DriveInput {
       if (pulled && !this.padHeld) this.taps.push(performance.now());
       this.padHeld = pulled;
       handbrake ||= pulled;
+    }
+    const tc = this.touch;
+    if (tc?.shown) {
+      if (tc.steer !== null) steer = tc.steer;
+      // The pedals are pressed harder higher up: felt, like the triggers.
+      if (tc.throttle > 0 || tc.brake > 0) digital = false;
+      throttle = Math.max(throttle, tc.throttle);
+      brake = Math.max(brake, tc.brake);
+      this.taps.push(...tc.takeHandbrakePresses());
+      handbrake ||= tc.handbrake;
     }
     for (const t of this.taps) this.park.tap(t, speed);
     this.taps = [];

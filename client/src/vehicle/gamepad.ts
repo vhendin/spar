@@ -78,6 +78,11 @@ export class PadControls {
     }
   }
 
+  /** Whether any button went down this frame. */
+  get pressed(): boolean {
+    return this.tappedNow.size > 0;
+  }
+
   get listening(): boolean {
     return this.listener !== null;
   }

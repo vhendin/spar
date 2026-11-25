@@ -22,7 +22,8 @@ const RECENTRE_SPEED = 3;
 
 /**
  * The camera while driving. Dragging with the mouse (either button) or the gamepad's right
- * stick turns it round the vehicle, or looks round the cab; the wheel sets the distance.
+ * stick turns it round the vehicle, or looks round the cab; the wheel (or a pinch with two
+ * fingers) sets the distance.
  * While aiming the winch, moving the mouse alone turns it.
  */
 export class ChaseCamera {
@@ -63,17 +64,43 @@ export class ChaseCamera {
       },
       { passive: true },
     );
+    // Fingers on the picture: one drags the view round, two pinch it nearer or further.
+    const fingers = new Map<number, { x: number; y: number }>();
+    let spread = 0;
+    const apart = (): number => {
+      const [a, b] = [...fingers.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
     element.addEventListener('pointerdown', (e) => {
       if (!this.active() || (e.button !== 0 && e.button !== 2)) return;
-      this.dragging = true;
       element.setPointerCapture(e.pointerId);
+      if (e.pointerType === 'touch') {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        spread = apart();
+      }
+      this.dragging = fingers.size < 2;
     });
     element.addEventListener('pointermove', (e) => {
+      const finger = fingers.get(e.pointerId);
+      if (finger) {
+        const dx = e.clientX - finger.x, dy = e.clientY - finger.y;
+        finger.x = e.clientX;
+        finger.y = e.clientY;
+        if (fingers.size >= 2) {
+          const now = apart();
+          if (spread > 0 && now > 0 && this.mode !== 'cab') this.distance = Math.max(4, Math.min(40, this.distance * (spread / now)));
+          spread = now;
+        } else if (this.dragging) this.look(-dx * DRAG, (this.mode === 'cab' ? -1 : 1) * dy * DRAG);
+        return;
+      }
       if (!this.dragging && !(this.freeLook && this.active() && e.pointerType === 'mouse')) return;
       const k = this.dragging ? DRAG : AIM;
       this.look(-e.movementX * k, (this.mode === 'cab' ? -1 : 1) * e.movementY * k);
     });
     const release = (e: PointerEvent): void => {
+      fingers.delete(e.pointerId);
+      spread = apart();
+      // After a pinch the finger left behind does not drag until it is lifted.
       this.dragging = false;
       if (element.hasPointerCapture(e.pointerId)) element.releasePointerCapture(e.pointerId);
     };

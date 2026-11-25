@@ -60,6 +60,7 @@ import { FrameTimer, MAX_SECONDS, MODES, Recorder, saveRecording, SECTIONS, type
 import { BENCH_ROUTE, BENCH_SECONDS, BENCH_SETUP, benchPose, showBenchResult, WARM_MAX_SECONDS, WARM_QUIET_SECONDS, type BenchPose } from './perf/bench';
 import { PartsBench, placePose, showPartsResult, type Part } from './perf/parts';
 import { cornerButton, toggleFullscreen } from './fullscreen';
+import { TouchControls } from './touch/touchControls';
 
 
 // Errors and warnings go to the server's log too (data/perf/client-errors.log).
@@ -234,7 +235,9 @@ async function start(): Promise<void> {
   const startView = resumeAt?.camera ?? params.get('camera');
   if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
   const gamepad = new PadControls();
-  const input = new DriveInput(gamepad);
+  // On a phone or tablet: a thumb stick, pedals and buttons over the driving.
+  const touch = new TouchControls(() => settings.touch);
+  const input = new DriveInput(gamepad, touch);
   // ?glowres=0.5 works the glow out at half the picture's width instead of a quarter, to compare.
   const glowRes = Number(params.get('glowres'));
   const look = new Look(renderer, scene, camera, settings.glow > 0, glowRes > 0 && glowRes <= 1 ? glowRes : undefined);
@@ -527,6 +530,8 @@ async function start(): Promise<void> {
   // the picture) and moving it turns the drone and tilts its camera.
   const droneLooking = (): boolean => drone.state === 'flying' && !flying && !paused && !starting;
   const holdPointer = (): void => {
+    // Not on a touch screen, where a finger drags the view instead.
+    if (touch.inUse) return;
     if (document.pointerLockElement !== canvas) Promise.resolve(canvas.requestPointerLock()).catch(() => {});
   };
   canvas.addEventListener('click', () => {
@@ -1714,10 +1719,14 @@ async function start(): Promise<void> {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
 
-    // The gamepad's Start button opens and closes the menu.
+    // The gamepad's Start button (or the touch pause button) opens and closes the menu.
     gamepad.poll();
-    if (gamepad.tapped('menu') && garage.open) garage.choose();
-    else if (gamepad.tapped('menu') && world) {
+    // The touch controls show while driving, if touch is in use; a gamepad button puts them away.
+    if (gamepad.pressed) touch.keysUsed();
+    touch.poll(!!world && !paused && !starting && !flying && !world.map.open && !garage.open);
+    const menuTapped = gamepad.tapped('menu') || touch.tapped('menu');
+    if (menuTapped && garage.open) garage.choose();
+    else if (menuTapped && world) {
       if (starting) {
         if (world.start.open) world.start.drive();
       } else if (paused) resume();
