@@ -56,6 +56,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   stick and says so. Chosen on an earlier visit, the sensor is asked for again at the first tap.
   With tilt, the stick's corner drags the view like the rest of the picture; flying the drone,
   the stick is back.
+- **Tried (step 4):** works really well; the angles and feel can be tweaked later.
 - **Next:** the menu fitted to a phone screen, if wanted.
 - **Open:**
   - The stick: is the curve right for a thumb (1.5, as the gamepad's)? Should the steering
