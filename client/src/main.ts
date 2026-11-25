@@ -236,7 +236,7 @@ async function start(): Promise<void> {
   if (startView === 'orbit' || startView === 'cab') chase.setMode(startView);
   const gamepad = new PadControls();
   // On a phone or tablet: a thumb stick, pedals and buttons over the driving.
-  const touch = new TouchControls(() => settings.touch);
+  const touch = new TouchControls(() => settings.touch, () => settings.steering);
   const input = new DriveInput(gamepad, touch);
   // ?glowres=0.5 works the glow out at half the picture's width instead of a quarter, to compare.
   const glowRes = Number(params.get('glowres'));
@@ -1248,6 +1248,17 @@ async function start(): Promise<void> {
             break;
           case 'volume':
             audio.volume = settings.volume;
+            break;
+          case 'steering':
+            // Asked from the tap, as an iPhone wants; refused, it stays with the stick.
+            menu.steeringNote = '';
+            void touch.steeringChanged().then((ok) => {
+              if (ok) return;
+              settings.steering = 0;
+              saveSettings(settings);
+              menu.steeringNote = 'The motion sensor was not allowed, so the stick steers. To allow it, close Spår completely and open it again, then choose Tilt.';
+              menu.refresh();
+            });
             break;
           case 'objectRange':
             if (world?.features) world.features.rangeScale = settings.objectRange;

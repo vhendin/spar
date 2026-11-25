@@ -68,6 +68,7 @@ const CONTROLS: [string, string][] = [
 /** The touch controls (touch/touchControls.ts), where they are and what they do. */
 const TOUCH: [string, string][] = [
   ['Left thumb', 'Steer: put it down anywhere on the lower left and slide sideways'],
+  ['Tilt', 'Or steer by turning the phone like a wheel (Settings, Steering)'],
   ['Drive, Brake', 'The pedals on the right: the higher up the pedal, the more. Brake also reverses'],
   ['Handbrake', 'Above the brake. Tap twice when stopped to park'],
   ['Drag', 'Look around (anywhere else on the picture)'],
@@ -107,6 +108,14 @@ export class Menu {
     onFullscreenChange(() => {
       if (this.open && this.page === 'main') this.render();
     });
+  }
+
+  /** Said under the steering choice: why tilt did not take. */
+  steeringNote = '';
+
+  /** Draws the open page again, after something it shows changed. */
+  refresh(): void {
+    if (this.open) this.render();
   }
 
   get open(): boolean {
@@ -348,6 +357,7 @@ export class Menu {
           this.render();
         }, row, nearest[1] === value ? 'on' : '');
       }
+      if (key === 'steering') add('p', this.steeringNote || 'Tilt: hold the phone like a wheel and turn it. The stick\'s corner then drags the view.', box, 'hint');
     }
 
     const pending = NEEDS_RESTART.some((k) => s[k] !== this.built[k]);

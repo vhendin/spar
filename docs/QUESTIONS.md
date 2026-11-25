@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Phones: fullscreen and touch controls (this commit: step 3 of 4)
+### Phones: fullscreen and touch controls (this commit: step 4 of 4)
 
 - **Asked:** touch controls for phones, and fullscreen. Both Android and iPhone; a thumb stick
   to steer with tilt as a choice; every action on a button; fullscreen on the laptop too.
@@ -48,7 +48,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
     turns it and tilts its camera; the vehicle's buttons go away meanwhile.
   - The menu has Say something on a touch screen (no Enter key). Prompts, the winch's and the
     drone's help name the buttons instead of keys, and sit at the top.
-- **Next:** tilt steering (step 4).
+- **Tried (step 3, new layout):** "This looks fine."
+- **Step 4, tilt steering:** Settings → Steering: Stick or Tilt (per phone, not in the presets).
+  Hold the phone sideways like a wheel and turn it: full lock at 30°, a 2° dead zone, read from
+  gravity in the screen's plane so tipping the phone back does not matter, the same either way
+  round. On an iPhone choosing Tilt asks for the motion sensor; refused, it goes back to the
+  stick and says so. Chosen on an earlier visit, the sensor is asked for again at the first tap.
+  With tilt, the stick's corner drags the view like the rest of the picture; flying the drone,
+  the stick is back.
+- **Next:** the menu fitted to a phone screen, if wanted.
 - **Open:**
   - The stick: is the curve right for a thumb (1.5, as the gamepad's)? Should the steering
     come back to straight at once when the thumb lifts, as now, or ease back?
@@ -60,6 +68,10 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Does the login (Cloudflare Access) work inside the home-screen app on an iPhone, or does it
     jump out to Safari? The manifest is fetched with the login cookie for that reason.
   - How a phone copes: is low smooth, and does the phone get hot?
+  - Tilt: is 30° for full lock right, and the 2° dead zone? Linear now; a curve like the
+    stick's (gentle near the middle)? Does the steering tremble with the hand?
+  - Tilt on an iPhone: is the sensor asked for once only, or every time Spår is opened (it
+    should pass silently at the first tap after the first yes)?
   - Step 3 feedback: the gauges, pedals and minimap hid the car. Done (this commit, before
     tilt): the lamps in one row low in the middle (34 px tall), a small digital readout
     above them (gear, km/h, rev bar with the red zone), pedals 66×84 and 54×132 that look

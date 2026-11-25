@@ -7,6 +7,9 @@
 // pinch the camera nearer or further (ChaseCamera). The lamps on the dash and the minimap are
 // buttons too (main.ts).
 //
+// Steering can instead be tilting the phone (Settings, Steering: Tilt; touch/tilt.ts): then the
+// stick's corner is free, and a drag there looks round like anywhere else.
+//
 // With the drone out the stick slides it and climbs, the pedals fly it forward and back, and
 // the buttons that belong to the vehicle go away.
 //
@@ -17,6 +20,7 @@
 import type { PadAction } from '../vehicle/gamepad';
 import type { TouchDrive } from '../vehicle/input';
 import { knob, pedalValue, stickAxis } from './stick';
+import { Tilt } from './tilt';
 
 /** The setting: 0 automatic (shown after a touch, hidden after a key), 1 always, −1 never. */
 export type TouchSetting = number;
@@ -53,7 +57,10 @@ export class TouchControls implements TouchDrive {
   /** Whether the game has the driving on screen (not paused, no menu or map). */
   shown = false;
 
-  steer: number | null = null;
+  /** The stick sideways, −1..1 (left positive), null with no thumb on it. */
+  private stickSteer: number | null = null;
+  private readonly tilt = new Tilt();
+  private drone = false;
   throttle = 0;
   brake = 0;
   handbrake = false;
@@ -71,7 +78,11 @@ export class TouchControls implements TouchDrive {
   private readonly brakeLabel: HTMLDivElement;
   private readonly throttleLabel: HTMLDivElement;
 
-  constructor(private readonly setting: () => TouchSetting) {
+  constructor(
+    private readonly setting: () => TouchSetting,
+    /** 0 the stick steers, 1 tilting the phone. */
+    private readonly steering: () => number = () => 0,
+  ) {
     this.touching = matchMedia('(pointer: coarse)').matches;
     const root = (this.root = document.createElement('div'));
     root.id = 'touch';
@@ -82,6 +93,14 @@ export class TouchControls implements TouchDrive {
       if (e.pointerType === 'touch') this.touching = true;
     }, { capture: true });
     window.addEventListener('keydown', () => this.keysUsed());
+    // Tilt chosen on an earlier visit: the sensor is asked for again at the first tap, since an
+    // iPhone only answers that from a tap.
+    let tries = 0;
+    const retry = (): void => {
+      if (this.steering() === 1 && !this.tilt.enabled && tries++ < 2) void this.tilt.enable();
+    };
+    window.addEventListener('pointerup', retry, { capture: true });
+    if (this.steering() === 1) retry();
 
     // The stick: an area over the lower left where the thumb lands.
     const zone = this.el('div', 'stick-zone');
@@ -102,7 +121,7 @@ export class TouchControls implements TouchDrive {
       up: () => {
         this.stickBase.classList.remove('on');
         this.stickKnob.style.transform = '';
-        this.steer = null;
+        this.stickSteer = null;
         this.lift = 0;
       },
     });
@@ -148,6 +167,28 @@ export class TouchControls implements TouchDrive {
     root.style.display = 'none';
   }
 
+  /** −1..1 (left positive), or null to leave the steering to the keys or the pad. */
+  get steer(): number | null {
+    return this.tilting && !this.drone ? this.tilt.steer : this.stickSteer;
+  }
+
+  /** Steering by tilting the phone now (chosen, and the sensor answered). */
+  private get tilting(): boolean {
+    return this.steering() === 1 && this.tilt.enabled;
+  }
+
+  /**
+   * The steering setting was changed (from a tap in Settings, which an iPhone needs before it
+   * hands out the sensor): resolves false when tilt was chosen but the sensor was refused.
+   */
+  steeringChanged(): Promise<boolean> {
+    if (this.steering() !== 1) {
+      this.tilt.disable();
+      return Promise.resolve(true);
+    }
+    return this.tilt.enable();
+  }
+
   /** A key was pressed or the gamepad used: in automatic mode the touch controls go away. */
   keysUsed(): void {
     this.touching = false;
@@ -160,6 +201,8 @@ export class TouchControls implements TouchDrive {
   poll(wanted: boolean, scene: TouchScene = { drone: false, winch: 'idle' }): void {
     const s = this.setting();
     this.show(wanted && (s > 0 || (s === 0 && this.touching)));
+    this.drone = scene.drone;
+    this.root.dataset.steering = this.tilting ? 'tilt' : 'stick';
     const key = `${scene.drone ? 'drone' : 'drive'} ${scene.winch}`;
     if (key !== this.scene) {
       this.scene = key;
@@ -212,7 +255,7 @@ export class TouchControls implements TouchDrive {
     const [kx, ky] = knob(dx, dy);
     this.stickKnob.style.transform = `translate(${kx}px, ${ky}px)`;
     // Thumb to the left steers left, which is positive; up climbs (the drone).
-    this.steer = -stickAxis(dx);
+    this.stickSteer = -stickAxis(dx);
     this.lift = -stickAxis(dy);
   }
 

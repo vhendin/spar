@@ -502,6 +502,8 @@ kbd {
 #touch { position: fixed; inset: 0; z-index: 8; pointer-events: none; }
 #touch > *, #touch .pedals > * { pointer-events: auto; touch-action: none; }
 #touch .stick-zone { position: absolute; left: 0; bottom: 0; width: 42%; height: 64%; }
+/* Steering by tilt: the stick's corner lets a drag through to the picture, to look round. */
+#touch[data-steering='tilt'][data-mode='drive'] .stick-zone { display: none; }
 #touch .stick {
   position: absolute; left: calc(26% + var(--safe-l)); top: 58%; width: 112px; height: 112px; margin: -56px 0 0 -56px;
   border-radius: 50%; border: 2px solid rgba(236, 235, 230, 0.35); background: rgba(28, 34, 48, 0.22); opacity: 0.45;

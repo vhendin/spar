@@ -34,12 +34,14 @@ export interface Settings {
    * the gamepad), 1 always, −1 never. Not part of a preset.
    */
   touch: number;
+  /** Touch steering: 0 the thumb stick, 1 tilting the phone. Not part of a preset. */
+  steering: number;
 }
 
 export const PRESETS: Record<PresetName, Settings> = {
-  low: { pixelRatio: 1, shadows: 0, plantRange: 0.6, farTreeRange: 0.5, terrainSplit: 1.2, objectRange: 0.6, fov: 60, glow: 0, volume: 0.7, frameCap: 60, touch: 0 },
-  medium: { pixelRatio: 1.5, shadows: 1024, plantRange: 0.8, farTreeRange: 0.75, terrainSplit: 1.4, objectRange: 0.8, fov: 60, glow: 1, volume: 0.7, frameCap: 60, touch: 0 },
-  high: { pixelRatio: 2, shadows: 2048, plantRange: 1, farTreeRange: 1, terrainSplit: 1.6, objectRange: 1, fov: 60, glow: 1, volume: 0.7, frameCap: 60, touch: 0 },
+  low: { pixelRatio: 1, shadows: 0, plantRange: 0.6, farTreeRange: 0.5, terrainSplit: 1.2, objectRange: 0.6, fov: 60, glow: 0, volume: 0.7, frameCap: 60, touch: 0, steering: 0 },
+  medium: { pixelRatio: 1.5, shadows: 1024, plantRange: 0.8, farTreeRange: 0.75, terrainSplit: 1.4, objectRange: 0.8, fov: 60, glow: 1, volume: 0.7, frameCap: 60, touch: 0, steering: 0 },
+  high: { pixelRatio: 2, shadows: 2048, plantRange: 1, farTreeRange: 1, terrainSplit: 1.6, objectRange: 1, fov: 60, glow: 1, volume: 0.7, frameCap: 60, touch: 0, steering: 0 },
 };
 
 /** The settings that only take effect when the world is built again. */
@@ -58,10 +60,11 @@ export const CHOICES: Record<keyof Settings, { label: string; options: [string, 
   volume: { label: 'Volume', options: [['Off', 0], ['Quiet', 0.4], ['Medium', 0.7], ['Loud', 1]] },
   frameCap: { label: 'Frame rate limit', options: [['30', 30], ['60', 60], ['No limit', 0]] },
   touch: { label: 'Touch controls', options: [['Automatic', 0], ['Always', 1], ['Never', -1]] },
+  steering: { label: 'Steering', options: [['Stick', 0], ['Tilt', 1]] },
 };
 
 /** Settings that are a matter of taste rather than of the computer: presets leave them alone. */
-export const PERSONAL: (keyof Settings)[] = ['fov', 'volume', 'frameCap', 'touch'];
+export const PERSONAL: (keyof Settings)[] = ['fov', 'volume', 'frameCap', 'touch', 'steering'];
 
 const KEY = 'spar.settings';
 const OLD_KEY = 'spar.quality';
