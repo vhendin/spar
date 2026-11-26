@@ -5,7 +5,20 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Going to a trail from the map (this commit)
+### The next checkpoint easier to find (this commit)
+
+- **Asked:** on a trail, the small poles are hard to see; a mark on the compass and/or a light
+  in the terrain (2026-11-27).
+- **Done:** both. The compass marks the next checkpoint in orange, "Checkpoint 3 of 7 · 240 m"
+  ("End of the trail" for the last), pinned to the edge when behind. A soft orange column of
+  light, 45 m, stands on the pole, kept a few pixels wide from afar and faint within about
+  15–80 m so it does not get in the way when passing. The flag's shaders are now built while
+  loading too, so the first checkpoint no longer stalls the game.
+- **Open:**
+  - The light: too strong or too faint, too tall? Thin at 300 m (about 1.5 m wide).
+  - Should the light show at night only, or the compass mark be enough by day?
+
+### Going to a trail from the map (8d88d25)
 
 - **Asked:** go straight to a trail once it has been seen, picked from the map (2026-11-26).
 - **Done:** the map's list has a Trails section, by kind, with the trails whose start (either

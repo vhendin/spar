@@ -50,7 +50,7 @@ import { Finds } from './finds';
 import { Camp, type CampOffer } from './camp';
 import { Campfire } from './campfire';
 import { Trails, type TrailOffer, TRAIL_WORDS } from './trails';
-import { TrailFlag } from './trailFlag';
+import { CHECKPOINT_COLOR, TrailFlag } from './trailFlag';
 import { trailMarks } from './features/trailMarks';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
@@ -1246,7 +1246,7 @@ async function start(): Promise<void> {
     // Whatever may first show up while driving (plants met further on, buildings, the first mud
     // thrown) is drawn once by stand-ins now, so its shaders are built while loading.
     const warm = new WarmUp();
-    warm.add([...(vegetation?.standIns() ?? []), ...(features?.standIns() ?? []), ...standIns(spray.group), ...standIns(exhaust.group)]);
+    warm.add([...(vegetation?.standIns() ?? []), ...(features?.standIns() ?? []), ...standIns(spray.group), ...standIns(exhaust.group), ...standIns(trailFlag.group)]);
     scene.add(warm.group);
     warmUp = warm;
     world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, camp, campKeys: pois.camps, campfire, trails, trailFlag, spawn, arrival, obstacles, unplaced: true, start };
@@ -2333,7 +2333,7 @@ async function start(): Promise<void> {
       env.update(now, dt, camera.position, flying || drone.flown ? camera.position : w.view.group.position);
       const windSpeed = env.weather.wind * 4;
       w.campfire.update(paused ? 0 : dt, camera, 1 - Math.min(1, env.daylight * 1.5), env.windVector.x * windSpeed, env.windVector.y * windSpeed);
-      w.trailFlag.update(paused ? 0 : dt, env.windVector.x * windSpeed, env.windVector.y * windSpeed);
+      w.trailFlag.update(paused ? 0 : dt, env.windVector.x * windSpeed, env.windVector.y * windSpeed, camera.position);
       w.shading.wet.value = env.weather.wetness;
       // One pixel's angle, for the road edges' anti-aliasing (the view and window change).
       w.shading.pixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, renderer.domElement.height);
@@ -2496,7 +2496,10 @@ async function start(): Promise<void> {
       guide.update(now, camera, from, groundAt, guiding);
       sharedGuide.row = guide.showing ? 1 : 0;
       camera.getWorldDirection(compassLook);
-      compass.update(guiding, bearing(0, 0, compassLook.x, compassLook.z), from, [guide.mark, sharedGuide.mark].filter((m) => m !== null));
+      const checkpoint = w.trails.nextCheckpoint;
+      const course = w.trails.current;
+      const checkpointMark = checkpoint && course ? { x: checkpoint.x, z: checkpoint.z, name: checkpoint === course.checkpoints[course.checkpoints.length - 1] ? 'End of the trail' : `Checkpoint ${course.checkpoints.indexOf(checkpoint)} of ${course.checkpoints.length - 1}`, color: CHECKPOINT_COLOR } : null;
+      compass.update(guiding, bearing(0, 0, compassLook.x, compassLook.z), from, [checkpointMark, guide.mark, sharedGuide.mark].filter((m) => m !== null));
 
       // On its side or roof and not going anywhere: say how to get back on the wheels.
       const lying = !w.unplaced && !flying && !w.sim.beingRighted && w.sim.upright < 0.4 && Math.abs(w.sim.speed) < 2;
