@@ -1048,9 +1048,9 @@ async function start(): Promise<void> {
       const bare = [...(vectors.buildings ?? []), ...pois.buildings].map((b): number[][] => b.outline).concat(pois.clear);
       vegetation = await Vegetation.create(renderer, index, welcome.seed, settings.plantRange, settings.farTreeRange, seeThrough, seasonAt(CALENDAR, seasonStep(environment.dayOfYear())), bare);
       scene.add(vegetation.group);
-      // ?atlas=1 stands the far-tree pictures up in front of the start position.
-      if (params.get('atlas') === '1') {
-        const board = vegetation.atlasBoard(40);
+      // ?atlas=1 stands the far-tree pictures up in front of the start position; ?atlas=normals which way they face.
+      if (params.get('atlas') === '1' || params.get('atlas') === 'normals') {
+        const board = vegetation.atlasBoard(40, params.get('atlas') === 'normals');
         board.name = 'atlas';
         scene.add(board);
       }
@@ -2345,7 +2345,9 @@ async function start(): Promise<void> {
       if (w.vegetation) {
         w.vegetation.shading.wind.value = env.weather.wind;
         w.vegetation.shading.windDirection.value.copy(env.windVector);
-        w.vegetation.shading.impostorLight.value = env.daylight;
+        const shading = w.vegetation.shading;
+        env.lights(shading.sunLight.value, shading.skyLight.value, shading.groundLight.value);
+        shading.lightFrom.value.copy(env.lightFrom);
         if (!w.unplaced) w.vegetation.shading.trample.update(paused ? 0 : dt, w.sim, w.view.group);
       }
       timer.lap('sky');

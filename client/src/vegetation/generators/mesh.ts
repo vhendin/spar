@@ -13,6 +13,8 @@ export interface GeneratorColors {
   barkTop: Rgb;
   foliage: Rgb;
   accent: Rgb;
+  /** Bare twigs, as seen in winter. */
+  twig: Rgb;
   /**
    * How much of a leafy crown is in leaf, 0 bare to 1 full. A generator must build the same
    * number of vertices whatever this is, so a mesh can be updated in place as the season turns.
@@ -34,8 +36,10 @@ export interface MeshData {
 /**
  * A generator builds one individual. The same seed must give the same individual at both
  * detail levels, so the simplified mesh stands in for the full one without a visible jump.
+ * `picture` is set when the full mesh is drawn into a small flat picture for the distance,
+ * where the finest parts may be drawn thicker so they do not vanish.
  */
-export type Generator = (params: Params, colors: GeneratorColors, seed: number, detail: Detail) => MeshData;
+export type Generator = (params: Params, colors: GeneratorColors, seed: number, detail: Detail, picture?: boolean) => MeshData;
 
 /** sRGB "#rrggbb" to linear RGB. */
 export function hexColor(hex: string): Rgb {

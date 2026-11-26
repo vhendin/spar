@@ -18,6 +18,19 @@ function bounds(positions: Float32Array) {
   return { minY, maxY, reach };
 }
 
+/** Total surface of a mesh's triangles. */
+function area(m: { positions: Float32Array; indices: Uint16Array }): number {
+  const p = m.positions;
+  let sum = 0;
+  for (let t = 0; t < m.indices.length; t += 3) {
+    const a = m.indices[t]! * 3, b = m.indices[t + 1]! * 3, c = m.indices[t + 2]! * 3;
+    const ux = p[b]! - p[a]!, uy = p[b + 1]! - p[a + 1]!, uz = p[b + 2]! - p[a + 2]!;
+    const vx = p[c]! - p[a]!, vy = p[c + 1]! - p[a + 1]!, vz = p[c + 2]! - p[a + 2]!;
+    sum += Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+  }
+  return sum;
+}
+
 describe.each(all.map((s) => [s.name, s] as const))('%s', (_, species) => {
   const tree = species.generator === 'conifer' || species.generator === 'broadleaf';
 
@@ -30,10 +43,16 @@ describe.each(all.map((s) => [s.name, s] as const))('%s', (_, species) => {
         expect(Array.from(other.indices)).toEqual(Array.from(summer.indices));
       }
     }
-    // Leafy trees go bare in winter: the crown shrinks and takes the winter colour.
+    // Leafy trees go bare in winter: the leaves are gone, the branches and twigs stay, and
+    // the crown thins on the way there.
     if (species.deciduous && species.generator === 'broadleaf') {
-      const top = (m: { positions: Float32Array }) => bounds(m.positions).reach;
-      expect(top(generate(species, 0, 'full', seasonAt(calendar, 30)))).toBeLessThan(top(generate(species, 0, 'full', seasonAt(calendar, 200))) * 0.95);
+      const winter = area(generate(species, 0, 'full', seasonAt(calendar, 30)));
+      const autumn = area(generate(species, 0, 'full', seasonAt(calendar, 270)));
+      const summer = area(generate(species, 0, 'full', seasonAt(calendar, 200)));
+      expect(winter).toBeLessThan(summer * 0.25);
+      expect(winter).toBeGreaterThan(0);
+      expect(autumn).toBeGreaterThan(winter);
+      expect(autumn).toBeLessThan(summer);
     }
   });
 
@@ -66,9 +85,10 @@ describe.each(all.map((s) => [s.name, s] as const))('%s', (_, species) => {
   it('stays within its triangle budget', () => {
     const full = generate(species, 0, 'full').indices.length / 3;
     const low = generate(species, 0, 'low').indices.length / 3;
-    expect(full).toBeLessThanOrEqual(tree ? 450 : 90);
+    // Leafy trees carry their bare branches and twigs too, for the winter.
+    expect(full).toBeLessThanOrEqual(species.generator === 'broadleaf' ? 600 : tree ? 450 : 90);
     if (tree || species.generator === 'boulder') {
-      expect(low).toBeLessThanOrEqual(80);
+      expect(low).toBeLessThanOrEqual(species.generator === 'broadleaf' ? 100 : 80);
       expect(low).toBeLessThan(full / 3);
     }
   });

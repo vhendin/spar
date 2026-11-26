@@ -171,7 +171,7 @@ export class Vegetation {
   private patchesDirty = false;
   private warned = false;
   /** Every generated mesh, to be recoloured when the season turns, and the ones pictured far away. */
-  private readonly sources: { species: number; variant: number; detail: Detail; geometry: THREE.BufferGeometry }[] = [];
+  private readonly sources: { species: number; variant: number; detail: Detail; picture: boolean; geometry: THREE.BufferGeometry }[] = [];
   private readonly pictures: THREE.BufferGeometry[] = [];
   private renderer!: THREE.WebGPURenderer;
   private season: SeasonState;
@@ -236,12 +236,12 @@ export class Vegetation {
   private async prepare(renderer: THREE.WebGPURenderer): Promise<void> {
     // One generated mesh per species variant and detail level, shared by every layer using it.
     const meshes = new Map<string, THREE.BufferGeometry>();
-    const geometry = (species: number, variant: number, detail: Detail): THREE.BufferGeometry => {
-      const key = `${species}/${variant}/${detail}`;
+    const geometry = (species: number, variant: number, detail: Detail, picture = false): THREE.BufferGeometry => {
+      const key = `${species}/${variant}/${detail}${picture ? '/picture' : ''}`;
       let g = meshes.get(key);
       if (!g) {
-        meshes.set(key, (g = toGeometry(generate(SPECIES[species]!, variant, detail, this.season))));
-        this.sources.push({ species, variant, detail, geometry: g });
+        meshes.set(key, (g = toGeometry(generate(SPECIES[species]!, variant, detail, this.season, picture))));
+        this.sources.push({ species, variant, detail, picture, geometry: g });
       }
       return g;
     };
@@ -274,7 +274,7 @@ export class Vegetation {
           if (lowMaterial) perDetail.low[species][v] = new Batch(geometry(species, v, 'low'), lowMaterial, def.colors.variation, this.group, shadow);
           if (layer.ranges.impostor !== undefined) {
             (this.atlasCell[species] ??= [])[v] = pictures.length;
-            pictures.push(geometry(species, v, 'full'));
+            pictures.push(geometry(species, v, 'full', true));
           }
         }
       }
@@ -284,7 +284,7 @@ export class Vegetation {
     this.atlas = await bakeImpostors(renderer, pictures, 8);
     const pictured = this.tileLayers.find((l) => l.ranges.impostor !== undefined);
     if (pictured) {
-      this.impostorMaterial = this.shading.impostorMaterial(this.atlas.texture, this.atlas.columns, this.atlas.rows, pictured.ranges.low ?? pictured.ranges.full, pictured.ranges.impostor!);
+      this.impostorMaterial = this.shading.impostorMaterial(this.atlas.texture, this.atlas.normals, this.atlas.columns, this.atlas.rows, pictured.ranges.low ?? pictured.ranges.full, pictured.ranges.impostor!);
     }
 
     this.worker.onmessage = (ev: MessageEvent<VegetationResponse>) => {
@@ -312,8 +312,8 @@ export class Vegetation {
         this.nextSeason = null;
         // Same shapes, new colours and leaf: the vertex data is overwritten in place, and every
         // batch drawing it shares the same attributes.
-        for (const { species, variant, detail, geometry } of this.sources) {
-          const data = generate(SPECIES[species]!, variant, detail, this.season);
+        for (const { species, variant, detail, picture, geometry } of this.sources) {
+          const data = generate(SPECIES[species]!, variant, detail, this.season, picture);
           for (const [name, values] of [['position', data.positions], ['normal', data.normals], ['color', data.colors]] as const) {
             const attribute = geometry.getAttribute(name) as THREE.BufferAttribute;
             if (attribute.array.length !== values.length) continue;
@@ -323,10 +323,11 @@ export class Vegetation {
         }
         if (this.impostorMaterial) {
           const atlas = await bakeImpostors(this.renderer, this.pictures, 8);
-          const old = this.atlas.texture as THREE.DataTexture;
-          (old.image.data as Uint8Array).set((atlas.texture as THREE.DataTexture).image.data as Uint8Array);
-          old.needsUpdate = true;
-          atlas.texture.dispose();
+          for (const [old, fresh] of [[this.atlas.texture, atlas.texture], [this.atlas.normals, atlas.normals]] as const) {
+            ((old as THREE.DataTexture).image.data as Uint8Array).set((fresh as THREE.DataTexture).image.data as Uint8Array);
+            old.needsUpdate = true;
+            fresh.dispose();
+          }
         }
       }
     } finally {
@@ -420,11 +421,11 @@ export class Vegetation {
   }
 
   /** The sheet of far-tree pictures on a board, for checking how they came out. */
-  atlasBoard(width: number): THREE.Mesh {
+  atlasBoard(width: number, normals = false): THREE.Mesh {
     const height = (width * this.atlas.rows) / this.atlas.columns;
     const board = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
-      new THREE.MeshBasicMaterial({ map: this.atlas.texture, color: 0xffffff, side: THREE.DoubleSide, fog: false }),
+      new THREE.MeshBasicMaterial({ map: normals ? this.atlas.normals : this.atlas.texture, color: 0xffffff, side: THREE.DoubleSide, fog: false }),
     );
     board.add(new THREE.Mesh(new THREE.PlaneGeometry(width, height).translate(0, 0, -0.05), new THREE.MeshBasicMaterial({ color: 0x8090a0, fog: false })));
     return board;
@@ -435,6 +436,7 @@ export class Vegetation {
     for (const perDetail of this.batches) for (const detail of ['full', 'low'] as const) perDetail?.[detail].forEach((v) => v.forEach((b) => b.dispose()));
     for (const tile of this.tiles.values()) this.dropImpostor(tile);
     this.atlas.texture.dispose();
+    this.atlas.normals.dispose();
   }
 
   private post(req: VegetationRequest): void {

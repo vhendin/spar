@@ -219,6 +219,17 @@ export class Environment {
     return new Date(this.utc + this.clock.utcOffset * 3600000).getUTCMonth();
   }
 
+  /**
+   * The scene's light as of the last update, for what lights itself: the sun's (or moon's)
+   * light, and the sky's from above and the ground's from below, each colour times strength.
+   */
+  lights(sun: THREE.Vector3, sky: THREE.Vector3, ground: THREE.Vector3): void {
+    const c = this.sun.color, a = this.ambient.color, g = this.ambient.groundColor;
+    sun.set(c.r, c.g, c.b).multiplyScalar(this.sun.intensity);
+    sky.set(a.r, a.g, a.b).multiplyScalar(this.ambient.intensity);
+    ground.set(g.r, g.g, g.b).multiplyScalar(this.ambient.intensity);
+  }
+
   /** The in-game instant at the last update, UTC milliseconds. */
   get utcNow(): number {
     return this.utc;

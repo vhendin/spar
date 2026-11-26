@@ -5,26 +5,43 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Distant trees in winter (seen 2026-11-26, nothing changed yet)
+### Leafy trees in winter (this commit)
 
-The user found the far forest a bit odd while driving in winter. The fog of war is not
-the cause: the same view, with the code from before it, gives the same trees. In winter:
-- the bare broadleaf trees close by are solid dark grey lumps;
-- the far forest (the flat pictures and the low-detail trees) is a white, snowy speckle, much
-  lighter than the near trees, so there is a visible step where one turns into the other;
-- one broadleaf tree in the middle distance shows as a tall green block on a thin trunk, in
-  summer too (across the lake from 9372, 4528 in Vålådalen).
+- **Asked:** the user found the far forest odd while driving in winter (2026-11-26). Not the
+  fog of war: the code from before it gives the same trees. Close by, bare broadleaf trees
+  were solid dark grey lumps; far away, a white snowy speckle much lighter than the near
+  trees.
+- **Decided** (the user, 2026-11-26): bare branches; a little snow on top of them; the crown
+  thins to the branches in autumn and grows back in spring; far pictures that match the
+  near trees.
+- **Done:**
+  - Birch, aspen, rowan, alder and mountain birch grow a side branch out to every leaf blob,
+    with three fine twigs inside each blob, in the species' winter colour. As the leaves
+    fall, the blobs shrink onto their twigs, a little apart from each other; in winter only
+    the stems, branches and twigs are left. The branches face the right way, so their upper
+    sides catch a little snow.
+  - The simpler trees in the middle distance (55–220 m) keep their main branches, straight,
+    and the leaf blobs on their ends.
+  - The far pictures are drawn without light, plus a second sheet of which way each pixel
+    faces. The game lights them with the same sun and sky as the near trees, so a spruce
+    across the lake has its shaded side towards you when you look into the sun. In winter
+    they are no longer brighter and whiter than the trees close by. Bare trees are drawn
+    with thicker twigs in the pictures, so a bare birch wood stays visible far off.
+  - `?atlas=normals` shows the facing sheet, as `?atlas=1` shows the pictures.
+- **Costs:** a near leafy tree is about 500 triangles instead of about 300 (budget 600), a
+  middle-distance one about 90 instead of 66 (budget 100). The picture sheet is drawn twice
+  at start and when the season turns. Worth a run of the benchmark.
+- **To try:** drive in winter (or with `?time=2027-02-10T12:00`), in late September and
+  October as the leaves fall, and in summer, looking both towards and away from the sun.
+  The far forest is now darker when you look into the sun, in summer too.
+- **Open:**
+  - Enough twigs? Three per blob reads as bare branches up close but sparse; more would cost
+    triangles.
+  - One broadleaf tree in the middle distance shows as a tall green block on a thin trunk, in
+    summer (across the lake from 9372, 4528 in Vålådalen). Not looked into yet.
+  - Summer far forest: darker than before, most when looking into the sun. Right, or too dark?
 
-Decided with the user (2026-11-26), to be built next:
-- **Bare branches:** out of leaf, birch, aspen, rowan, alder and mountain birch show their
-  real branches (white birch stems forking into thin branches and twigs), not a lump.
-- **Snow:** a little, on the upper sides of the thicker branches.
-- **Autumn and spring:** the crown thins blob by blob down to the same branches, and grows
-  back in spring.
-- **Far away:** the pictures match the near trees, with no step where one turns into the
-  other.
-
-### Trails to drive (this commit)
+### Trails to drive (4206e6a)
 
 - **Asked:** idea 3 of `docs/OVERTHEHILL.md`, next in its suggested order. Decided before
   building (the user, 2026-11-26, one question at a time):

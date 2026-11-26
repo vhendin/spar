@@ -14,6 +14,8 @@ import { Trample, TRAMPLE_CELL, TRAMPLE_SIZE } from './trample';
 /** Side of an impostor picture in units of tree height, and the empty margin below the tree. */
 export const IMPOSTOR_CELL = 1.1;
 export const IMPOSTOR_PAD = 0.03;
+/** How much of the sunlight reaches a far tree's sunlit side, the rest being shade from its neighbours. */
+const SUN_IN_FOREST = 0.85;
 
 export interface MeshMaterialOptions {
   /** Drawn where near <= distance < far, both in metres. */
@@ -31,8 +33,15 @@ export class VegetationShading {
   /** Wind strength, 0 calm to 1 storm, and the direction it blows towards (x east, y south). */
   readonly wind = uniform(0.35);
   readonly windDirection = uniform(new THREE.Vector2(0.8, 0.6));
-  /** Brightness of the flat pictures, which carry baked light; follows the daylight. */
-  readonly impostorLight = uniform(1.0);
+  /**
+   * The light the flat pictures are lit by, the same as the scene's: the way to the sun (or
+   * moon), its light (colour times strength), and the sky's light from above and the
+   * ground's from below.
+   */
+  readonly lightFrom = uniform(new THREE.Vector3(0, 1, 0));
+  readonly sunLight = uniform(new THREE.Vector3(1, 1, 1));
+  readonly skyLight = uniform(new THREE.Vector3(0.5, 0.5, 0.5));
+  readonly groundLight = uniform(new THREE.Vector3(0.2, 0.2, 0.2));
   /**
    * Where the player's camera is. Distances are measured from here rather than from
    * whichever camera is drawing, so trees are picked the same way in the shadow pass.
@@ -98,7 +107,7 @@ export class VegetationShading {
    * `iOrigin` (vec4: ground position and tree height) and `iInfo` (vec4: atlas column,
    * atlas row, the instance's random number, brightness).
    */
-  impostorMaterial(atlas: THREE.Texture, columns: number, rows: number, near: number, far: number): THREE.MeshBasicNodeMaterial {
+  impostorMaterial(atlas: THREE.Texture, normals: THREE.Texture, columns: number, rows: number, near: number, far: number): THREE.MeshBasicNodeMaterial {
     const origin = attribute<'vec4'>('iOrigin', 'vec4');
     const info = attribute<'vec4'>('iInfo', 'vec4');
     const corner = positionGeometry;
@@ -123,7 +132,15 @@ export class VegetationShading {
     // Small pictures blur their outline; firm it up so thin crowns do not dissolve with distance.
     material.positionNode = origin.xyz.add(across).add(up);
     // Their baked light is mostly sunlight, so a passing cloud's shadow darkens them too.
-    material.colorNode = texel.xyz.mul(info.w).mul(this.impostorLight).mul(mix(1, cloudShadow.light, 0.75));
+    // Lit as the near trees are (a Lambert surface under the sun and the sky), from which way
+    // each pixel of the picture faces: across it, up it, or out of it towards the viewer.
+    const facing = texture(normals, uv).xyz.mul(2).sub(1);
+    const towards = vec3(toCamera.x, 0, toCamera.z).normalize();
+    const n = right.mul(facing.x).add(vec3(0, facing.y, 0)).add(towards.mul(facing.z)).normalize();
+    // The pictures carry no shadows of one tree on the next, which the near trees do.
+    const sun = this.sunLight.mul(max(n.dot(this.lightFrom), 0)).mul(cloudShadow.light).mul(SUN_IN_FOREST);
+    const sky = mix(this.groundLight, this.skyLight, n.y.mul(0.5).add(0.5));
+    material.colorNode = texel.xyz.mul(info.w).mul(sun.add(sky)).mul(1 / Math.PI);
     material.opacityNode = texel.w.mul(1.8).min(1);
     return material;
   }

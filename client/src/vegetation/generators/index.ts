@@ -18,7 +18,7 @@ export const SUMMER: SeasonState = { foliage: { spring: 0, summer: 1, autumn: 0,
  * different individuals; the season changes only colours and how full a leafy crown is,
  * never the number of vertices.
  */
-export function generate(species: Species, variant: number, detail: Detail, season: SeasonState = SUMMER): MeshData {
+export function generate(species: Species, variant: number, detail: Detail, season: SeasonState = SUMMER, picture = false): MeshData {
   const s = species.seasons;
   const foliage = seasonMix(season, { spring: hexColor(s.spring), summer: hexColor(s.summer), autumn: hexColor(s.autumn), winter: hexColor(s.winter) });
   // On ground plants the accent is flowers and seed heads: gone by winter, fading in autumn.
@@ -30,12 +30,13 @@ export function generate(species: Species, variant: number, detail: Detail, seas
     bark,
     barkTop: species.colors.barkTop ? hexColor(species.colors.barkTop) : bark,
     accent: species.colors.accent ? mixRgb(hexColor(species.colors.accent), foliage, faded) : foliage,
+    twig: hexColor(s.winter),
     leaves: species.deciduous ? season.leaves : 1,
   };
   // The seed depends only on the species name and variant, so every client grows the same trees.
   let seed = 2166136261;
   for (let i = 0; i < species.name.length; i++) seed = Math.imul(seed ^ species.name.charCodeAt(i), 16777619);
-  const data = GENERATORS[species.generator](species.params as Params, colors, (seed ^ Math.imul(variant + 1, 0x9e3779b1)) >>> 0, detail);
+  const data = GENERATORS[species.generator](species.params as Params, colors, (seed ^ Math.imul(variant + 1, 0x9e3779b1)) >>> 0, detail, picture);
   const hold = SNOW_HOLD[species.generator] * Math.min(1, season.snow / SNOW_FULL);
   if (hold > 0) dustWithSnow(data, hold);
   return data;
