@@ -63,8 +63,8 @@ ones move to the bottom with the answer, so the reasoning stays findable.
     sites the fire in the ring is lit, with flickering light and sparks.
 - **Done:**
   - Stopped (under 0.6 m/s) within 30 m of a shelter, camp site, hut or lodge, a line at the
-    bottom offers "Camp at Stensdalen until dawn · C" (tap it on a touch screen). C still opens
-    the credits everywhere else. Not offered again at the same place until driven 40 m away.
+    bottom offers "Camp at Stensdalen until dawn · C" (tap it on a touch screen). C no longer
+    opens the credits; they are in the menu. Not offered again at the same place until driven 40 m away.
   - The rest ends at the next sunrise (sun's centre 0.83° below the horizon), worked out in
     the browser from the region's latitude and the clock; 8 hours when there is none in the
     next day.
@@ -88,10 +88,8 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Proving ground: a shelter, a camp site and a hut east of the road, between the finds and
     the forest.
   - Protocol 11: a `camp` message each way, and `until` on the world's time.
-- **Open:**
-  - Is 18 s for a night right? A short rest (camped at 03:00) passes as slowly as a long one.
-  - Should the gamepad have a button for camping? Now only the keyboard and a tap.
-  - Should C stay shared with the credits, or move to a key of its own?
+- **Answered (the user, 2026-11-26):** all fine as built: 18 s for every night, no gamepad
+  button for now; the credits need no key of their own, so C is camping only.
 
 ### More kinds of places to find (this commit)
 

@@ -1574,9 +1574,8 @@ async function start(): Promise<void> {
         }
         break;
       case 'KeyC':
-        // Camp, when stopped by a place to; otherwise the credits: the data and software the world is made from.
+        // Camp, when stopped by a place to. The credits are in the menu.
         if (w && campOffer.kind === 'offer') campHere(w);
-        else showCredits(credits.style.display !== 'flex');
         break;
       case 'KeyT':
         panel.toggle();

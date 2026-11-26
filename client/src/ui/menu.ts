@@ -66,7 +66,7 @@ const CONTROLS: [string, string][] = [
   ['Tab (hold)', 'Big minimap'],
   ['T', 'Time and weather'],
   ['Enter', 'Chat with the others'],
-  ['C', 'Camp, when stopped by a shelter, camp site, hut or lodge; otherwise the credits'],
+  ['C', 'Camp, when stopped by a shelter, camp site, hut or lodge'],
   ['P', 'Fullscreen'],
   ['Esc', 'Menu and pause'],
 ];
