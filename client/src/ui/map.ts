@@ -10,7 +10,8 @@ import type { RegionIndex, RegionVectors, TrailLine } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { paintGround, summits, type MapRasters, type Summit } from './mapImage';
 import type { Finds } from '../finds';
-import type { Checkpoint, Course } from '../trails';
+import { TRAIL_WORDS, Trails, trailEnds, type Checkpoint, type Course, type TrailEnd } from '../trails';
+import { formatDuration } from '../trips';
 import { SeenGrid } from './seen';
 import { headingAt, type StartStore } from './starts';
 import { builder, closeButton, coarsePointer } from './dom';
@@ -60,7 +61,9 @@ export interface MapActions {
   /** The ids of the places a night has been spent at here. */
   camped?(): Set<string>;
   /** The trails here, those driven, the one on the way and its next checkpoint; `winter` opens the snowmobile trails. */
-  trails?(): { lines: readonly TrailLine[]; driven: Set<string>; current: Course | null; next: Checkpoint | null; winter: boolean };
+  trails?(): { lines: readonly TrailLine[]; driven: Set<string>; current: Course | null; next: Checkpoint | null; winter: boolean; best?: Map<string, number> };
+  /** Puts the vehicle down at a trail's end, facing along it, ready to set off. */
+  toTrail?(trail: TrailLine, end: TrailEnd): void;
   /**
    * Sharing the destination with the other drivers in the region; left out when playing alone.
    * `shared` is what is shared now, with who shared it (null for this driver).
@@ -864,6 +867,7 @@ export class MapScreen {
         button(name, () => this.choose({ name, x: t.x * s, z: t.y * s }), tops, d?.name === name ? 'on' : '');
       }
     }
+    this.renderTrails(box);
     if (this.starts.list.length || this.starts.editable) {
       add('div', 'Your start points', box, 'label');
       const mine = add('div', '', box, 'list');
@@ -912,6 +916,41 @@ export class MapScreen {
     add('p', coarsePointer()
       ? 'Drag to move, pinch to zoom. Tap a spot to drive there; tap the pin again to clear it.'
       : 'Drag to move, wheel to zoom. Click a spot to drive there; click the pin again to clear it. M or Esc closes.', box, 'hint');
+  }
+
+  /**
+   * The trails whose start has been seen (and can be driven now: snowmobile trails in winter),
+   * by kind. Each can be gone to: set down at the end nearest the vehicle, facing along it.
+   */
+  private renderTrails(box: HTMLDivElement): void {
+    const trails = this.actions.trails?.();
+    const go = this.actions.toTrail;
+    if (!trails || !go) return;
+    const { add, button } = builder(box);
+    const known = trails.lines
+      .filter((t) => Trails.open(t, trails.winter))
+      .map((t) => ({ t, ends: trailEnds(t).filter((e) => this.shows(e.x, e.z)) }))
+      .filter((k) => k.ends.length);
+    if (!known.length) return;
+    const driven = known.filter((k) => trails.driven.has(k.t.id)).length;
+    add('div', `Trails · ${driven} of ${known.length} driven`, box, 'label');
+    for (const kind of Object.keys(TRAIL_WORDS) as TrailLine['kind'][]) {
+      const group = known.filter((k) => k.t.kind === kind).sort((a, b) => a.t.name.localeCompare(b.t.name, 'sv'));
+      if (!group.length) continue;
+      const words = TRAIL_WORDS[kind][1];
+      add('div', words[0]!.toUpperCase() + words.slice(1), box, 'sublabel');
+      const list = add('div', '', box, 'list');
+      for (const { t, ends } of group) {
+        const line = add('div', '', list, 'spawn');
+        const best = trails.best?.get(t.id);
+        const done = trails.driven.has(t.id);
+        add('span', `${done ? '✓ ' : ''}${t.name} · ${formatDistance(t.length)}${best !== undefined ? ` · best ${formatDuration(best)}` : ''}`, line);
+        button('Go there', () => {
+          const end = ends.reduce((a, b) => (Math.hypot(b.x - this.state.x, b.z - this.state.z) < Math.hypot(a.x - this.state.x, a.z - this.state.z) ? b : a));
+          go(t, end);
+        }, line);
+      }
+    }
   }
 
   /** Whether open water covers a spot, by the map's land cover. */

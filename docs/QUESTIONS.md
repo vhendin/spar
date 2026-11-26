@@ -5,7 +5,21 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Thinner forest, yards round buildings (this commit)
+### Going to a trail from the map (this commit)
+
+- **Asked:** go straight to a trail once it has been seen, picked from the map (2026-11-26).
+- **Done:** the map's list has a Trails section, by kind, with the trails whose start (either
+  end; an ascent's bottom) has been seen, with length, a tick and the best time once driven.
+  Snowmobile trails only in winter. "Go there" sets the vehicle down at the end nearest it,
+  stopped and facing along the trail, and that trail is offered (J) before any other starting
+  at the same spot. It moves only: no destination is set, a trip on the way ends unlogged as
+  with a start point, and a trail on the way is given up. That end becomes the place to go
+  back to.
+- **Open:**
+  - Nearest end, or always the end the trail is named from (the first)?
+  - Should a trail seen anywhere along it count, not only at its ends?
+
+### Thinner forest, yards round buildings (0233248)
 
 - **Asked:** would fewer trees help the freezes? Fewer trees round buildings, and forests
   thin enough to drive through rather than a near wall (2026-11-26).

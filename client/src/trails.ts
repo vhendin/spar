@@ -43,6 +43,36 @@ export interface Checkpoint {
   at: number;
 }
 
+/** Where a trail can be set off from: either end, an ascent from the bottom only; facing along it. */
+export interface TrailEnd {
+  x: number;
+  z: number;
+  /** Degrees, 0 north, 90 east: along the trail. */
+  heading: number;
+  /** The far end, set off from towards the start. */
+  reversed: boolean;
+}
+
+export function trailEnds(t: TrailLine): TrailEnd[] {
+  const ends = t.kind === 'ascent' ? [false] : [false, true];
+  return ends.map((reversed) => {
+    const points = reversed ? [...t.points].reverse() : t.points;
+    const [x, z] = points[0]!;
+    // Aimed at a point a little way on, so a kink at the very end does not turn it.
+    let [ax, az] = points[points.length - 1]!;
+    for (const p of points) {
+      if (Math.hypot(p[0]! - x!, p[1]! - z!) >= AIM) {
+        [ax, az] = p;
+        break;
+      }
+    }
+    const heading = ((Math.atan2(ax! - x!, -(az! - z!)) * 180) / Math.PI + 360) % 360;
+    return { x: x!, z: z!, heading: Math.round(heading * 10) / 10, reversed };
+  });
+}
+/** Metres along the trail its end faces towards. */
+const AIM = 25;
+
 /** A trail as driven one way. */
 export interface Course {
   trail: TrailLine;
@@ -136,6 +166,8 @@ export class Trails {
   private restedAt: { x: number; z: number } | null = null;
   private lookedAt = -Infinity;
   private lastOffer: TrailOffer = { kind: 'none' };
+  /** The trail gone to from the map, offered first while at its end. */
+  private chosen: Extract<TrailOffer, { kind: 'offer' }> | null = null;
   /** Rises with every finish, so the map knows to draw again. */
   version = 0;
 
@@ -164,6 +196,22 @@ export class Trails {
     return r ? r.course.checkpoints[r.next]! : null;
   }
 
+  /** The quickest time of each trail driven to the end here, seconds. */
+  bests(): Map<string, number> {
+    return new Map(Object.entries(this.here).map(([id, d]) => [id, d.best]));
+  }
+
+  /**
+   * Put at a trail's end on purpose (the map's trail list): any trail on the way is dropped, and
+   * that trail is offered at once, before any other starting at the same spot.
+   */
+  goTo(trail: TrailLine, reversed: boolean): void {
+    this.run = null;
+    this.restedAt = null;
+    this.lookedAt = -Infinity;
+    this.chosen = { kind: 'offer', trail, reversed };
+  }
+
   /** The ids of the trails driven to the end here. */
   driven(): Set<string> {
     return new Set(Object.keys(this.here));
@@ -182,6 +230,13 @@ export class Trails {
   }
 
   private nearest(x: number, z: number, winter: boolean): TrailOffer {
+    const c = this.chosen;
+    if (c) {
+      const [ex, ez] = c.reversed ? c.trail.points[c.trail.points.length - 1]! : c.trail.points[0]!;
+      const d = Math.hypot(ex! - x, ez! - z);
+      if (d <= TRAIL_REACH && Trails.open(c.trail, winter)) return c;
+      if (d > AWAY) this.chosen = null;
+    }
     let best: TrailOffer = { kind: 'none' }, bestD = TRAIL_REACH;
     for (const t of this.lines) {
       if (!Trails.open(t, winter)) continue;
@@ -202,6 +257,7 @@ export class Trails {
   /** Sets off on the trail offered; returns its first checkpoint. */
   start(trail: TrailLine, reversed: boolean, x: number, z: number): Course {
     const c = course(trail, reversed);
+    this.chosen = null;
     this.run = { course: c, next: 1, seconds: 0, astray: null, lastX: x, lastZ: z };
     this.lastOffer = { kind: 'none' };
     return c;

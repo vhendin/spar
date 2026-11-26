@@ -1138,7 +1138,21 @@ async function start(): Promise<void> {
       reached: () => trips.reached(index.name),
       found: () => finds,
       camped: () => camp.campedAt(),
-      trails: () => ({ lines: trails.lines, driven: trails.driven(), current: trails.current, next: trails.nextCheckpoint, winter: (world?.ground.snow ?? 0) > SNOW_TRAILS }),
+      trails: () => ({ lines: trails.lines, driven: trails.driven(), current: trails.current, next: trails.nextCheckpoint, winter: (world?.ground.snow ?? 0) > SNOW_TRAILS, best: trails.bests() }),
+      toTrail: (t, end) => {
+        const w = world;
+        if (!w) return;
+        if (w.trails.current) chat.add('Trail given up: the vehicle was put somewhere else');
+        w.trails.goTo(t, end.reversed);
+        const s = { name: t.name, x: end.x, z: end.z, heading: end.heading };
+        if (starting) {
+          w.map.toggle(mapState(w));
+          w.start.driveFrom(s);
+          return;
+        }
+        travel(w, s);
+        toggleMap();
+      },
       sharing: {
         available: () => others.players.length > 1,
         shared: () => shared && { destination: shared.destination, by: shared.by === null ? null : playerName(shared.by) },

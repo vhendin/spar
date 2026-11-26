@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { TRAILS_KEY, readTrails, type TrailLine } from '@spar/shared';
-import { CHECKPOINT_EVERY, STRAY_SECONDS, Trails, course, offLine } from './trails';
+import { CHECKPOINT_EVERY, STRAY_SECONDS, Trails, course, offLine, trailEnds } from './trails';
 
 const store = new Map<string, string>();
 beforeEach(() => {
@@ -88,5 +88,34 @@ describe('trails', () => {
     t.start(hike, false, 0, 0);
     expect(t.update(1, 2000, 2000, info)).toEqual({ kind: 'lost' });
     expect(t.current).toBeNull();
+  });
+});
+
+describe('going to a trail from the map', () => {
+  it('sets down at either end facing along it, an ascent only at the bottom', () => {
+    expect(trailEnds(hike)).toEqual([
+      { x: 0, z: 0, heading: 90, reversed: false },
+      { x: 1200, z: 600, heading: 0, reversed: true },
+    ]);
+    expect(trailEnds(up)).toEqual([{ x: 3000, z: 0, heading: 180, reversed: false }]);
+  });
+
+  it('drops a trail on the way and offers the one gone to at once, even where one just ended', () => {
+    const trails = new Trails('valadalen', [hike, up]);
+    trails.start(hike, false, 0, 0);
+    trails.giveUp(3000, 0);
+    expect(trails.offer(0, 3000, 0, 0, false).kind).toBe('none');
+    trails.start(hike, false, 0, 0);
+    trails.goTo(up, false);
+    expect(trails.current).toBeNull();
+    expect(trails.offer(1, 3000, 0, 0, false)).toMatchObject({ kind: 'offer', trail: up });
+  });
+
+  it('offers the trail gone to before another starting at the same spot', () => {
+    const other: TrailLine = { ...hike, id: 'hiking:r9:0', name: 'Another route', points: [[0, 0], [0, -900]], length: 900 };
+    const trails = new Trails('valadalen', [hike, other]);
+    expect(trails.offer(0, 1, 0, 0, false)).toMatchObject({ trail: other });
+    trails.goTo(hike, false);
+    expect(trails.offer(1, 1, 0, 0, false)).toMatchObject({ trail: hike, reversed: false });
   });
 });
