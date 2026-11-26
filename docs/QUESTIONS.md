@@ -5,6 +5,32 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Trails to drive (this commit)
+
+- **Asked:** idea 3 of `docs/OVERTHEHILL.md`, next in its suggested order. Decided before
+  building (the user, 2026-11-26, one question at a time):
+  - **Kinds:** hiking routes (the named route relations: Kungsleden, Pilegrimsleden, the
+    summer routes between huts), snowmobile trails (skoterleder, imported for this), power-line
+    corridors and ascents (the steepest drivable line from a road to a summit).
+  - **Snowmobile trails in winter only:** offered when there is snow on the ground, drawn as a
+    packed, marked lane. In summer the red-cross poles stand but the trail is not offered.
+  - **Starting:** drive to its start. Trailheads show on the map once seen; stopping at one
+    offers the trail with a quiet prompt, as camping does.
+  - **Straying:** checkpoints every few hundred metres; more than about 100 m off the line, a
+    gentle note, then back to the last checkpoint, facing on. Never from the beginning.
+  - **Finishing:** a line in the logbook (date, vehicle, time taken) and the trail drawn in full
+    ink on the map. No unlocks.
+  - **Time:** kept quietly: the logbook has the time taken and the best time; nothing shows
+    while driving.
+  - **Marks:** the real ones: red crosses on poles for snowmobile trails, orange-painted
+    cairns and posts for hiking routes, the pylons for power lines, small wands for ascents. The
+    next checkpoint's pole has a ribbon; the line shows on the minimap.
+  - **Length:** long routes cut at huts, shelters, roads or crossings into stretches of
+    2–8 km, each its own trail ("Kungsleden: Sälka – Tjäktja").
+  - **Multiplayer:** each on their own; no server changes.
+- **Data per region:** 5–34 hiking route relations, 90–270 snowmobile-trail ways, 1–42
+  power-line ways.
+
 ### The map fills in as you drive (5f6c679; over lakes 0af2341)
 
 - **Asked:** idea 1 of `docs/OVERTHEHILL.md`. Decided before building: unseen ground pale (the
