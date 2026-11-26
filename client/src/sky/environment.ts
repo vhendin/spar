@@ -219,6 +219,11 @@ export class Environment {
     return new Date(this.utc + this.clock.utcOffset * 3600000).getUTCMonth();
   }
 
+  /** The in-game instant at the last update, UTC milliseconds. */
+  get utcNow(): number {
+    return this.utc;
+  }
+
   /** In-game seconds per real second. */
   get rate(): number {
     return this.clock.rate;

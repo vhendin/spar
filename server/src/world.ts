@@ -14,6 +14,8 @@ export class WorldState {
   private anchorUtc: number;
   private anchorAt: number;
   private lastStep: number;
+  /** While a night passes at a camp: where the clock stops, when, and its pace before and after. */
+  private night: { until: number; endsAt: number; rate: number } | null = null;
 
   constructor(
     private readonly config: ServerConfig,
@@ -29,12 +31,55 @@ export class WorldState {
 
   /** The in-game instant now, as UTC milliseconds. */
   utc(): number {
-    return Math.round(this.anchorUtc + (this.now() - this.anchorAt) * this.rate);
+    this.settle();
+    const utc = Math.round(this.anchorUtc + (this.now() - this.anchorAt) * this.rate);
+    return this.night ? Math.min(this.night.until, utc) : utc;
+  }
+
+  /** True while a night passes at a camp. */
+  get resting(): boolean {
+    this.settle();
+    return this.night !== null;
+  }
+
+  /**
+   * A night at a camp: the clock runs from now to `until` (UTC milliseconds) over `ms` real
+   * milliseconds, then goes on at its old pace.
+   */
+  passNight(until: number, ms: number): void {
+    const utc = this.utc();
+    if (until <= utc || ms <= 0) return;
+    const rate = this.night?.rate ?? this.rate;
+    this.anchorAt = this.now();
+    this.anchorUtc = utc;
+    this.night = { until, endsAt: this.anchorAt + ms, rate };
+    this.rate = (until - utc) / ms;
+  }
+
+  /** Ends the night at once, at its dawn. */
+  wake(): void {
+    if (this.night) this.night.endsAt = Math.min(this.night.endsAt, this.now());
+    this.settle();
+  }
+
+  /** Once the night's time is up, the clock stands at its dawn and runs at its old pace. */
+  private settle(): void {
+    const n = this.night;
+    if (!n || this.now() < n.endsAt) return;
+    this.anchorAt = n.endsAt;
+    this.anchorUtc = n.until;
+    this.rate = n.rate;
+    this.night = null;
   }
 
   /** A player changed the clock or the weather; fields left out stay as they are. */
   set(change: SetWorld): void {
     let utc = this.utc();
+    // A change to the clock ends a night being passed, where it has got to.
+    if (this.night) {
+      this.rate = this.night.rate;
+      this.night = null;
+    }
     if (change.day !== undefined) utc = onDayOfYear(utc, this.config.utcOffset, change.day);
     this.anchorAt = this.now();
     this.anchorUtc = change.hour === undefined ? utc : atLocalHour(utc, this.config.utcOffset, change.hour);
@@ -60,7 +105,7 @@ export class WorldState {
     const round = (v: number): number => Math.round(v * 1000) / 1000;
     return {
       type: 'world',
-      time: { utc: this.utc(), rate: this.rate, utcOffset: this.config.utcOffset },
+      time: { utc: this.utc(), rate: this.rate, utcOffset: this.config.utcOffset, ...(this.night ? { until: this.night.until } : {}) },
       weather: { state: w.state, cloud: round(w.cloud), rain: round(w.rain), wind: round(w.wind), windDirection: round(w.windDirection), wetness: round(w.wetness) },
     };
   }

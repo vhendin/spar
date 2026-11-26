@@ -70,4 +70,4 @@ def test_map_reads_back(tmp_path):
     field = [a for a in osm.areas if a.biome == "farmland"]
     assert len(field) == 1 and field[0].geom.GetGeometryRef(0).GetGeometryCount() > 1
     assert len([p for p in osm.places if p.kind == "hamlet"]) == 10
-    assert {p.kind for p in osm.pois} == {"peak", "viewpoint"}
+    assert {p.kind for p in osm.pois} == {"peak", "viewpoint", "shelter", "camp", "hut"}

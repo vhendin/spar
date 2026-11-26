@@ -40,7 +40,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Should the summits that the map finds itself (the spot heights) count as lookouts too? Now
     only summits from the map data do.
 
-### Camp at a shelter (planned)
+### Camp at a shelter (this commit)
 
 - **Asked:** idea 7 of `docs/OVERTHEHILL.md`, next in its suggested order. Decided before
   building (the user, 2026-11-26, one question at a time):
@@ -61,7 +61,37 @@ ones move to the bottom with the answer, so the reasoning stays findable.
     places", the list folded away, and a small mark on the map at a place camped. No score.
   - **At huts and lodges:** windows glow and smoke rises from the chimney. At shelters and camp
     sites the fire in the ring is lit, with flickering light and sparks.
-- **Open:** none yet.
+- **Done:**
+  - Stopped (under 0.6 m/s) within 30 m of a shelter, camp site, hut or lodge, a line at the
+    bottom offers "Camp at Stensdalen until dawn · C" (tap it on a touch screen). C still opens
+    the credits everywhere else. Not offered again at the same place until driven 40 m away.
+  - The rest ends at the next sunrise (sun's centre 0.83° below the horizon), worked out in
+    the browser from the region's latitude and the clock; 8 hours when there is none in the
+    next day.
+  - The server keeps one camp at a time (the clock is the whole server's): it knows where each
+    vehicle is from its snapshots, waits until everyone within 50 m has agreed, then runs the
+    clock to dawn over 18 s, stops there and goes back to its old pace. Anyone changing the
+    clock (T) ends the night where it is. A waiting camp is given up when the one waiting
+    drives 40 m off. The chat says who camped where.
+  - The night: the camera comes in front of the fire over 3 s, looking back across it at the
+    shelter (at a hut, from the vehicle's side, at the house and the sky), drifting a little
+    and lifting towards the sky in the small hours. Dashboard and minimap hide. The fire has
+    flames, sparks, smoke and a warm glow on the ground; a hut's windows glow and its chimney
+    smokes (huts to camp at always get one now, and windows even when small). No real light
+    is added: a new light would rebuild every material's shader. The fire burns down over 12 s
+    after dawn. Any key (or a tap on the line) wakes everyone at dawn.
+  - Morning: a card with the place's name and "Dawn", "The sun never set" or "The sun never
+    rose".
+  - Logbook: "Nights out: 3 nights, at 2 places", each night folded away (place, date, vehicle,
+    who else, and whether the sun set). A small tent on the map by each place camped at.
+    Kept in the browser (`spar.nights`) and with the account, merged.
+  - Proving ground: a shelter, a camp site and a hut east of the road, between the finds and
+    the forest.
+  - Protocol 11: a `camp` message each way, and `until` on the world's time.
+- **Open:**
+  - Is 18 s for a night right? A short rest (camped at 03:00) passes as slowly as a long one.
+  - Should the gamepad have a button for camping? Now only the keyboard and a tap.
+  - Should C stay shared with the credits, or move to a key of its own?
 
 ### More kinds of places to find (this commit)
 

@@ -54,6 +54,8 @@ export interface MapActions {
   reached(): Set<string>;
   /** The small things to find here, and which have been found. */
   found?(): Pick<Finds, 'points' | 'has'>;
+  /** The ids of the places a night has been spent at here. */
+  camped?(): Set<string>;
   /**
    * Sharing the destination with the other drivers in the region; left out when playing alone.
    * `shared` is what is shared now, with who shared it (null for this driver).
@@ -1029,6 +1031,7 @@ export class MapScreen {
     }
     // Destinations: a dot in the colour of their kind, ringed once reached; named when zoomed in.
     const reached = this.actions.reached();
+    const camped = this.actions.camped?.() ?? new Set<string>();
     for (const p of this.vectors.destinations ?? []) {
       if (!this.showsDestination(p)) continue;
       const [sx, sy] = this.toScreen(p.x, p.z);
@@ -1044,6 +1047,19 @@ export class MapScreen {
         c.lineWidth = 2;
         c.beginPath();
         c.arc(sx, sy, 8, 0, Math.PI * 2);
+        c.stroke();
+      }
+      if (camped.has(p.id)) {
+        // A night spent here: a small tent up and to the right.
+        c.fillStyle = '#c8641e';
+        c.strokeStyle = '#fff';
+        c.lineWidth = 1.2;
+        c.beginPath();
+        c.moveTo(sx + 7, sy - 14);
+        c.lineTo(sx + 12, sy - 6);
+        c.lineTo(sx + 2, sy - 6);
+        c.closePath();
+        c.fill();
         c.stroke();
       }
       if (s >= 0.25 || (s >= 0.08 && !/ (of|at) /.test(p.name))) label(p.name, sx, sy + 13, '11px Inter, system-ui, sans-serif');

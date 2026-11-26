@@ -8,7 +8,7 @@ import type { SeeThrough } from '../seeThrough';
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 import type { BuiltPart, BuiltTile } from './build';
 import { OBJECTS } from './defs';
-import type { Breakable, Solid } from './mesh';
+import type { Breakable, Solid, Spot } from './mesh';
 import type { FeatureRequest, FeatureResponse } from './worker';
 
 const MAX_IN_FLIGHT = 2;
@@ -20,6 +20,7 @@ interface Tile {
   group: THREE.Group | null;
   parts: { object: THREE.Object3D; range: number; triangles: number }[];
   solids: Solid[];
+  spots: Spot[];
   /** Each kind's mesh and wires, for tipping fences over. */
   drawn: Map<string, { mesh?: THREE.Mesh; lines?: THREE.LineSegments }>;
 }
@@ -59,6 +60,7 @@ export class Features {
     vectors: RegionVectors,
     seed: number,
     seeThrough: SeeThrough | null = null,
+    glow: string[] = [],
   ) {
     this.group.name = 'features';
     seeThrough?.apply(this.material);
@@ -74,7 +76,7 @@ export class Features {
       done?.(msg);
     };
     const { buildings, powerLines, fences, objects, lifts } = vectors;
-    this.post({ kind: 'init', index, vectors: { buildings, powerLines, fences, objects, lifts }, seed });
+    this.post({ kind: 'init', index, vectors: { buildings, powerLines, fences, objects, lifts }, seed, glow });
   }
 
   update(camera: THREE.Vector3): void {
@@ -135,6 +137,19 @@ export class Features {
     }
   }
 
+  /** What lights up at a camp (fire rings, chimneys, windows) of the objects with these keys, in the tiles built so far. */
+  spotsOf(keys: ReadonlySet<string>, x: number, z: number, radius: number): Spot[] {
+    const size = this.index.tileSize;
+    const out: Spot[] = [];
+    for (const tile of this.tiles.values()) {
+      if (tile.state !== 'ready') continue;
+      if (Math.max(tile.tx * size - x, 0, x - tile.tx * size - size) > radius) continue;
+      if (Math.max(tile.tz * size - z, 0, z - tile.tz * size - size) > radius) continue;
+      for (const s of tile.spots) if (keys.has(s.key) && Math.hypot(s.x - x, s.z - z) <= radius) out.push(s);
+    }
+    return out;
+  }
+
   /** Whether the fence stretch with this key has been knocked over. */
   isBroken(key: string): boolean {
     return this.broken.has(key);
@@ -166,7 +181,7 @@ export class Features {
 
   private request(tx: number, tz: number): void {
     const key = `${tx},${tz}`;
-    const tile: Tile = { tx, tz, state: 'loading', group: null, parts: [], solids: [], drawn: new Map() };
+    const tile: Tile = { tx, tz, state: 'loading', group: null, parts: [], solids: [], spots: [], drawn: new Map() };
     this.tiles.set(key, tile);
     const id = this.nextId++;
     this.inFlight++;
@@ -189,6 +204,7 @@ export class Features {
   private show(tile: Tile, built: BuiltTile): void {
     tile.state = 'ready';
     tile.solids = built.solids;
+    tile.spots = built.spots;
     if (built.parts.length === 0) return;
     const group = new THREE.Group();
     const size = this.index.tileSize;

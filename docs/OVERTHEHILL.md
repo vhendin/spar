@@ -236,6 +236,9 @@ cabins.
 
 ### 7. Camping and the day
 
+*Built 2026-11-26, without tools or repairs (neither exists yet): see "Camp at a shelter" in
+`QUESTIONS.md`.*
+
 **They:** the camp tool skips 12 hours and repairs everyone; all players within 15 m.
 
 **Spår:**

@@ -50,6 +50,9 @@
     },
     {
       "$ref": "#/definitions/ArrivedAt"
+    },
+    {
+      "$ref": "#/definitions/CampState"
     }
   ],
   "definitions": {
@@ -159,6 +162,10 @@
             },
             "utcOffset": {
               "description": "Hours the region's clocks are ahead of UTC.",
+              "type": "number"
+            },
+            "until": {
+              "description": "While a night passes at a camp: the clock runs fast and stops here, UTC milliseconds.",
               "type": "number"
             }
           }
@@ -671,6 +678,109 @@
         "id": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "CampPlace": {
+      "title": "CampPlace",
+      "description": "A place to camp: a shelter, camp site, hut or lodge from the region's destinations.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "x",
+        "z"
+      ],
+      "properties": {
+        "id": {
+          "description": "The destination's OpenStreetMap id.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "kind": {
+          "description": "shelter, camp, hut or lodge.",
+          "type": "string",
+          "pattern": "^[a-z_]{1,20}$"
+        },
+        "x": {
+          "description": "Metres east.",
+          "type": "number"
+        },
+        "z": {
+          "description": "Metres south.",
+          "type": "number"
+        }
+      }
+    },
+    "CampState": {
+      "title": "CampState",
+      "description": "How a camp stands: players waiting by the fire for everyone near to agree, the night passing, morning, or given up. To everyone in the region.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "region",
+        "place",
+        "state",
+        "ready",
+        "waiting"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "camp"
+        },
+        "region": {
+          "description": "The region it happens in.",
+          "type": "string",
+          "pattern": "^[a-z0-9_-]+$"
+        },
+        "place": {
+          "$ref": "#/definitions/CampPlace"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "waiting",
+            "night",
+            "morning",
+            "over"
+          ]
+        },
+        "ready": {
+          "description": "Players who have agreed to camp.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "waiting": {
+          "description": "Players near the fire who have not yet agreed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "until": {
+          "description": "When the rest ends, UTC milliseconds.",
+          "type": "number"
+        },
+        "ended": {
+          "description": "Whether the rest ends at a sunrise, or after 8 hours with the sun up all day or down all day.",
+          "type": "string",
+          "enum": [
+            "dawn",
+            "never_set",
+            "never_rose"
+          ]
         }
       }
     }

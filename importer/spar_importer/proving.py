@@ -15,7 +15,8 @@ the gravel road down the middle:
 
 East of the road, from the forest track south: one of each thing to find (a summer farm, a
 spring, the historic places, a cairn and a pass); a waterfall on the stream into the lake and a
-ford on the forest track.
+ford on the forest track. A little further from the road, places to camp: a shelter, a camp site
+and a hut.
 
 East of the road: a fell rising 320 m with a track spiralling to the top (snow deepens with
 height), and a forest with a track through it. A cabin, a fence and a power line stand by the
@@ -97,6 +98,13 @@ FINDS: list[tuple[float, dict]] = [
     (1710, {"historic": "tomb"}),
     (1770, {"man_made": "cairn"}),
     (1840, {"mountain_pass": "yes", "name": "Proving pass"}),
+]
+
+# Places to spend a night at, a little further from the road than the finds: (z, tags).
+CAMPS: list[tuple[float, dict]] = [
+    (1200, {"amenity": "shelter", "shelter_type": "lean_to", "name": "Proving shelter"}),
+    (1450, {"tourism": "camp_site", "name": "Proving camp site"}),
+    (1700, {"tourism": "wilderness_hut", "name": "Proving hut"}),
 ]
 
 FELL_X, FELL_Z, FELL_R, FELL_H = 1540.0, 540.0, 480.0, 320.0
@@ -299,6 +307,8 @@ def map_features() -> tuple[list[tuple[list, dict]], list[tuple[list[list], dict
     # waterfall on the stream into the lake, and a ford on the forest track.
     for z, tags in FINDS:
         nodes.append((ROAD_X + 24, z, tags))
+    for z, tags in CAMPS:
+        nodes.append((ROAD_X + 62, z, tags))
     nodes.append((503, 1610, {"waterway": "waterfall"}))
     nodes.append((1300, 1300, {"ford": "yes"}))
 

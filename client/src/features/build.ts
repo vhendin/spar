@@ -9,7 +9,7 @@ import { logPile } from './generators/logPile';
 import { poi } from './generators/poi';
 import { powerLine } from './generators/pole';
 import { inBox, type TileJob } from './layout';
-import { FeatureMesh, type GroundFn, type Solid } from './mesh';
+import { FeatureMesh, type GroundFn, type Solid, type Spot } from './mesh';
 
 export interface BuiltPart {
   /** Object definition name. */
@@ -24,6 +24,8 @@ export interface BuiltPart {
 export interface BuiltTile {
   parts: BuiltPart[];
   solids: Solid[];
+  /** What lights up at a camp. */
+  spots: Spot[];
   /** Lowest and highest point, for culling. */
   low: number;
   high: number;
@@ -46,7 +48,7 @@ export const LIFT_DEFS: Record<string, string> = {
   magic_carpet: 'magic_carpet',
 };
 
-export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: number, ground: GroundFn): BuiltTile {
+export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: number, ground: GroundFn, glow: ReadonlySet<string> = new Set()): BuiltTile {
   const meshes = new Map<string, FeatureMesh>();
   const mesh = (kind: string): FeatureMesh => {
     let m = meshes.get(kind);
@@ -54,7 +56,7 @@ export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: n
     return m;
   };
   const buildingDef = defs[BUILDING];
-  if (buildingDef) for (const b of job.buildings) building(b, buildingDef, seed, ground, mesh(BUILDING));
+  if (buildingDef) for (const b of job.buildings) building(b, buildingDef, seed, ground, mesh(BUILDING), glow.has(b.id));
   const poleDef = defs[POLE];
   if (poleDef) {
     for (const { line, poles } of job.power) {
@@ -79,6 +81,7 @@ export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: n
 
   const parts: BuiltPart[] = [];
   const solids: Solid[] = [];
+  const spots: Spot[] = [];
   let low = Infinity, high = -Infinity;
   for (const [kind, m] of meshes) {
     const built = m.build();
@@ -89,8 +92,9 @@ export function buildTile(job: TileJob, defs: Record<string, ObjectDef>, seed: n
         high = Math.max(high, list[k]!);
       }
     }
+    spots.push(...m.spots);
     parts.push({ kind, ...built });
     if (defs[kind]?.collider) solids.push(...m.solids);
   }
-  return { parts, solids, low, high };
+  return { parts, solids, spots, low, high };
 }

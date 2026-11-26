@@ -43,6 +43,23 @@ export interface Breakable {
   foot: [number, number, number, number, number, number];
 }
 
+/**
+ * A place that lights up at a camp: a fire ring, a chimney top (smoke), or a window (glow).
+ * Windows face (nx, nz) and are w by h metres; positions are centres, in world metres.
+ */
+export interface Spot {
+  /** The object's or building's id. */
+  key: string;
+  kind: 'fire' | 'chimney' | 'window';
+  x: number;
+  y: number;
+  z: number;
+  nx?: number;
+  nz?: number;
+  w?: number;
+  h?: number;
+}
+
 /** Ground height in metres at a local position. */
 export type GroundFn = (x: number, z: number) => number;
 
@@ -55,6 +72,7 @@ export class FeatureMesh {
   /** Wires: pairs of points drawn as thin lines. */
   readonly lines: number[] = [];
   readonly solids: Solid[] = [];
+  readonly spots: Spot[] = [];
 
   get vertexCount(): number {
     return this.p.length / 3;

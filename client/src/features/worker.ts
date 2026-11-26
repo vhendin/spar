@@ -8,7 +8,7 @@ import { OBJECTS } from './defs';
 import { assignToTiles, tileKey, type FeatureVectors, type TileJob } from './layout';
 
 export type FeatureRequest =
-  | { kind: 'init'; index: RegionIndex; vectors: FeatureVectors; seed: number }
+  | { kind: 'init'; index: RegionIndex; vectors: FeatureVectors; seed: number; glow?: string[] }
   | { kind: 'tile'; id: number; tx: number; tz: number };
 
 export type FeatureResponse =
@@ -19,6 +19,8 @@ export type FeatureResponse =
 
 let index: RegionIndex;
 let seed = 0;
+/** Buildings whose windows and chimney are marked for lighting at a camp. */
+let glow: ReadonlySet<string> = new Set();
 let jobs = new Map<string, TileJob>();
 const files = new Map<string, Promise<Uint16Array>>();
 
@@ -69,7 +71,7 @@ function reach(job: TileJob): number {
 
 async function build(tx: number, tz: number): Promise<BuiltTile> {
   const job = jobs.get(tileKey(tx, tz));
-  if (!job) return { parts: [], solids: [], low: 0, high: 0 };
+  if (!job) return { parts: [], solids: [], spots: [], low: 0, high: 0 };
   const h = index.heights;
   const level = h.levels[0]!;
   const side = h.samples + 2 * h.apron;
@@ -108,13 +110,14 @@ async function build(tx: number, tz: number): Promise<BuiltTile> {
     const bottom = data[at + side]! * (1 - fu) + data[at + side + 1]! * fu;
     return h.encoding.offset + (top * (1 - fv) + bottom * fv) * h.encoding.scale;
   };
-  return buildTile(job, OBJECTS, seed, ground);
+  return buildTile(job, OBJECTS, seed, ground, glow);
 }
 
 self.onmessage = (ev: MessageEvent<FeatureRequest>): void => {
   const req = ev.data;
   if (req.kind === 'init') {
     ({ index, seed } = req);
+    glow = new Set(req.glow ?? []);
     jobs = assignToTiles(req.vectors, index.tileSize, index.size);
     self.postMessage({ kind: 'ready', tiles: [...jobs].map(([key, job]) => [key, reach(job)]) } satisfies FeatureResponse);
     return;

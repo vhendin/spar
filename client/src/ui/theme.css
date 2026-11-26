@@ -128,6 +128,15 @@ kbd {
 #drone-inset { position: fixed; display: none; pointer-events: none; border: 1px solid var(--glass-rule); border-radius: 6px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
 #drone-inset span { position: absolute; left: 8px; top: 6px; font: 600 11px/1 var(--sans); letter-spacing: 0.12em; color: var(--on-glass); text-shadow: 0 1px 2px #000; }
 #prompt { top: 62%; padding: 9px 18px; font-size: 15px; opacity: 0; transition: opacity 0.4s; }
+/* Camping: offered when stopped by a shelter, camp site, hut or lodge; a tap camps on a touch screen. */
+#camp-prompt {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(max(16px, var(--safe-b)) + 44px); white-space: nowrap;
+  padding: 7px 16px; font: 14px/1.4 var(--sans); color: var(--on-glass); background: var(--glass);
+  border: 1px solid var(--glass-rule); border-radius: 999px; backdrop-filter: blur(4px);
+  opacity: 0; transition: opacity 0.6s; pointer-events: none; cursor: pointer;
+}
+#camp-prompt.show { opacity: 1; pointer-events: auto; }
+#camp-prompt .place { font-family: var(--serif); font-size: 16px; }
 .guide { top: 96px; display: none; align-items: center; gap: 10px; padding: 5px 16px; font-size: 14px; }
 .guide .name { font: 18px/1.2 var(--serif); }
 

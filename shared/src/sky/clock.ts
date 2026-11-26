@@ -10,10 +10,15 @@ export interface GameClock {
   utcOffset: number;
   /** Local stopwatch reading (milliseconds) that `utc` belongs to. */
   at: number;
+  /** While a night passes at a camp: the clock runs fast and stops here (UTC milliseconds). */
+  until?: number;
 }
 
 /** The in-game instant now, as UTC milliseconds. `now` is the local stopwatch in milliseconds. */
-export const gameUtc = (clock: GameClock, now: number): number => clock.utc + (now - clock.at) * clock.rate;
+export const gameUtc = (clock: GameClock, now: number): number => {
+  const t = clock.utc + (now - clock.at) * clock.rate;
+  return clock.until === undefined ? t : Math.min(clock.until, t);
+};
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

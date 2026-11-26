@@ -10,6 +10,7 @@ import { isClientMessage } from '@spar/shared/validate';
 import type { ServerConfig } from './config';
 import { AccessVerifier } from './access';
 import { AccountStore, cleanChanges } from './accounts';
+import { Camps, NIGHT_MS, type CampChange, type Where } from './camps';
 import { AREA_SIZES, AreaMaker, checkRequest, cleanStarts, fromHost, readStarts, writeStarts, type AreaRequest } from './areas';
 import { cleanName, describeWorldChange, playerList } from './players';
 import { listRegions } from './regions';
@@ -277,6 +278,10 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
   const onRoad = new Set<string>();
   /** Everyone who has said hello, by their socket. */
   const joined = new Map<WebSocket, Player>();
+  /** Where each driver's vehicle was last, from its snapshots: for who is near a camp. */
+  const where = new Map<string, Where>();
+  const camps = new Camps((id) => where.get(id), () => [...joined.values()].map((p) => p.id));
+  let nightTimer: NodeJS.Timeout | null = null;
   /**
    * Players whose connection dropped, by the token their browser chose: coming back with it
    * before the timer runs out, they are the same player again, and nobody is told they left.
@@ -290,6 +295,7 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
   let ticks = 0;
   const timer = setInterval(() => {
     world.step();
+    campChanged(camps.check());
     // Once the lakes are open the holes in the ice are gone with it.
     if (seasonAt(seasonDefs as SeasonCalendar, dayOfYear(world.utc(), config.utcOffset)).ice <= 0) rooms.thaw();
     if (++ticks % WORLD_INTERVAL !== 0 || joined.size === 0) return;
@@ -326,6 +332,29 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
     const done = rooms.everyoneArrived(region, here);
     if (done) toRoom(region, { type: 'chat', text: `Everyone has arrived at ${done.name}` });
   };
+  /** Tells the region how its camp stands; at the start of a night, runs the clock to dawn. */
+  const campChanged = (change: CampChange | null): void => {
+    if (!change) return;
+    const { state } = change;
+    const msg: ServerMessage = state;
+    const text = JSON.stringify(msg);
+    for (const [ws, p] of joined) if (p.region === state.region && ws.readyState === ws.OPEN) ws.send(text);
+    if (change.start && state.until !== undefined) {
+      world.passNight(state.until, NIGHT_MS);
+      broadcast(world.message());
+      const names = state.ready.map((id) => [...joined.values()].find((p) => p.id === id)?.name).filter((n): n is string => !!n);
+      if (names.length) say(`${names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`} camped at ${state.place.name}`);
+      if (nightTimer) clearTimeout(nightTimer);
+      nightTimer = setTimeout(morning, NIGHT_MS + 20);
+    }
+  };
+  const morning = (): void => {
+    if (nightTimer) clearTimeout(nightTimer);
+    nightTimer = null;
+    world.wake();
+    broadcast(world.message());
+    campChanged(camps.morning());
+  };
   const gone = (player: Player): void => {
     broadcast({ type: 'away', id: player.id });
     announcePlayers();
@@ -343,6 +372,8 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
       acks.delete(ws);
       checkArrivals(player.region);
       onRoad.delete(player.id);
+      where.delete(player.id);
+      campChanged(camps.check());
       // Its cables come off at once, and the vehicles its browser ran go back to their drivers.
       if (towing.leave(player.id)) announceTowing();
       const token = tokens.get(ws);
@@ -420,11 +451,13 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
           const of = msg.of ?? player.id;
           if (towing.runnerOf(of) !== player.id) break;
           onRoad.add(of);
+          where.set(of, { region: msg.vehicle.region, x: msg.vehicle.p[0]!, z: msg.vehicle.p[2]! });
           broadcast(msg.of === undefined ? { type: 'state', id: player.id, vehicle: msg.vehicle } : { type: 'state', id: of, by: player.id, vehicle: msg.vehicle }, ws);
           break;
         }
         case 'away':
           onRoad.delete(player.id);
+          where.delete(player.id);
           if (towing.free(player.id)) announceTowing();
           broadcast({ type: 'away', id: player.id }, ws);
           break;
@@ -499,6 +532,12 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
           if (text) broadcast({ type: 'chat', from: player.id, name: player.name, text });
           break;
         }
+        case 'camp': {
+          if (player.region !== msg.region) break;
+          if (msg.action === 'wake' && camps.current?.night && camps.current.ready.has(player.id)) morning();
+          else campChanged(camps.message(player.id, msg));
+          break;
+        }
         case 'set_world': {
           // Anyone who has joined may change the clock and weather; everyone sees it at once.
           world.set(msg);
@@ -526,6 +565,7 @@ export function createGameServer(config: ServerConfig, deps: { access?: AccessVe
     close: () =>
       new Promise((resolve, reject) => {
         clearInterval(timer);
+        if (nightTimer) clearTimeout(nightTimer);
         for (const ws of wss.clients) ws.terminate();
         joined.clear();
         for (const d of dropped.values()) clearTimeout(d.timer);

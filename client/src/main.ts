@@ -2,7 +2,7 @@ import './ui/theme.css';
 import { startErrorLog } from './perf/errorLog';
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three/webgpu';
-import { parseLocalTime, seasonAt, type RegionIndex, type SeasonCalendar, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
+import { nextDawn, parseLocalTime, seasonAt, type CampPlace, type Night, type RegionIndex, type SeasonCalendar, type RegionVectors, type ServerMessage, type VehicleDef, type Weather, type Welcome } from '@spar/shared';
 import { fillCredits } from './credits';
 import { Features } from './features/features';
 import { poiFeatures } from './features/poi';
@@ -46,6 +46,8 @@ import { Guide, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { EYE, Explorer } from './explore';
 import { Finds } from './finds';
+import { Camp, type CampOffer } from './camp';
+import { Campfire } from './campfire';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { signIn } from './account';
@@ -180,6 +182,11 @@ interface World {
   explorer: Explorer;
   /** Small things found on the way, and the highest point reached. */
   finds: Finds;
+  /** Nights at a shelter, camp site, hut or lodge. */
+  camp: Camp;
+  /** Each camp place's object or building id (by place id), whose fire and windows are lit. */
+  campKeys: Record<string, string>;
+  campfire: Campfire;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
@@ -377,6 +384,172 @@ async function start(): Promise<void> {
   function playerName(id: string): string {
     return others.players.find((p) => p.id === id)?.name ?? 'another driver';
   }
+
+  // Camping: offered when stopped by a shelter, camp site, hut or lodge; the night passes at
+  // the fire, watched, until dawn; then a card with the place's name.
+  const campPrompt = document.createElement('div');
+  campPrompt.id = 'camp-prompt';
+  document.body.append(campPrompt);
+  let campShown = '';
+  let campOffer: CampOffer = { kind: 'none' };
+  /** The night being passed, and where the camera rests for it. */
+  let night: {
+    place: CampPlace;
+    ended: Night['ended'];
+    t: number;
+    from: THREE.Vector3;
+    fromLook: THREE.Vector3;
+    eye: THREE.Vector3;
+    look: THREE.Vector3;
+  } | null = null;
+  const campLook = new THREE.Vector3();
+  /** Seconds after which a night ends here even if the server's morning never comes. */
+  const NIGHT_LONGEST = 30;
+
+  /** Asks to camp at the place offered: the rest ends at the next dawn here. */
+  const campHere = (w: World): void => {
+    const o = campOffer;
+    if (o.kind !== 'offer') return;
+    if (link.status !== 'online') {
+      chat.add('Camping needs the connection to the server, which keeps the clock');
+      return;
+    }
+    const { latitude, longitude } = w.index.center;
+    const dawn = nextDawn(w.environment.utcNow, latitude, longitude);
+    w.camp.asked(o.place);
+    connection?.send({ type: 'camp', region: w.index.name, action: 'ready', place: o.place, until: dawn.utc, ended: dawn.kind });
+  };
+
+  /** Gives up waiting for the others. */
+  const campLeave = (w: World): void => {
+    w.camp.gaveUp();
+    connection?.send({ type: 'camp', region: w.index.name, action: 'leave' });
+  };
+
+  /** The night begins: the fire lit, the camera brought to it, and the night kept. */
+  const startNight = (w: World, msg: Extract<ServerMessage, { type: 'camp' }>): void => {
+    const place = msg.place;
+    const key = w.campKeys[place.id];
+    const p = w.view.group.position;
+    const groundAt = (x: number, z: number): number => w.terrain.heightAt(x, z) ?? w.map.heightAt(x, z) ?? p.y;
+    let spots = key ? (w.features?.spotsOf(new Set([key]), place.x, place.z, 80) ?? []) : [];
+    if (!spots.some((s) => s.kind === 'fire' || s.kind === 'window')) {
+      // Nothing built there to light: a fire between the place and the vehicle.
+      const d = Math.hypot(p.x - place.x, p.z - place.z) || 1;
+      const fx = place.x + ((p.x - place.x) / d) * Math.min(5, d / 2), fz = place.z + ((p.z - place.z) / d) * Math.min(5, d / 2);
+      spots = [...spots, { key: 'camp', kind: 'fire', x: fx, y: groundAt(fx, fz), z: fz }];
+    }
+    w.campfire.light(spots);
+    const fire = spots.find((s) => s.kind === 'fire');
+    let eye: THREE.Vector3, look: THREE.Vector3;
+    if (fire) {
+      // In front of the fire, away from the shelter, looking back across the flames at it.
+      let dx = fire.x - place.x, dz = fire.z - place.z;
+      if (Math.hypot(dx, dz) < 0.5) {
+        dx = p.x - fire.x;
+        dz = p.z - fire.z;
+      }
+      const d = Math.hypot(dx, dz) || 1;
+      dx /= d;
+      dz /= d;
+      const ex = fire.x + dx * 4.2 - dz * 1.6, ez = fire.z + dz * 4.2 + dx * 1.6;
+      eye = new THREE.Vector3(ex, Math.max(groundAt(ex, ez), fire.y) + 1.3, ez);
+      look = new THREE.Vector3(fire.x - dx * 1.2, fire.y + 0.9, fire.z - dz * 1.2);
+    } else {
+      // A hut: from the vehicle's side, a little off, the house and the sky over it.
+      let dx = p.x - place.x, dz = p.z - place.z;
+      const d = Math.hypot(dx, dz) || 1;
+      dx /= d;
+      dz /= d;
+      const ex = place.x + dx * 16 - dz * 5, ez = place.z + dz * 16 + dx * 5;
+      eye = new THREE.Vector3(ex, groundAt(ex, ez) + 2.2, ez);
+      look = new THREE.Vector3(place.x, groundAt(place.x, place.z) + 3, place.z);
+    }
+    camera.getWorldDirection(campLook);
+    night = {
+      place,
+      ended: msg.ended ?? 'dawn',
+      t: 0,
+      from: camera.position.clone(),
+      fromLook: camera.position.clone().addScaledVector(campLook, 10),
+      eye,
+      look,
+    };
+    const day = w.environment.dayOfYear();
+    const along = msg.ready.filter((id) => id !== towing.me).map(playerName);
+    w.camp.record({
+      place: place.id,
+      name: place.name,
+      kind: place.kind,
+      vehicle: w.sim.def.title,
+      date: dateOfYear(day),
+      season: seasonName(seasonAt(CALENDAR, day), day),
+      ended: msg.ended ?? 'dawn',
+      ...(along.length ? { with: along } : {}),
+    });
+    w.map.refresh();
+  };
+
+  /** Morning: the fire burns down, the camera goes back to the vehicle, and the card shows. */
+  const endNight = (w: World): void => {
+    const n = night;
+    if (!n) return;
+    night = null;
+    w.campfire.burnDown();
+    w.camp.rested(n.place);
+    chase.reset();
+    chapter(n.place.name, n.ended === 'never_set' ? 'The sun never set' : n.ended === 'never_rose' ? 'The sun never rose' : 'Dawn');
+  };
+
+  /** The camera through the night: brought to the fire, drifting a little, looking up at the sky in the small hours. */
+  const campCamera = (dt: number): void => {
+    const n = night!;
+    n.t += dt;
+    const k = THREE.MathUtils.smoothstep(n.t, 0, 3);
+    camera.position.lerpVectors(n.from, n.eye, k);
+    const sway = Math.sin(n.t * 0.2) * 0.6;
+    camera.position.x += sway * k;
+    campLook.lerpVectors(n.fromLook, n.look, k);
+    campLook.y += Math.sin(Math.min(1, n.t / 18) * Math.PI) * 1.4 * k;
+    camera.lookAt(campLook);
+  };
+
+  /** The prompt's words: built from text, never from markup, since names come from the map and other drivers. */
+  const showCampPrompt = (o: CampOffer, touchShown: boolean): void => {
+    const key = (k: string): string => (touchShown ? '' : k);
+    let parts: [string, string?][] = [];
+    if (o.kind === 'offer') {
+      parts = o.others.length
+        ? [[`${o.others.join(' and ')} ${o.others.length === 1 ? 'is' : 'are'} camping at `], [o.place.name, 'place'], [touchShown ? ' · tap to camp too' : ' · C to camp too']]
+        : [['Camp at '], [o.place.name, 'place'], [touchShown ? ' until dawn · tap here' : ` until dawn · ${key('C')}`]];
+    } else if (o.kind === 'waiting') {
+      parts = o.for.length
+        ? [['Waiting at '], [o.place.name, 'place'], [` for ${o.for.join(' and ')} to camp too · drive off to give up`]]
+        : [['At '], [o.place.name, 'place'], [' · the night is about to begin']];
+    } else if (o.kind === 'night') {
+      parts = [['Resting at '], [o.place.name, 'place'], [o.with.length ? ` with ${o.with.join(' and ')}` : ''], [touchShown ? ' · tap to wake at dawn' : ' · any key to wake at dawn']];
+    }
+    const text = parts.map((p) => p.join('|')).join('/');
+    if (text !== campShown) {
+      campShown = text;
+      campPrompt.replaceChildren(
+        ...parts.map(([t, cls]) => {
+          const span = document.createElement('span');
+          span.textContent = t;
+          if (cls) span.className = cls;
+          return span;
+        }),
+      );
+    }
+    campPrompt.classList.toggle('show', parts.length > 0);
+  };
+  campPrompt.addEventListener('click', () => {
+    const w = world;
+    if (!w) return;
+    if (campOffer.kind === 'offer') campHere(w);
+    else if (campOffer.kind === 'waiting') campLeave(w);
+    else if (campOffer.kind === 'night') connection?.send({ type: 'camp', region: w.index.name, action: 'wake' });
+  });
 
   // ?ghosts=4 brings made-up drivers along behind our vehicle, for trying the game with company.
   const ghosts = params.has('ghosts') ? new Ghosts(Number(params.get('ghosts')) || 4, params.get('region') ?? stored(REGION_KEY) ?? '') : null;
@@ -847,7 +1020,7 @@ async function start(): Promise<void> {
     let features: Features | null = null;
     if (params.get('objects') !== '0') {
       const withPois = { ...vectors, buildings: [...(vectors.buildings ?? []), ...pois.buildings], objects: [...(vectors.objects ?? []), ...pois.objects] };
-      features = new Features(index, withPois, welcome.seed, seeThrough);
+      features = new Features(index, withPois, welcome.seed, seeThrough, pois.glow);
       features.rangeScale = settings.objectRange;
       scene.add(features.group);
     }
@@ -902,6 +1075,10 @@ async function start(): Promise<void> {
     const sound = new VehicleAudio(audio);
     // Small things to find on the way, and the highest point reached.
     const finds = new Finds(index.name, vectors.finds ?? [], vectors.lakes);
+    // Nights at a shelter, camp site, hut or lodge, and the fire lit for one.
+    const camp = new Camp(index.name, vectors.destinations ?? []);
+    const campfire = new Campfire();
+    scene.add(campfire.group);
     const map = new MapScreen(document.body, index, vectors, {
       setDestination: (d) => {
         guide.destination = d;
@@ -909,6 +1086,7 @@ async function start(): Promise<void> {
       },
       reached: () => trips.reached(index.name),
       found: () => finds,
+      camped: () => camp.campedAt(),
       sharing: {
         available: () => others.players.length > 1,
         shared: () => shared && { destination: shared.destination, by: shared.by === null ? null : playerName(shared.by) },
@@ -999,7 +1177,7 @@ async function start(): Promise<void> {
     start.setPlayers(others.list());
     start.setAddresses(welcome.addresses ?? []);
     start.setAccount(account?.email ?? null);
-    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, camp, campKeys: pois.camps, campfire, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
     ground.onBreak = (x, z) => connection?.send({ type: 'ice_hole', region: index.name, hole: { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 } });
@@ -1238,6 +1416,7 @@ async function start(): Promise<void> {
         places: placesToReach,
         seen: world && !world.map.whole ? world.map.seen.share : null,
         finds: world?.finds.summary() ?? null,
+        nights: world?.camp.summary() ?? null,
       }),
       players: () => ({ list: others.list(), region: world?.index.title ?? '', titleOf: (name) => regionTitles.get(name) ?? name }),
       join: (id) => joinFriend(id),
@@ -1358,6 +1537,11 @@ async function start(): Promise<void> {
       return;
     }
     if (paused || starting) return;
+    // A night at the fire: any key wakes everyone there at dawn.
+    if (night && w) {
+      if (!['F3', 'F8', 'F9', 'KeyP'].includes(e.code)) connection?.send({ type: 'camp', region: w.index.name, action: 'wake' });
+      return;
+    }
     if (e.code === 'Enter' || e.code === 'NumpadEnter') {
       // A line to the others.
       e.preventDefault();
@@ -1390,8 +1574,9 @@ async function start(): Promise<void> {
         }
         break;
       case 'KeyC':
-        // Credits: the data and software the world is made from.
-        showCredits(credits.style.display !== 'flex');
+        // Camp, when stopped by a place to; otherwise the credits: the data and software the world is made from.
+        if (w && campOffer.kind === 'offer') campHere(w);
+        else showCredits(credits.style.display !== 'flex');
         break;
       case 'KeyT':
         panel.toggle();
@@ -1563,6 +1748,13 @@ async function start(): Promise<void> {
       if (msg.destination) chat.add(`${name} shared ${msg.destination.name} with everyone here: it shows in blue on the map and at the top`);
       else if (shared) chat.add(`${name} stopped sharing ${shared.destination.name}`);
       setShared(msg.destination ? { destination: msg.destination, by: msg.by } : null);
+    },
+    camp: (msg) => {
+      const w = world;
+      if (!w || msg.region !== w.index.name) return;
+      w.camp.heard(msg);
+      if (msg.state === 'night' && msg.ready.includes(towing.me) && !night) startNight(w, msg);
+      else if (msg.state === 'morning' && night?.place.id === msg.place.id) endNight(w);
     },
     arrived: (msg) => {
       const w = world;
@@ -1876,7 +2068,7 @@ async function start(): Promise<void> {
       // While paused nothing moves: no input, no physics, no flying mud.
       const still = flying || paused || starting || w.map.open;
       // With the drone out the driving controls fly it, and the vehicle waits on its handbrake.
-      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : drone.flown ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : input.read(dt, w.sim.speed);
+      const controls = still ? { throttle: 0, brake: 0, steer: 0, handbrake: false } : drone.flown || night ? { throttle: 0, brake: 0, steer: 0, handbrake: true } : input.read(dt, w.sim.speed);
       const winching: WinchControls = still || w.unplaced ? { pull: false, slack: false } : input.winch();
       // Paused, the physics still runs while our vehicle follows another browser: it is not ours to stop.
       if (!paused || towing.following) owed += dt;
@@ -1990,6 +2182,7 @@ async function start(): Promise<void> {
         w.start.setPicture(w.map.picture);
       } else if (benchmark) benchStep(w, now);
       else if (flying) fly.update(dt);
+      else if (night) campCamera(dt);
       else if (drone.flown) {
         // The drone's camera, under its nose, turned with it and tilted down.
         camera.position.set(drone.p.x, drone.p.y - 0.1, drone.p.z);
@@ -2062,6 +2255,8 @@ async function start(): Promise<void> {
       const snowDepth = snowOverride === null ? season.snow : 0;
       env.snowing = snowDepth > 0.02;
       env.update(now, dt, camera.position, flying || drone.flown ? camera.position : w.view.group.position);
+      const windSpeed = env.weather.wind * 4;
+      w.campfire.update(paused ? 0 : dt, camera, 1 - Math.min(1, env.daylight * 1.5), env.windVector.x * windSpeed, env.windVector.y * windSpeed);
       w.shading.wet.value = env.weather.wetness;
       // One pixel's angle, for the road edges' anti-aliasing (the view and window change).
       w.shading.pixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, renderer.domElement.height);
@@ -2156,8 +2351,12 @@ async function start(): Promise<void> {
       if (!w.unplaced && !flying && !paused && !w.map.open && !starting) {
         trips.tick(dt, tripFrom ? Math.min(50, Math.hypot(where.x - tripFrom.x, where.z - tripFrom.z)) : 0, now);
         tripFrom = { x: where.x, z: where.z };
+        // A night at a shelter, camp site, hut or lodge: offered when stopped by one.
+        campOffer = drone.flown ? { kind: 'none' } : w.camp.offer(towing.me, where.x, where.z, w.sim.speed, playerName);
+        if (campOffer.kind === 'waiting' && w.camp.drivenOff(where.x, where.z)) campLeave(w);
+        if (night && (night.t > NIGHT_LONGEST || (link.status !== 'online' && night.t > 3))) endNight(w);
         // Something found on the way: a quiet card, and it is marked on the map.
-        if (!drone.flown) {
+        if (!drone.flown && !night) {
           const found = w.finds.update(now, where.x, where.z, w.terrain.heightAt(where.x, where.z) ?? w.map.heightAt(where.x, where.z), () => {
             const day = w.environment.dayOfYear();
             return { vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(seasonAt(CALENDAR, day), day) };
@@ -2168,7 +2367,11 @@ async function start(): Promise<void> {
             w.map.refresh();
           }
         }
-      } else tripFrom = null;
+      } else {
+        tripFrom = null;
+        campOffer = { kind: 'none' };
+      }
+      showCampPrompt(campOffer, touch.shown);
       // Seeing the region, from the driver's seat or from the drone.
       if (!w.unplaced && !flying && !starting) {
         if (drone.flown) w.explorer.update(now, drone.p.x, drone.p.z, drone.p.y);
@@ -2183,7 +2386,7 @@ async function start(): Promise<void> {
         }
       }
       w.map.update(where, now);
-      minimap.update(dt, w.map, where, !w.unplaced && !w.map.open);
+      minimap.update(dt, w.map, where, !w.unplaced && !w.map.open && !night);
       // The shared destination first, so arriving at a place that is both is logged as shared.
       // From the drone, the compass and the way to the destination count from it.
       const from = flying || drone.flown ? camera.position : w.view.group.position;
@@ -2206,7 +2409,7 @@ async function start(): Promise<void> {
       if (say) prompted = sayKey;
       prompt.style.opacity = say ? '1' : '0';
 
-      dash.visible = !flying && !drone.flown && !w.unplaced;
+      dash.visible = !flying && !drone.flown && !w.unplaced && !night;
       const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;
       if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || (!towing.following && w.sim.holding) }, gauge);
       hint.style.opacity = now < hintUntil && !paused && winchShown === '' ? '1' : '0';

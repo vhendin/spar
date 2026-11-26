@@ -20,7 +20,8 @@ export type ClientMessage =
   | Handover
   | Pause
   | Share
-  | Arrived;
+  | Arrived
+  | Camp;
 
 /**
  * First message on a new connection, with the driver's name and colour.
@@ -810,4 +811,46 @@ export interface Arrived {
    */
   region: string;
   destination: Destination;
+}
+/**
+ * Camping: ready to rest here until dawn (with the place and when the rest ends), no longer (driven off), or awake early.
+ */
+export interface Camp {
+  type: 'camp';
+  /**
+   * The region it happens in.
+   */
+  region: string;
+  action: 'ready' | 'leave' | 'wake';
+  place?: CampPlace;
+  /**
+   * With ready: the in-game instant the rest ends, UTC milliseconds.
+   */
+  until?: number;
+  /**
+   * Whether the rest ends at a sunrise, or after 8 hours with the sun up all day or down all day.
+   */
+  ended?: 'dawn' | 'never_set' | 'never_rose';
+}
+/**
+ * A place to camp: a shelter, camp site, hut or lodge from the region's destinations.
+ */
+export interface CampPlace {
+  /**
+   * The destination's OpenStreetMap id.
+   */
+  id: string;
+  name: string;
+  /**
+   * shelter, camp, hut or lodge.
+   */
+  kind: string;
+  /**
+   * Metres east.
+   */
+  x: number;
+  /**
+   * Metres south.
+   */
+  z: number;
 }

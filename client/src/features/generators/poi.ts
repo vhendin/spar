@@ -79,7 +79,7 @@ function slab(out: FeatureMesh, f: Frame, hx: number, z0: number, y0: number, z1
 }
 
 /** A ring of stones round a fire, with charred wood in it, at local (lx, lz). */
-function fireRing(def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame, lx: number, lz: number): void {
+function fireRing(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame, lx: number, lz: number): void {
   const n = 9 + Math.floor(rng.float() * 3);
   for (let k = 0; k < n; k++) {
     const a = (k / n) * Math.PI * 2 + rng.range(-0.1, 0.1);
@@ -88,6 +88,9 @@ function fireRing(def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame, lx: numb
     out.box(f.at(x, f.groundAt(x, z) + hy * 0.6, z), rng.range(0.12, 0.18), hy, rng.range(0.1, 0.15), f.yaw + a, shade(pick(def, 'stone', rng), rng.range(0.85, 1.1)));
   }
   const g = f.groundAt(lx, lz);
+  // Lit for a night spent here.
+  const p = f.at(lx, g, lz);
+  out.spots.push({ key: o.id, kind: 'fire', x: p[0], y: p[1], z: p[2] });
   for (let k = 0; k < 3; k++) {
     const a = rng.float() * Math.PI;
     const dx = Math.cos(a) * 0.32, dz = Math.sin(a) * 0.32;
@@ -137,7 +140,7 @@ function shelter(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f:
 
   // The fire ring in front, and a log to sit on.
   const fire = hz + 2.1;
-  fireRing(def, rng, out, f, rng.range(-0.3, 0.3), fire);
+  fireRing(o, def, rng, out, f, rng.range(-0.3, 0.3), fire);
   const side = rng.float() < 0.5 ? -1 : 1;
   const sx = side * 1.4, g = f.groundAt(sx, fire);
   out.rod(f.at(sx, g + 0.16, fire - 0.8), f.at(sx, g + 0.16, fire + 0.8), 0.2, 8, log(), ends);
@@ -209,7 +212,7 @@ function table(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: F
 
 /** A camp site: a fire ring in the middle, two picnic tables and a ridge tent. */
 function camp(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
-  fireRing(def, rng, out, f, 0, 0);
+  fireRing(o, def, rng, out, f, 0, 0);
   table(o, def, rng, out, f, -3.6, 2.2, rng.range(-0.4, 0.4), 't1');
   table(o, def, rng, out, f, 3.4, 2.6, rng.range(-0.4, 0.4) + Math.PI / 2, 't2');
   // The tent behind the fire: two sloping sides and two ends, on a ridge pole.

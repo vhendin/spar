@@ -32,6 +32,32 @@ describe('poiFeatures', () => {
   });
 });
 
+describe('camping', () => {
+  it('names what lights up at each place to camp: its own model, or the building mapped there', () => {
+    const mapped: Building = { id: 'w9', kind: 'hut', outline: [[345, 195], [355, 195], [355, 205], [345, 205]] };
+    const f = poiFeatures([place('n1', 'shelter', 50, 80), place('n4', 'camp', 120, 160), place('n6', 'hut', 250, 120), place('n7', 'lodge', 350, 200), place('n2', 'peak', 300, 300)], [mapped], [road], 1);
+    expect(f.camps).toEqual({ n1: 'poin1', n4: 'poin4', n6: 'poin6', n7: 'w9' });
+    expect(f.glow.sort()).toEqual(['poin6', 'w9']);
+  });
+
+  it('marks the fire rings, and the windows and chimney of a hut to glow', () => {
+    const f = poiFeatures([place('n1', 'shelter', 50, 80), place('n4', 'camp', 120, 160), place('n6', 'hut', 250, 120)], [], [road], 1);
+    const tile = buildTile({ buildings: f.buildings, power: [], fences: [], objects: f.objects, lifts: [] }, OBJECTS, 7, hilly, new Set(f.glow));
+    const fires = tile.spots.filter((s) => s.kind === 'fire');
+    expect(fires.map((s) => s.key).sort()).toEqual(['poin1', 'poin4']);
+    // The shelter's fire is in front of it, a few metres off.
+    const shelterFire = fires.find((s) => s.key === 'poin1')!;
+    expect(Math.hypot(shelterFire.x - 50, shelterFire.z - 80)).toBeGreaterThan(2);
+    expect(shelterFire.y).toBeCloseTo(hilly(shelterFire.x, shelterFire.z), 0);
+    const hut = tile.spots.filter((s) => s.key === 'poin6');
+    expect(hut.filter((s) => s.kind === 'chimney')).toHaveLength(1);
+    expect(hut.filter((s) => s.kind === 'window').length).toBeGreaterThanOrEqual(2);
+    for (const w of hut.filter((s) => s.kind === 'window')) expect(Math.hypot(w.nx!, w.nz!)).toBeCloseTo(1, 5);
+    // Without being marked, the same hut has none.
+    expect(buildTile({ buildings: f.buildings, power: [], fences: [], objects: [], lifts: [] }, OBJECTS, 7, hilly).spots).toEqual([]);
+  });
+});
+
 describe('poi generator', () => {
   it('builds every kind with something to hit', () => {
     const f = poiFeatures([place('n1', 'shelter', 50, 80), place('n2', 'peak', 300, 300), place('n3', 'viewpoint', 200, 50), place('n4', 'camp', 120, 160), place('n5', 'sight', 10, 10)], [], [road], 1);

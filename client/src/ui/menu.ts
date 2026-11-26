@@ -3,6 +3,7 @@
 
 import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../vehicle/gamepad';
 import { KIND_WORDS, type FindsSummary } from '../finds';
+import type { NightsSummary } from '../camp';
 import { formatDuration, type LogEntry } from '../trips';
 import { formatDistance } from './map';
 import { fillPlayers, type PlayerLine } from './players';
@@ -35,7 +36,7 @@ export interface MenuActions {
    * The logbook for this area: its title, the arrivals there, how many places there are to
    * reach, and the share of it seen (null when the whole map is shown).
    */
-  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null; finds: FindsSummary | null };
+  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null; finds: FindsSummary | null; nights: NightsSummary | null };
   /** Everyone connected, and the title of the region we drive in. */
   players(): { list: PlayerLine[]; region: string; titleOf(name: string): string };
   /** Set off just behind another driver, wherever they are. */
@@ -65,7 +66,7 @@ const CONTROLS: [string, string][] = [
   ['Tab (hold)', 'Big minimap'],
   ['T', 'Time and weather'],
   ['Enter', 'Chat with the others'],
-  ['C', 'Credits'],
+  ['C', 'Camp, when stopped by a shelter, camp site, hut or lodge; otherwise the credits'],
   ['P', 'Fullscreen'],
   ['Esc', 'Menu and pause'],
 ];
@@ -85,6 +86,7 @@ const TOUCH: [string, string][] = [
   ['Winch', 'Drag to aim, then Hook on (or Next, Cancel). Hooked: hold In or Out'],
   ['Drone', 'The stick flies forward, back and sideways, the pedals are Up and Down, a swipe turns and tilts'],
   ['Say something', 'In this menu: a line to the others'],
+  ['Camp', 'Stopped by a shelter, camp site, hut or lodge: tap the line at the bottom to rest there until dawn'],
 ];
 
 export class Menu {
@@ -253,7 +255,7 @@ export class Menu {
     }
 
     if (this.page === 'logbook') {
-      const { title, entries, places, seen, finds } = this.actions.logbook();
+      const { title, entries, places, seen, finds, nights } = this.actions.logbook();
       const names = new Set(entries.map((e) => e.destination));
       add('h2', 'Logbook');
       const share = seen === null ? '' : ` ${seen > 0 && seen < 0.01 ? 'Under 1' : Math.round(seen * 100)} % of it seen.`;
@@ -280,6 +282,7 @@ export class Menu {
         }
       }
       if (finds) foundHere(finds, box, add);
+      if (nights) nightsOut(nights, box, add);
       return;
     }
 
@@ -372,6 +375,29 @@ export function listNames(names: string[]): string {
 }
 
 /** The logbook's line of what has been found here, the highest point, and the finds folded away. */
+/** The nights spent at shelters, camp sites, huts and lodges here. */
+function nightsOut(n: NightsSummary, box: HTMLElement, add: Builder['add']): void {
+  add('h3', 'Nights out', box);
+  if (!n.nights) {
+    add('p', 'Stop by a shelter, camp site, hut or lodge and camp (C) to rest there until dawn: the night passes at the fire. Each night is written down here.', box, 'hint');
+    return;
+  }
+  add('p', `${n.nights} night${n.nights === 1 ? '' : 's'}, at ${n.places} place${n.places === 1 ? '' : 's'}.`, box, 'sub');
+  const fold = add('details', '', box, 'found');
+  add('summary', 'Each night', fold);
+  const table = add('table', '', fold, 'log');
+  const head = add('tr', '', table);
+  for (const h of ['Place', 'When', 'Vehicle']) add('th', h, head);
+  for (const e of [...n.list].reverse()) {
+    const tr = add('tr', '', table);
+    const place = add('td', e.name, tr);
+    if (e.with.length) add('span', ` with ${listNames(e.with)}`, place, 'note');
+    if (e.ended !== 'dawn') add('span', e.ended === 'never_set' ? ' · the sun never set' : ' · the sun never rose', place, 'note');
+    add('td', e.date, tr);
+    add('td', e.vehicle, tr);
+  }
+}
+
 function foundHere(f: FindsSummary, box: HTMLElement, add: Builder['add']): void {
   add('h3', 'Found on the way', box);
   const parts = f.kinds.map((k) => `${k.words[1]} ${k.found} of ${k.total}`);

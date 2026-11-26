@@ -4,6 +4,7 @@
 // region, what has been found and the highest point reached.
 
 import { FINDS_KEY, HIGHEST_KEY, mergeFinds, mergeHighest } from './finds';
+import { NIGHTS_KEY, mergeNights } from './camp';
 import { mergeSeen } from './seen';
 
 /** The browser storage keys kept per account, besides one per region for what has been seen. */
@@ -20,6 +21,7 @@ export const ACCOUNT_KEYS = [
   'spar.gamepad',
   'spar.finds',
   'spar.highest',
+  'spar.nights',
 ] as const;
 
 export type AccountKey = (typeof ACCOUNT_KEYS)[number];
@@ -45,6 +47,7 @@ export function mergeAccountValue(key: string, kept: string | null | undefined, 
   if (key === LOGBOOK_KEY) return mergeLogbooks(kept, incoming);
   if (key === FINDS_KEY) return mergeFinds(kept, incoming);
   if (key === HIGHEST_KEY) return mergeHighest(kept, incoming);
+  if (key === NIGHTS_KEY) return mergeNights(kept, incoming);
   if (SEEN_KEY.test(key)) return mergeSeen(kept, incoming);
   return null;
 }

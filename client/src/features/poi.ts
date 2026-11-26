@@ -52,7 +52,14 @@ export interface PoiFeatures {
   buildings: Building[];
   /** Squares nothing grows in, as outlines. */
   clear: number[][][];
+  /** Buildings whose windows can glow and chimney smoke at night: the huts and lodges, and buildings mapped at a camp place. */
+  glow: string[];
+  /** For each place a night can be spent at (by its id), whose fire, windows and chimney are lit then: an object's or a building's id. */
+  camps: Record<string, string>;
 }
+
+/** The kinds of place a night can be spent at. */
+export const CAMP_KINDS: ReadonlySet<string> = new Set(['shelter', 'camp', 'hut', 'lodge']);
 
 /** Distance from (x, z) to the segment a–b, and the closest point on it. */
 function toSegment(x: number, z: number, ax: number, az: number, bx: number, bz: number): [number, number, number] {
@@ -118,12 +125,21 @@ export function poiFeatures(
   seed: number,
   finds: readonly FindPoint[] = [],
 ): PoiFeatures {
-  const out: PoiFeatures = { objects: [], buildings: [], clear: [] };
+  const out: PoiFeatures = { objects: [], buildings: [], clear: [], glow: [], camps: {} };
   for (const p of places) {
     if (p.kind === 'lift') continue;
-    if (buildings.some((b) => nearOutline(b.outline, p.x, p.z, OWN_BUILDING))) continue;
+    const own = buildings.find((b) => nearOutline(b.outline, p.x, p.z, OWN_BUILDING));
+    if (own) {
+      // Mapped already: its windows light up for a night there.
+      if (CAMP_KINDS.has(p.kind)) {
+        out.glow.push(own.id);
+        out.camps[p.id] = own.id;
+      }
+      continue;
+    }
     const road = towardsRoad(p.x, p.z, roads);
     const id = `poi${p.id}`;
+    if (CAMP_KINDS.has(p.kind)) out.camps[p.id] = id;
     if (p.kind === 'hut' || p.kind === 'lodge') {
       const rng = objectRng(id, seed);
       const heading = road >= 0 ? road : rng.float() * 360;
@@ -132,6 +148,7 @@ export function poiFeatures(
         ? rectangle(p.x, p.z, rng.range(5, 6.5), rng.range(4, 5), heading)
         : rectangle(p.x, p.z, rng.range(15, 19), rng.range(8.5, 10), heading);
       out.buildings.push(hut ? { id, kind: 'cabin', outline } : { id, kind: 'house', levels: 2, outline });
+      out.glow.push(id);
       continue;
     }
     const kind = POI_DEFS[p.kind];

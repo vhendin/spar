@@ -105,13 +105,13 @@ const SMALL_KINDS = new Set(['shed', 'hut', 'garage', 'cabin', 'toilets', 'log_b
  * barns or low-roofed halls. L, T and other right-angled shapes are built as overlapping
  * rectangular wings; other shapes are raised as walls with a flat roof.
  */
-export function building(b: Building, def: ObjectDef, seed: number, ground: GroundFn, out: FeatureMesh): void {
+export function building(b: Building, def: ObjectDef, seed: number, ground: GroundFn, out: FeatureMesh, glow = false): void {
   const rng = objectRng(b.id, seed);
   const area = Math.abs(outlineArea(b.outline));
   const rect = footprintRect(b.outline);
   const fill = area / (4 * rect.hl * rect.hw);
   const large = area >= param(def, 'largeArea', 260, rng) || (LARGE_KINDS.has(b.kind) && area > 120);
-  const shed = !large && (area < param(def, 'shedArea', 16, rng) || (SMALL_KINDS.has(b.kind) && area < 30));
+  const shed = !large && !glow && (area < param(def, 'shedArea', 16, rng) || (SMALL_KINDS.has(b.kind) && area < 30));
 
   const heights = b.outline.map(([x, z]) => ground(x, z));
   const low = Math.min(...heights), high = Math.max(...heights);
@@ -159,7 +159,8 @@ export function building(b: Building, def: ObjectDef, seed: number, ground: Grou
 
   const eaves = param(def, 'eaves', 0.4, rng) * (shed ? 0.6 : 1);
   const spacing = param(def, 'windowSpacing', 3.2, rng);
-  const chimney = !large && area > 30 && rng.float() < param(def, 'chimney', 0.7, rng);
+  // A hut or lodge to spend the night at always has one, for the smoke.
+  const chimney = !large && ((area > 30 && rng.float() < param(def, 'chimney', 0.7, rng)) || glow);
   const chimneyAt = rng.range(-0.5, 0.5);
   const doorShare = rng.range(-0.6, 0.6) * (shed ? 0.3 : 1);
   const main = wings.reduce((best, w) => (w.hl * w.hw > best.hl * best.hw ? w : best), wings[0]!);
@@ -208,6 +209,12 @@ export function building(b: Building, def: ObjectDef, seed: number, ground: Grou
     const addWindow = (nu: number, nv: number, along: number, y0: number, w: number, h: number): void => {
       panel(nu, nv, along, y0 - 0.1, y0 + h + 0.1, w / 2 + 0.1, 0.03, trim);
       panel(nu, nv, along, y0, y0 + h, w / 2, 0.05, glass);
+      if (glow) {
+        // Where it glows at night: just outside the glass.
+        const dist = (nu !== 0 ? wing.hl : wing.hw) + 0.07;
+        const p = at(nu * dist + nv * along, y0 + h / 2, nv * dist - nu * along);
+        out.spots.push({ key: b.id, kind: 'window', x: p[0], y: p[1], z: p[2], nx: nu * c - nv * s, nz: nu * s + nv * c, w, h });
+      }
     };
 
     if (!large) {
@@ -255,6 +262,10 @@ export function building(b: Building, def: ObjectDef, seed: number, ground: Grou
       const y0 = top + roofRise * 0.5;
       const y1 = ridge + 0.8;
       out.box(at(u, (y0 + y1) / 2, v), 0.3, (y1 - y0) / 2, 0.3, yaw, shade(stone, 1.15), false, shade(stone, 0.4));
+      if (glow) {
+        const p = at(u, y1, v);
+        out.spots.push({ key: b.id, kind: 'chimney', x: p[0], y: p[1], z: p[2] });
+      }
     }
   });
 }

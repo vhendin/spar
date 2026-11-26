@@ -19,7 +19,8 @@ export type ServerMessage =
   | DriveFrom
   | HandoverTo
   | DestinationShared
-  | ArrivedAt;
+  | ArrivedAt
+  | CampState;
 
 /**
  * Reply to hello: who you are and which world to load.
@@ -56,6 +57,10 @@ export interface WorldTime {
    * Hours the region's clocks are ahead of UTC.
    */
   utcOffset: number;
+  /**
+   * While a night passes at a camp: the clock runs fast and stops here, UTC milliseconds.
+   */
+  until?: number;
 }
 export interface WorldWeather {
   state: 'clear' | 'overcast' | 'rain';
@@ -858,4 +863,54 @@ export interface ArrivedAt {
   region: string;
   destination: Destination;
   id: string;
+}
+/**
+ * How a camp stands: players waiting by the fire for everyone near to agree, the night passing, morning, or given up. To everyone in the region.
+ */
+export interface CampState {
+  type: 'camp';
+  /**
+   * The region it happens in.
+   */
+  region: string;
+  place: CampPlace;
+  state: 'waiting' | 'night' | 'morning' | 'over';
+  /**
+   * Players who have agreed to camp.
+   */
+  ready: string[];
+  /**
+   * Players near the fire who have not yet agreed.
+   */
+  waiting: string[];
+  /**
+   * When the rest ends, UTC milliseconds.
+   */
+  until?: number;
+  /**
+   * Whether the rest ends at a sunrise, or after 8 hours with the sun up all day or down all day.
+   */
+  ended?: 'dawn' | 'never_set' | 'never_rose';
+}
+/**
+ * A place to camp: a shelter, camp site, hut or lodge from the region's destinations.
+ */
+export interface CampPlace {
+  /**
+   * The destination's OpenStreetMap id.
+   */
+  id: string;
+  name: string;
+  /**
+   * shelter, camp, hut or lodge.
+   */
+  kind: string;
+  /**
+   * Metres east.
+   */
+  x: number;
+  /**
+   * Metres south.
+   */
+  z: number;
 }
