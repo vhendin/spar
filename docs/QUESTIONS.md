@@ -5,6 +5,25 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
+### Distant trees in winter (seen 2026-11-26, nothing changed yet)
+
+The user found the far forest a bit odd while driving in winter. The fog of war is not
+the cause: the same view, with the code from before it, gives the same trees. In winter:
+- the bare broadleaf trees close by are solid dark grey lumps;
+- the far forest (the flat pictures and the low-detail trees) is a white, snowy speckle, much
+  lighter than the near trees, so there is a visible step where one turns into the other;
+- one broadleaf tree in the middle distance shows as a tall green block on a thin trunk, in
+  summer too (across the lake from 9372, 4528 in Vålådalen).
+
+Decided with the user (2026-11-26), to be built next:
+- **Bare branches:** out of leaf, birch, aspen, rowan, alder and mountain birch show their
+  real branches (white birch stems forking into thin branches and twigs), not a lump.
+- **Snow:** a little, on the upper sides of the thicker branches.
+- **Autumn and spring:** the crown thins blob by blob down to the same branches, and grows
+  back in spring.
+- **Far away:** the pictures match the near trees, with no step where one turns into the
+  other.
+
 ### Trails to drive (this commit)
 
 - **Asked:** idea 3 of `docs/OVERTHEHILL.md`, next in its suggested order. Decided before
