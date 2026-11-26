@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Species, VegetationRules } from '@spar/shared';
 import { groundHeight, groupByChunk, placeLayer, STRIDE, type GroundData, type Placement } from './placement';
+import { footprints } from './footprints';
 import { bandWeight, compileRules } from './rules';
 
 const defs = join(import.meta.dirname, '../../../defs');
@@ -122,6 +123,35 @@ describe('placeLayer', () => {
         expect(z > 201 && z < 209, name).toBe(false);
       }
     }
+  });
+
+  it('keeps a yard round buildings: no trees near the walls, fewer a little further out', () => {
+    // A 10 x 10 m hut in the middle of the forest.
+    const hut = [[250, 250], [260, 250], [260, 260], [250, 260]];
+    const g = { ...forest, footprints: footprints([hut], 30) };
+    const trees = placeLayer(layer('trees'), 5, 150, 150, 360, 360, g);
+    const open = placeLayer(layer('trees'), 5, 150, 150, 360, 360, forest);
+    const near = (p: Placement, from: number, to: number): number => {
+      let n = 0;
+      for (let k = 0; k < p.count; k++) {
+        const dx = Math.max(250 - p.data[k * STRIDE]!, 0, p.data[k * STRIDE]! - 260);
+        const dz = Math.max(250 - p.data[k * STRIDE + 2]!, 0, p.data[k * STRIDE + 2]! - 260);
+        const d = Math.hypot(dx, dz);
+        if (d >= from && d < to) n++;
+      }
+      return n;
+    };
+    expect(near(open, 0, 6)).toBeGreaterThan(0);
+    expect(near(trees, 0, 6)).toBe(0);
+    expect(near(trees, 6, 20)).toBeLessThan(near(open, 6, 20) * 0.75);
+    expect(near(trees, 30, 80)).toBe(near(open, 30, 80));
+  });
+
+  it('leaves room to drive between the trees of a forest', () => {
+    const p = placeLayer(layer('trees'), 5, 0, 0, 512, 512, forest);
+    const perHectare = p.count / ((512 * 512) / 10_000);
+    expect(perHectare).toBeGreaterThan(120);
+    expect(perHectare).toBeLessThan(300);
   });
 
   it('grows the right things in the right places', () => {

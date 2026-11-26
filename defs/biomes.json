@@ -3,6 +3,10 @@
     {
       "name": "trees",
       "spacing": 4.5,
+      "yard": {
+        "clear": 6,
+        "thin": 20
+      },
       "batch": "tile",
       "ranges": {
         "full": 55,
@@ -13,6 +17,10 @@
     {
       "name": "rocks",
       "spacing": 11,
+      "yard": {
+        "clear": 4,
+        "thin": 12
+      },
       "batch": "tile",
       "ranges": {
         "full": 60,
@@ -50,7 +58,7 @@
       "species": "spruce",
       "layer": "trees",
       "biomes": {
-        "forest": 0.38
+        "forest": 0.19
       },
       "wetness": {
         "prefer": [
@@ -90,7 +98,7 @@
       "species": "pine",
       "layer": "trees",
       "biomes": {
-        "forest": 0.26,
+        "forest": 0.13,
         "bare_rock": 0.03
       },
       "wetness": {
@@ -131,7 +139,7 @@
       "species": "birch",
       "layer": "trees",
       "biomes": {
-        "forest": 0.13,
+        "forest": 0.065,
         "grassland": 0.012,
         "built_up": 0.03,
         "wetland": 0.01
@@ -199,8 +207,8 @@
       "species": "mountain_birch",
       "layer": "trees",
       "biomes": {
-        "forest": 0.6,
-        "scrub": 0.3,
+        "forest": 0.3,
+        "scrub": 0.201,
         "heath": 0.03,
         "grassland": 0.015
       },
@@ -245,7 +253,7 @@
       "species": "aspen",
       "layer": "trees",
       "biomes": {
-        "forest": 0.02
+        "forest": 0.01
       },
       "wetness": {
         "prefer": [
@@ -275,8 +283,8 @@
       "species": "rowan",
       "layer": "trees",
       "biomes": {
-        "forest": 0.02,
-        "scrub": 0.03,
+        "forest": 0.01,
+        "scrub": 0.0201,
         "built_up": 0.01
       },
       "elevation": {
@@ -300,7 +308,7 @@
       "species": "alder",
       "layer": "trees",
       "biomes": {
-        "forest": 0.3,
+        "forest": 0.15,
         "wetland": 0.02,
         "grassland": 0.05
       },
@@ -594,7 +602,7 @@
       "species": "pine",
       "layer": "trees",
       "biomes": {
-        "regrowth": 0.32
+        "regrowth": 0.224
       },
       "size": {
         "canopy": 1.0
@@ -604,7 +612,7 @@
       "species": "birch",
       "layer": "trees",
       "biomes": {
-        "regrowth": 0.22
+        "regrowth": 0.154
       },
       "size": {
         "canopy": 0.9
@@ -614,7 +622,7 @@
       "species": "spruce",
       "layer": "trees",
       "biomes": {
-        "regrowth": 0.08
+        "regrowth": 0.056
       },
       "size": {
         "canopy": 0.8

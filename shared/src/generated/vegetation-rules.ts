@@ -16,11 +16,19 @@ export interface VegetationLayer {
    * Grid cell size in metres: at most one object per cell.
    */
   spacing: number;
+  yard?: LayerYard;
   /**
    * tile = placed per 256 m world tile and kept far out; patch = placed per 32 m patch near the camera only.
    */
   batch: 'tile' | 'patch';
   ranges: LayerRanges;
+}
+/**
+ * Room kept round buildings: nothing of this layer within `clear` metres of a wall, thinning out to the usual chance at `thin`.
+ */
+export interface LayerYard {
+  clear: number;
+  thin: number;
 }
 /**
  * Distances in metres out to which each representation is drawn.

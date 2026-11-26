@@ -9,7 +9,7 @@
 // results everywhere, unlike sin or pow.
 
 import { hash32 } from '@spar/shared';
-import { onFootprint, type Footprints } from './footprints';
+import { WALL_MARGIN, wallDistance2, type Footprints } from './footprints';
 import { bandWeight, type CompiledLayer } from './rules';
 
 /** One mask file and one height file that cover the area being placed. */
@@ -126,7 +126,18 @@ export function placeLayer(layer: CompiledLayer, seed: number, x0: number, z0: n
       const biome = g.mask[g.planes.biome * plane + at]!;
       // Nothing grows in open water or on roads, paths and streams.
       if (biome === g.waterId || g.mask[g.planes.road * plane + at]! > 24) continue;
-      if (g.footprints && onFootprint(g.footprints, x, z)) continue;
+      // Off the buildings, and for some layers thinner round them: yards and room to park.
+      let keep = 1;
+      if (g.footprints) {
+        const d2 = wallDistance2(g.footprints, x, z);
+        if (d2 < WALL_MARGIN * WALL_MARGIN) continue;
+        const yard = layer.yard;
+        if (yard && d2 < yard.thin * yard.thin) {
+          const c2 = yard.clear * yard.clear;
+          if (d2 <= c2) continue;
+          keep = (d2 - c2) / (yard.thin * yard.thin - c2);
+        }
+      }
 
       const wetness = g.mask[g.planes.wetness * plane + at]! * g.wetnessScale;
       const canopy = g.mask[g.planes.canopy * plane + at]! * g.canopyScale;
@@ -146,7 +157,7 @@ export function placeLayer(layer: CompiledLayer, seed: number, x0: number, z0: n
         weights[r] = w;
         total += w;
       }
-      if (total <= 0 || chance >= total) continue;
+      if (total <= 0 || chance >= total * keep) continue;
 
       let chosen = 0;
       let below = pick * total;

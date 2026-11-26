@@ -104,7 +104,7 @@ self.onmessage = (ev: MessageEvent<VegetationRequest>): void => {
   const req = ev.data;
   if (req.kind === 'init') {
     ({ index, layers, seed } = req);
-    buildings = footprints(req.buildings);
+    buildings = footprints(req.buildings, Math.max(0, ...layers.map((l) => l.yard?.thin ?? 0)));
     return;
   }
   place(req.kind, req.x, req.z).then(

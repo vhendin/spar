@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { footprints, onFootprint } from './footprints';
+import { footprints, onFootprint, wallDistance2 } from './footprints';
 
 describe('footprints', () => {
   // An L-shaped house: 20 x 10 m with a 10 x 10 m wing to the north.
@@ -12,5 +12,13 @@ describe('footprints', () => {
     expect(onFootprint(f, 115, 115)).toBe(false);
     expect(onFootprint(f, 125, 105)).toBe(false);
     expect(onFootprint(f, 500, 500)).toBe(false);
+  });
+
+  it('measures the distance to the nearest wall, out to its reach', () => {
+    const far = footprints(f.outlines, 20);
+    expect(wallDistance2(far, 105, 105)).toBe(0);
+    expect(wallDistance2(far, 125, 105)).toBeCloseTo(25);
+    expect(wallDistance2(far, 115, 115)).toBeCloseTo(25);
+    expect(wallDistance2(far, 500, 500)).toBe(Infinity);
   });
 });

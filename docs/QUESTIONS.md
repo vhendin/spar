@@ -5,7 +5,27 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Freezes of a few seconds (this commit)
+### Thinner forest, yards round buildings (this commit)
+
+- **Asked:** would fewer trees help the freezes? Fewer trees round buildings, and forests
+  thin enough to drive through rather than a near wall (2026-11-26).
+- **Freezes:** no; they came from shaders being built, which goes by the kinds of plant, not
+  how many. Fewer trees do mean less to draw each frame (and in the shadows), so a little
+  less work for the graphics card.
+- **Done:**
+  - The chance of a tree in forest is halved (scrub birch by a third, young regrowth by
+    30 %). Lowland forest goes from about 395 to 200 trees a hectare, one about every 7 m
+    instead of every 5 m. Trees that stay are where they were; felled trees keep their keys.
+  - A yard round every building: no trees within 6 m of a wall, thinning out to the usual
+    forest by 20 m. Rocks keep 4 m clear, thinning out by 12 m. Set per layer in
+    `defs/biomes.json` (`yard`).
+- **Open:**
+  - Thin enough to drive through, or still too thick / now too sparse from afar? Halving is
+    a first guess; the chances in `defs/biomes.json` are easy to turn.
+  - Yards of 6–20 m: right for huts and farms? Villages get open ground between the houses.
+  - Bog, mountain-birch heath and grassland trees are unchanged (they were sparse already).
+
+### Freezes of a few seconds (ea6b0ee)
 
 - **Asked:** playing online with a friend, the game froze for a couple of seconds every so
   often; the user guessed the ground loading in (2026-11-26).

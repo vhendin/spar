@@ -33,6 +33,8 @@ export interface CompiledLayer {
   spacing: number;
   batch: 'tile' | 'patch';
   ranges: { full: number; low?: number; impostor?: number };
+  /** Nothing within `clear` metres of a wall, thinning out to the usual chance at `thin`. */
+  yard: { clear: number; thin: number } | null;
   rules: CompiledRule[];
 }
 
@@ -55,6 +57,7 @@ export function compileRules(rules: VegetationRules, species: Species[], biomes:
     spacing: layer.spacing,
     batch: layer.batch,
     ranges: layer.ranges,
+    yard: layer.yard ?? null,
     rules: rules.rules
       .filter((r) => r.layer === layer.name)
       .map((r) => {

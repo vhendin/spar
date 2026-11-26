@@ -17,6 +17,17 @@
         "properties": {
           "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
           "spacing": { "description": "Grid cell size in metres: at most one object per cell.", "type": "number", "exclusiveMinimum": 0 },
+          "yard": {
+            "title": "LayerYard",
+            "description": "Room kept round buildings: nothing of this layer within `clear` metres of a wall, thinning out to the usual chance at `thin`.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["clear", "thin"],
+            "properties": {
+              "clear": { "type": "number", "minimum": 0 },
+              "thin": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          },
           "batch": { "description": "tile = placed per 256 m world tile and kept far out; patch = placed per 32 m patch near the camera only.", "type": "string", "enum": ["tile", "patch"] },
           "ranges": {
             "title": "LayerRanges",
