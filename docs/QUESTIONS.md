@@ -75,9 +75,17 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - The proving ground has one of each by the road south of the clear-cuts, a waterfall on the
     stream into the lake and a ford on the forest track.
 - **Decided (the user, 2026-11-26):** 1 km between fords; the reach as it is; named lakes
-  only. To do: more work on the aircraft wreck (a clearer plane), the mine (set into the slope,
-  rails or a cart, a sagging frame) and the memorial and boundary stones (rounder, natural
-  stones, lichen); the summer farms' barns in grey, unpainted log.
+  only. More work on the wreck, the mine and the stones, and grey log barns: done (this
+  commit):
+  - the wreck: the front of the fuselage with a stripe, the engine and a bent two-bladed
+    propeller, a torn-off wing with its tip bent up and a worn marking, the tail lying apart
+    with its fin and tailplane, plates strewn round;
+  - the mine: faces downhill, into a turfed mound; a sagging timber frame, rails on sleepers
+    with a rusty ore tub on them, the spoil heap beside;
+  - the boundary stone and the memorial: lumpy natural stones of many faces, some tinted with
+    lichen; the boundary stone flat on top with its cross, small stones at its foot;
+  - summer farm barns: grey unpainted log with dark seams and crossed log ends, dark roofs.
+- **Open:** are the new models good enough, or does one still look off?
 - **To try:** the proving ground's row of finds; in Vålådalen a ford (1.1 km W of Ottsjö) and a
   lake shore; the logbook (Esc → Logbook).
 

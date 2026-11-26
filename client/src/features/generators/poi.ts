@@ -1,5 +1,6 @@
 import type { ObjectDef, PlacedObject, Rng } from '@spar/shared';
 import { objectRng, param, pick, shade, type FeatureMesh, type GroundFn, type Rgb, type Vec3 } from '../mesh';
+import { hexColor } from '../../vegetation/generators/mesh';
 
 /**
  * What stands at a place worth driving to (features/poi.ts places them): a lean-to shelter of
@@ -251,89 +252,9 @@ function board(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: F
   solid(o, out, f, '', 0, 0, 0.9, 0.15, g, ridge);
 }
 
-/** A boundary stone (rå): a squared granite post with a cross cut in its top, leaning a little. */
-function boundaryStone(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
-  const g = f.groundAt(0, 0);
-  const hx = rng.range(0.13, 0.18), hz = rng.range(0.11, 0.16), high = param(def, 'height', 0.7, rng);
-  const stone = pick(def, 'stone', rng);
-  const yaw = f.yaw + rng.range(-0.3, 0.3);
-  out.box(f.at(0, g + high / 2 - 0.1, 0), hx, high / 2 + 0.1, hz, yaw, stone, false, shade(stone, 1.1));
-  const cut = pick(def, 'cut', rng), top = g + high + 0.002;
-  out.box(f.at(0, top, 0), hx * 0.75, 0.004, 0.012, yaw, cut);
-  out.box(f.at(0, top, 0), 0.012, 0.004, hz * 0.75, yaw, cut);
-  // Small stones round its foot, as round a real one.
-  for (let k = 0; k < 4; k++) {
-    const a = (k / 4) * Math.PI * 2 + rng.range(-0.4, 0.4), r = rng.range(0.3, 0.45);
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    out.box(f.at(x, f.groundAt(x, z) + 0.04, z), rng.range(0.07, 0.11), 0.07, rng.range(0.06, 0.1), rng.float() * Math.PI, shade(stone, rng.range(0.85, 1)));
-  }
-  solid(o, out, f, '', 0, 0, hx, hz, g - 0.1, g + high);
-}
 
-/** A memorial: a rough standing stone with a dark plaque facing the way. */
-function memorial(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
-  const [low] = span(f, [[-0.6, -0.3], [0.6, -0.3], [0.6, 0.3], [-0.6, 0.3]]);
-  const g = low - 0.1;
-  const stone = pick(def, 'stone', rng);
-  const w = rng.range(0.5, 0.65), high = param(def, 'height', 1.3, rng);
-  // Three blocks, narrowing upwards, so it is not a box.
-  out.box(f.at(0, g + high * 0.25, 0), w, high * 0.25, 0.3, f.yaw, shade(stone, 0.95));
-  out.box(f.at(rng.range(-0.05, 0.05), g + high * 0.62, 0), w * 0.85, high * 0.13, 0.26, f.yaw + rng.range(-0.06, 0.06), stone);
-  out.box(f.at(rng.range(-0.08, 0.08), g + high * 0.86, -0.02), w * 0.6, high * 0.12, 0.22, f.yaw + rng.range(-0.1, 0.1), shade(stone, 1.06));
-  out.box(f.at(0, g + high * 0.6, 0.27), w * 0.55, 0.16, 0.01, f.yaw, pick(def, 'plaque', rng));
-  out.box(f.at(0, g + high * 0.6, 0.282), w * 0.4, 0.09, 0.004, f.yaw, pick(def, 'letters', rng));
-  solid(o, out, f, '', 0, 0, w, 0.3, g, g + high);
-}
 
-/** An aircraft wreck: a broken piece of fuselage, a wing and bent plates in the heather. */
-function wreck(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
-  const metal = (): Rgb => shade(pick(def, 'metal', rng), rng.range(0.8, 1.1));
-  // The fuselage, half sunk, its nose lost.
-  const r = rng.range(0.6, 0.8), length = rng.range(3, 4);
-  const g0 = f.groundAt(0, -length / 2), g1 = f.groundAt(0.3, length / 2);
-  out.rod(f.at(0, g0 + r * 0.45, -length / 2), f.at(0.3, g1 + r * 0.6, length / 2), r, 9, metal(), pick(def, 'dark', rng));
-  solid(o, out, f, 'body', 0.15, 0, r, length / 2, Math.min(g0, g1) - 0.2, Math.max(g0, g1) + r * 1.4);
-  // A wing on its own, at a slant into the ground.
-  const wx = rng.range(2.6, 3.4), wz = rng.range(-1, 1), turn = rng.range(-0.6, 0.6);
-  const wg = f.groundAt(wx, wz);
-  out.box(f.at(wx, wg + 0.12, wz), rng.range(2.2, 2.8), 0.05, rng.range(0.6, 0.8), f.yaw + turn, metal(), true);
-  out.box(f.at(wx + 0.3, wg + 0.2, wz + 0.1), 0.35, 0.02, 0.5, f.yaw + turn, pick(def, 'paint', rng));
-  solid(o, out, f, 'wing', wx, wz, 2.4, 0.7, wg - 0.1, wg + 0.3);
-  // Plates and pieces strewn about.
-  for (let k = 0; k < 7; k++) {
-    const a = rng.float() * Math.PI * 2, d = rng.range(2, 6);
-    const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    out.box(f.at(x, f.groundAt(x, z) + 0.03, z), rng.range(0.15, 0.5), 0.02, rng.range(0.1, 0.4), rng.float() * Math.PI, metal(), true);
-  }
-}
 
-/** The mouth of an old mine: a timber frame round a dark opening in a bank of earth, and a spoil heap. */
-function mine(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
-  const [low, high] = span(f, [[-2.4, -0.2], [2.4, -0.2], [0, -1.5]]);
-  const g = low - 0.1, top = high + 2.3;
-  const wood = pick(def, 'wood', rng), earth = pick(def, 'earth', rng);
-  // The bank the adit goes into: a slope of earth rising to the frame, steep in front.
-  const hx = 2.4, zf = -0.2, zb = -5;
-  const gb = f.groundAt(0, zb) - 0.1;
-  const a = (x: number, y: number, z: number): Vec3 => f.at(x, y, z);
-  out.face([a(-hx, g, zf), a(hx, g, zf), a(hx, top, zf), a(-hx, top, zf)], shade(earth, 0.85));
-  out.face([a(-hx, top, zf), a(hx, top, zf), a(hx, gb, zb), a(-hx, gb, zb)], shade(earth, 1.1));
-  out.face([a(hx, g, zf), a(hx, gb, zb), a(hx, top, zf)], earth);
-  out.face([a(-hx, g, zf), a(-hx, top, zf), a(-hx, gb, zb)], earth);
-  out.box(f.at(0, g + 1.0, -0.21), 0.7, 1.0, 0.02, f.yaw, pick(def, 'dark', rng));
-  for (const x of [-0.8, 0.8]) out.box(f.at(x, g + 1.05, -0.12), 0.09, 1.05, 0.09, f.yaw, shade(wood, rng.range(0.85, 1)));
-  out.box(f.at(0, g + 2.15, -0.12), 1.05, 0.1, 0.11, f.yaw, wood);
-  solid(o, out, f, 'bank', 0, -1.6, 2.4, 1.4, g, (top + gb) / 2 + 0.5);
-  // The spoil heap off to one side: grey stones in a low mound.
-  const sx = rng.float() < 0.5 ? -3.5 : 3.5, sz = rng.range(0.5, 2);
-  const stone = pick(def, 'stone', rng);
-  for (let k = 0; k < 24; k++) {
-    const a = rng.float() * Math.PI * 2, d = Math.sqrt(rng.float()) * 1.6;
-    const x = sx + Math.cos(a) * d, z = sz + Math.sin(a) * d;
-    const h = (1 - d / 1.6) * 0.6;
-    out.box(f.at(x, f.groundAt(x, z) + h * 0.5 + 0.05, z), rng.range(0.15, 0.3), h * 0.5 + 0.08, rng.range(0.15, 0.3), rng.float() * Math.PI, shade(stone, rng.range(0.8, 1.1)));
-  }
-}
 
 /** Ruins: the low, broken stone walls of a small house, with a gap for the door. */
 function ruins(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
@@ -386,4 +307,236 @@ function spring(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: 
   }
   out.face([...ring].reverse(), water);
   solid(o, out, f, '', 0, 0, 0.9, 0.25, g, g + 0.45);
+}
+
+/**
+ * A lumpy stone at local (lx, lz): rings of corners round an upright axis, each a little in or
+ * out, narrowing to the top, which is flat when asked (to cut a cross in) or a blunt point.
+ * Its foot sinks `sink` metres into the ground. Returns the height of its top.
+ */
+function rock(out: FeatureMesh, f: Frame, rng: Rng, lx: number, lz: number, ground: number, rx: number, rz: number, h: number, color: Rgb, opts: { flat?: boolean; jitter?: number; sink?: number; lichen?: Rgb[] } = {}): number {
+  const n = 8, jitter = opts.jitter ?? 0.12, sink = opts.sink ?? 0.15;
+  const base = ground - sink;
+  // Height and width of each ring, as shares of the stone's.
+  const rings: [number, number][] = [[0, 0.92], [0.4, 1], [0.78, 0.82], [1, opts.flat ? 0.6 : 0.35]];
+  const twist = rng.float() * Math.PI * 2;
+  const corners = rings.map(([t, w]) => {
+    const ring: Vec3[] = [];
+    for (let k = 0; k < n; k++) {
+      const a = twist + (k / n) * Math.PI * 2 + rng.range(-0.15, 0.15);
+      const j = 1 + rng.range(-jitter, jitter);
+      const top = t === 1 && opts.flat ? 0 : rng.range(-0.04, 0.04) * h;
+      ring.push(f.at(lx + Math.cos(a) * rx * w * j, base + sink + (h - sink) * t + top - (t === 0 ? sink : 0), lz + Math.sin(a) * rz * w * j));
+    }
+    return ring;
+  });
+  const centre = f.at(lx, 0, lz);
+  // Faces turned outwards whichever way the corners went round.
+  const outward = (pts: Vec3[], shadeBy: number, own: Rgb | null = null): void => {
+    const [a, b, c] = pts as [Vec3, Vec3, Vec3];
+    const ux = b[0] - a[0], uz = b[2] - a[2], uy = b[1] - a[1], vx = c[0] - a[0], vz = c[2] - a[2], vy = c[1] - a[1];
+    const nx = uy * vz - uz * vy, nz = ux * vy - uy * vx;
+    const mx = (a[0] + c[0]) / 2 - centre[0], mz = (a[2] + c[2]) / 2 - centre[2];
+    out.face(nx * mx + nz * mz >= 0 ? pts : [...pts].reverse(), shade(own ?? color, shadeBy));
+  };
+  for (let r = 0; r + 1 < corners.length; r++) {
+    const lo = corners[r]!, hi = corners[r + 1]!;
+    for (let k = 0; k < n; k++) {
+      const k1 = (k + 1) % n;
+      // Lichen on the upper faces now and then: the stone's own face, tinted.
+      const spot = r > 0 && opts.lichen && rng.float() < 0.35 ? pick1(opts.lichen, rng) : null;
+      const tint: Rgb | null = spot ? [spot[0] * 0.55 + color[0] * 0.45, spot[1] * 0.55 + color[1] * 0.45, spot[2] * 0.55 + color[2] * 0.45] : null;
+      outward([lo[k]!, lo[k1]!, hi[k1]!, hi[k]!], rng.range(0.9, 1.06) * (r === 0 ? 0.9 : 1), tint);
+    }
+  }
+  // The top, facing up.
+  const top = corners[corners.length - 1]!;
+  const peak = opts.flat ? null : f.at(lx + rng.range(-0.05, 0.05) * rx, base + h * 1.04, lz + rng.range(-0.05, 0.05) * rz);
+  if (peak) for (let k = 0; k < n; k++) outward([top[k]!, top[(k + 1) % n]!, peak], 1.08);
+  // A ring going round with the angle faces down; reversed, up.
+  else out.face([...top].reverse(), shade(color, 1.1));
+  return base + h;
+}
+
+
+/** A boundary stone (rå): a rough upright stone, flat on top with a cross cut in it, small stones at its foot. */
+function boundaryStone(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const g = f.groundAt(0, 0);
+  const high = param(def, 'height', 0.7, rng);
+  const stone = pick(def, 'stone', rng);
+  const rx = rng.range(0.15, 0.2), rz = rng.range(0.13, 0.17);
+  const top = rock(out, f, rng, 0, 0, g, rx, rz, high, stone, { flat: true, jitter: 0.08, lichen: lichens(def) });
+  const cut = pick(def, 'cut', rng);
+  out.box(f.at(0, top + 0.003, 0), rx * 0.45, 0.004, 0.012, f.yaw, cut);
+  out.box(f.at(0, top + 0.003, 0), 0.012, 0.004, rz * 0.45, f.yaw, cut);
+  // The witnesses (vittnen): small stones round its foot, as round a real one.
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2 + rng.range(-0.4, 0.4), d = rng.range(0.32, 0.45);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    rock(out, f, rng, x, z, f.groundAt(x, z), rng.range(0.07, 0.1), rng.range(0.06, 0.09), rng.range(0.1, 0.16), shade(stone, rng.range(0.85, 1)), { jitter: 0.2, sink: 0.04 });
+  }
+  solid(o, out, f, '', 0, 0, rx, rz, g - 0.1, top);
+}
+
+/** A memorial: a big rough boulder set on end, a dark plaque on its smoother face towards the way. */
+function memorial(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const [low] = span(f, [[-0.6, -0.3], [0.6, -0.3], [0.6, 0.3], [-0.6, 0.3]]);
+  const stone = pick(def, 'stone', rng);
+  const rx = rng.range(0.55, 0.7), rz = rng.range(0.32, 0.4), high = param(def, 'height', 1.3, rng);
+  rock(out, f, rng, 0, 0, low, rx, rz, high, stone, { jitter: 0.05, sink: 0.2, lichen: lichens(def) });
+  // The plaque leans on the front face, held clear of its bumps.
+  const py = low + high * 0.5, pz = rz * 1.08;
+  out.box(f.at(0, py, pz), rx * 0.45, 0.17, 0.012, f.yaw, pick(def, 'plaque', rng));
+  out.box(f.at(0, py + 0.03, pz + 0.014), rx * 0.32, 0.025, 0.003, f.yaw, pick(def, 'letters', rng));
+  out.box(f.at(0, py - 0.05, pz + 0.014), rx * 0.25, 0.018, 0.003, f.yaw, pick(def, 'letters', rng));
+  solid(o, out, f, '', 0, 0, rx, rz, low - 0.1, low + high);
+}
+
+/** A thin sheet seen from both sides: a panel of a wreck. */
+function sheet(out: FeatureMesh, pts: Vec3[], color: Rgb): void {
+  out.face(pts, color);
+  out.face([...pts].reverse(), shade(color, 0.8));
+}
+
+/**
+ * An aircraft wreck, a small plane long down on the fell: the fuselage broken behind the
+ * wings, its nose and engine with a bent propeller, a wing lying apart with its tip bent up,
+ * the tail with its fin a little way off, and plates strewn in the heather.
+ */
+function wreck(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const metal = (): Rgb => shade(pick(def, 'metal', rng), rng.range(0.85, 1.05));
+  const paint = pick(def, 'paint', rng), dark = pick(def, 'dark', rng);
+  const a = (x: number, y: number, z: number): Vec3 => f.at(x, y, z);
+  // The front half of the fuselage, half sunk, along local z.
+  const r = rng.range(0.55, 0.7), z0 = -2.2, z1 = 1.2;
+  const g0 = f.groundAt(0, z0), g1 = f.groundAt(0, z1);
+  out.rod(a(0, g0 + r * 0.5, z0), a(0.1, g1 + r * 0.6, z1), r, 10, metal(), dark);
+  // A faded stripe along each side.
+  for (const sx of [1, -1]) {
+    const yAt = (z: number): number => g0 + r * 0.5 + ((g1 + r * 0.6 - g0 - r * 0.5) * (z - z0)) / (z1 - z0);
+    const xAt = (z: number): number => (0.1 * (z - z0)) / (z1 - z0) + sx * r * 1.02;
+    const zs = [z0 + 0.15, z1 - 0.1];
+    const pts = [a(xAt(zs[0]!), yAt(zs[0]!) - 0.07, zs[0]!), a(xAt(zs[1]!), yAt(zs[1]!) - 0.07, zs[1]!), a(xAt(zs[1]!), yAt(zs[1]!) + 0.09, zs[1]!), a(xAt(zs[0]!), yAt(zs[0]!) + 0.09, zs[0]!)];
+    sheet(out, pts, paint);
+  }
+  // The engine at the nose, and a two-bladed propeller with one blade bent back.
+  const ng = f.groundAt(0.1, z1 + 0.5);
+  out.rod(a(0.1, ng + r * 0.6, z1), a(0.12, ng + r * 0.55, z1 + 0.7), r * 0.75, 8, pick(def, 'engine', rng), dark);
+  const hub = a(0.12, ng + r * 0.55, z1 + 0.78);
+  out.rod(a(0.12, ng + r * 0.55, z1 + 0.7), hub, 0.12, 6, dark, dark);
+  out.rod(hub, a(0.14, ng + r * 0.55 + 0.9, z1 + 0.8), 0.05, 4, dark);
+  out.rod(hub, a(0.6, ng + 0.05, z1 + 1.1), 0.05, 4, dark);
+  solid(o, out, f, 'body', 0.05, (z0 + z1) / 2 + 0.3, r, (z1 - z0) / 2 + 0.6, Math.min(g0, g1) - 0.2, Math.max(g0, g1) + r * 1.3);
+  // The wing, torn off, flat in the heather on one side, its tip bent up.
+  const side = rng.float() < 0.5 ? 1 : -1;
+  const wx0 = side * 1.2, wx1 = side * 4.6, wz = 0.4, chord = 0.75;
+  const wg = (x: number, z: number): number => f.groundAt(x, z) + 0.08;
+  const wing = metal();
+  sheet(out, [a(wx0, wg(wx0, wz - chord), wz - chord), a(wx1, wg(wx1, wz - chord), wz - chord), a(wx1, wg(wx1, wz + chord), wz + chord), a(wx0, wg(wx0, wz + chord), wz + chord)].map((p) => [p[0], p[1], p[2]] as Vec3), wing);
+  const tip = side * 5.4;
+  sheet(out, [a(wx1, wg(wx1, wz - chord), wz - chord), a(tip, wg(wx1, wz) + 0.7, wz - chord * 0.7), a(tip, wg(wx1, wz) + 0.7, wz + chord * 0.6), a(wx1, wg(wx1, wz + chord), wz + chord)], wing);
+  // The wing's marking, half worn.
+  sheet(out, [a(side * 2.6, wg(side * 2.6, wz - 0.4) + 0.01, wz - 0.4), a(side * 3.4, wg(side * 3.4, wz - 0.4) + 0.01, wz - 0.4), a(side * 3.4, wg(side * 3.4, wz + 0.4) + 0.01, wz + 0.4), a(side * 2.6, wg(side * 2.6, wz + 0.4) + 0.01, wz + 0.4)], paint);
+  solid(o, out, f, 'wing', (wx0 + tip) / 2, wz, Math.abs(tip - wx0) / 2, chord, wg(wx1, wz) - 0.2, wg(wx1, wz) + 0.4);
+  // The tail, broken off a few metres behind, lying on its side with the fin up.
+  const tx = -side * rng.range(1, 2), tz = rng.range(-6.5, -5.5);
+  const tg = f.groundAt(tx, tz);
+  out.rod(a(tx, tg + 0.3, tz + 1.4), a(tx + side * 0.3, tg + 0.22, tz - 1.2), 0.38, 8, metal(), dark);
+  sheet(out, [a(tx + side * 0.2, tg + 0.5, tz - 0.4), a(tx + side * 0.28, tg + 0.45, tz - 1.25), a(tx + side * 0.3, tg + 1.55, tz - 1.4), a(tx + side * 0.25, tg + 1.45, tz - 0.9)], paint);
+  sheet(out, [a(tx - 1.3, tg + 0.22, tz - 0.7), a(tx + 1.5, tg + 0.26, tz - 0.8), a(tx + 1.4, tg + 0.22, tz - 1.25), a(tx - 1.2, tg + 0.18, tz - 1.2)], metal());
+  solid(o, out, f, 'tail', tx, tz, 0.5, 1.4, tg - 0.1, tg + 1.2);
+  // Plates and pieces strewn about.
+  for (let k = 0; k < 9; k++) {
+    const an = rng.float() * Math.PI * 2, d = rng.range(2.5, 8);
+    const x = Math.cos(an) * d, z = Math.sin(an) * d;
+    out.box(f.at(x, f.groundAt(x, z) + 0.03, z), rng.range(0.12, 0.45), 0.02, rng.range(0.1, 0.35), rng.float() * Math.PI, metal(), true);
+  }
+}
+
+/**
+ * The mouth of an old mine (gruvort), dug into the slope (it faces downhill): a sagging
+ * timber frame round the dark opening, rails running out on sleepers with a rusty ore cart
+ * left on them, and a grey spoil heap tipped beside.
+ */
+function mine(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const [low, high] = span(f, [[-2.4, -0.2], [2.4, -0.2], [0, -1.5]]);
+  const g = low - 0.1, top = high + 2.4;
+  const wood = pick(def, 'wood', rng), earth = pick(def, 'earth', rng), dark = pick(def, 'dark', rng);
+  // The bank: a mound of earth rising to the opening, sloping away behind and to the sides,
+  // so on a hillside it runs into the slope and on the flat it is a heap the adit goes into.
+  const a = (x: number, y: number, z: number): Vec3 => f.at(x, y, z);
+  const hx = 1.6, zf = -0.2, zb = -6, wide = 4.2;
+  const gb = f.groundAt(0, zb) - 0.1, gl = f.groundAt(-wide, -1) - 0.1, gr = f.groundAt(wide, -1) - 0.1;
+  const middle = a(0, g + 0.8, -2.5);
+  const mound = (pts: Vec3[], color: Rgb): void => {
+    const [p0, p1, p2] = pts as [Vec3, Vec3, Vec3];
+    const ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2], vx = p2[0] - p0[0], vy = p2[1] - p0[1], vz = p2[2] - p0[2];
+    const n: Vec3 = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    const c = pts.reduce((m, p) => [m[0] + p[0] / pts.length, m[1] + p[1] / pts.length, m[2] + p[2] / pts.length] as Vec3, [0, 0, 0] as Vec3);
+    out.face(n[0] * (c[0] - middle[0]) + n[1] * (c[1] - middle[1]) + n[2] * (c[2] - middle[2]) >= 0 ? pts : [...pts].reverse(), color);
+  };
+  const tl = a(-hx, top, zf), tr = a(hx, top, zf), tb = a(0, top - 0.5, -2.2);
+  const fl = a(-wide, gl, zf + 0.3), fr = a(wide, gr, zf + 0.3), bl = a(-wide * 0.7, gb, zb + 1), br = a(wide * 0.7, gb, zb + 1), back = a(0, gb, zb);
+  // The face round the opening, and the slopes off it.
+  mound([a(-hx, g, zf), a(hx, g, zf), tr, tl], shade(earth, 0.85));
+  const turf = pick(def, 'turf', rng);
+  mound([a(-hx, g, zf), tl, fl], shade(turf, 0.9));
+  mound([a(hx, g, zf), fr, tr], shade(turf, 0.9));
+  mound([tl, tr, tb], shade(turf, 1.12));
+  mound([tr, fr, br, tb], shade(turf, 1.02));
+  mound([tl, tb, bl, fl], shade(turf, 0.97));
+  mound([tb, br, back], shade(turf, 1.06));
+  mound([tb, back, bl], shade(turf, 1.0));
+  solid(o, out, f, 'bank', 0, -2.4, 2.4, 2.2, g, top - 0.4);
+  // The opening, and the frame round it: posts leaning in, the cap sagging in the middle.
+  out.face([a(-0.7, g, -0.21), a(0.7, g, -0.21), a(0.62, g + 1.95, -0.21), a(-0.62, g + 1.95, -0.21)], dark);
+  const post = (x: number, lean: number): void => out.rod(a(x, g - 0.1, -0.1), a(x + lean, g + 2.05, -0.1), 0.09, 6, shade(wood, rng.range(0.8, 1)));
+  post(-0.8, 0.1);
+  post(0.8, -0.12);
+  const sag = rng.range(0.08, 0.16);
+  out.rod(a(-1.0, g + 2.12, -0.08), a(0, g + 2.12 - sag, -0.08), 0.1, 6, wood);
+  out.rod(a(0, g + 2.12 - sag, -0.08), a(1.0, g + 2.08, -0.08), 0.1, 6, shade(wood, 0.92));
+  // Rails out of the mouth on rotting sleepers.
+  const rust = pick(def, 'rust', rng);
+  const rail = (x: number): void => out.rod(a(x, f.groundAt(x, 0) + 0.1, -0.15), a(x + 0.05, f.groundAt(x, 6) + 0.1, 6), 0.025, 4, rust);
+  rail(-0.3);
+  rail(0.3);
+  for (let z = 0.3; z < 6; z += rng.range(0.55, 0.75)) {
+    out.box(f.at(rng.range(-0.04, 0.04), f.groundAt(0, z) + 0.04, z), 0.5, 0.05, 0.08, f.yaw + rng.range(-0.1, 0.1), shade(wood, rng.range(0.6, 0.85)));
+  }
+  // The ore cart, a tub on wheels, left halfway out.
+  const cz = rng.range(2.5, 4), cg = f.groundAt(0, cz) + 0.12;
+  for (const [x, z] of [[-0.3, cz - 0.35], [0.3, cz - 0.35], [-0.3, cz + 0.35], [0.3, cz + 0.35]] as const) {
+    out.rod(a(x * 1.15, cg + 0.12, z), a(x * 0.85, cg + 0.12, z), 0.13, 8, shade(rust, 0.7), shade(rust, 0.6));
+  }
+  // The tub: wider at the top, open, rust inside.
+  const tub = (x: number, y: number, z: number): Vec3 => f.at(x, y, cz + z);
+  const y0 = cg + 0.25, y1 = cg + 0.8;
+  const lo: Vec3[] = [tub(-0.3, y0, -0.42), tub(0.3, y0, -0.42), tub(0.3, y0, 0.42), tub(-0.3, y0, 0.42)];
+  const hi: Vec3[] = [tub(-0.45, y1, -0.6), tub(0.45, y1, -0.6), tub(0.45, y1, 0.6), tub(-0.45, y1, 0.6)];
+  for (let k = 0; k < 4; k++) {
+    const k1 = (k + 1) % 4;
+    sheet(out, [lo[k]!, lo[k1]!, hi[k1]!, hi[k]!], shade(rust, k % 2 ? 0.95 : 1.05));
+  }
+  sheet(out, lo, shade(rust, 0.55));
+  solid(o, out, f, 'cart', 0, cz, 0.45, 0.6, cg, cg + 0.8);
+  // The spoil heap off to one side: grey stones in a low mound.
+  const sx = rng.float() < 0.5 ? -3.8 : 3.8, sz = rng.range(2.2, 3.5);
+  const stone = pick(def, 'stone', rng);
+  for (let k = 0; k < 26; k++) {
+    const an = rng.float() * Math.PI * 2, d = Math.sqrt(rng.float()) * 1.7;
+    const x = sx + Math.cos(an) * d, z = sz + Math.sin(an) * d;
+    const h = (1 - d / 1.7) * 0.6;
+    out.box(f.at(x, f.groundAt(x, z) + h * 0.5 + 0.05, z), rng.range(0.15, 0.3), h * 0.5 + 0.08, rng.range(0.15, 0.3), rng.float() * Math.PI, shade(stone, rng.range(0.8, 1.1)));
+  }
+}
+
+/** The lichen colours of a definition. */
+function lichens(def: ObjectDef): Rgb[] {
+  return (def.colors.lichen ?? []).map((c) => hexColor(c));
+}
+
+/** One of a list, at random. */
+function pick1<T>(list: readonly T[], rng: Rng): T {
+  return list[Math.floor(rng.float() * list.length)]!;
 }

@@ -151,14 +151,15 @@ export function poiFeatures(
         const a = ((turn + (k * 360) / n) * Math.PI) / 180, d = rng.range(7, 10);
         const x = p.x + Math.sin(a) * d, z = p.z - Math.cos(a) * d;
         const heading = turn + k * 90 + rng.range(-8, 8);
-        out.buildings.push({ id: `${id}.${k}`, kind: 'hut', outline: rectangle(x, z, rng.range(4, 5.5), rng.range(3.2, 4), heading) });
+        out.buildings.push({ id: `${id}.${k}`, kind: 'log_barn', outline: rectangle(x, z, rng.range(4, 5.5), rng.range(3.2, 4), heading) });
       }
       continue;
     }
     const kind = FIND_DEFS[p.what ?? ''] ?? FIND_DEFS[p.kind];
     if (!kind) continue;
     if (buildings.some((b) => nearOutline(b.outline, p.x, p.z, OWN_BUILDING))) continue;
-    out.objects.push({ id, kind, x: p.x, z: p.z, heading: towardsRoad(p.x, p.z, roads) });
+    // A mine goes into the hillside: it faces downhill, whatever the road.
+    out.objects.push({ id, kind, x: p.x, z: p.z, heading: kind === 'mine' ? -1 : towardsRoad(p.x, p.z, roads) });
     out.clear.push(square(p.x, p.z, CLEAR[kind] ?? 2));
   }
   return out;

@@ -2,8 +2,38 @@
   "name": "mine",
   "title": "Old mine opening (gruvort)",
   "generator": "poi",
-  "params": { "shape": "mine" },
-  "colors": { "wood": ["#5a4a3a", "#4e4034", "#63503c"], "earth": ["#6b6250", "#5f5a4a"], "dark": ["#0d0d0c"], "stone": ["#7a7870", "#6c6962", "#88847a"] },
+  "params": {
+    "shape": "mine"
+  },
+  "colors": {
+    "wood": [
+      "#5a4a3a",
+      "#4e4034",
+      "#63503c"
+    ],
+    "earth": [
+      "#6b6250",
+      "#5f5a4a"
+    ],
+    "dark": [
+      "#0d0d0c"
+    ],
+    "stone": [
+      "#7a7870",
+      "#6c6962",
+      "#88847a"
+    ],
+    "rust": [
+      "#7a4a2c",
+      "#6b3f26",
+      "#84512f"
+    ],
+    "turf": [
+      "#3c4824",
+      "#435027",
+      "#3f4a2a"
+    ]
+  },
   "range": 800,
   "collider": true
 }

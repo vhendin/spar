@@ -74,7 +74,7 @@ describe('finds', () => {
     const f = poiFeatures([], [], [road], 1, finds);
     expect(f.objects.map((o) => o.kind)).toEqual(['spring', 'pass_cairn', 'boundary_stone', 'memorial', 'wreck', 'mine', 'ruins', 'grave', 'cairn']);
     expect(f.buildings.length).toBeGreaterThanOrEqual(2);
-    expect(f.buildings.every((b) => b.kind === 'hut' && b.id.startsWith('findn12.'))).toBe(true);
+    expect(f.buildings.every((b) => b.kind === 'log_barn' && b.id.startsWith('findn12.'))).toBe(true);
     for (const o of f.objects) expect(OBJECTS[o.kind]?.generator).toBe('poi');
   });
 

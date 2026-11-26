@@ -97,7 +97,7 @@ export function wallSolids(id: string, outline: number[][], base: number, top: n
 }
 
 const LARGE_KINDS = new Set(['hotel', 'apartments', 'dormitory', 'industrial', 'supermarket', 'retail', 'commercial', 'college', 'school', 'train_station', 'warehouse', 'barn', 'farm_auxiliary']);
-const SMALL_KINDS = new Set(['shed', 'hut', 'garage', 'cabin', 'toilets']);
+const SMALL_KINDS = new Set(['shed', 'hut', 'garage', 'cabin', 'toilets', 'log_barn']);
 
 /**
  * A building on its mapped footprint. Rectangles get walls, a gable roof, corner boards,
@@ -138,10 +138,12 @@ export function building(b: Building, def: ObjectDef, seed: number, ground: Grou
   if (b.height) wall = Math.max(2, b.height - rect.hw * Math.tan(pitch));
   const top = floor + wall;
 
-  const walls = large && rng.float() < 0.7 ? pick(def, 'large', rng) : pick(def, 'walls', rng);
-  const trim = pick(def, 'trim', rng);
-  const roof = pick(def, 'roof', rng);
-  const door = pick(def, 'door', rng);
+  // An unpainted log barn (a summer farm's): grey timber, no white trim, an old dark roof.
+  const log = b.kind === 'log_barn';
+  const walls = log ? pick(def, 'log', rng) : large && rng.float() < 0.7 ? pick(def, 'large', rng) : pick(def, 'walls', rng);
+  const trim = log ? shade(walls, 0.8) : pick(def, 'trim', rng);
+  const roof = log ? pick(def, 'logRoof', rng) : pick(def, 'roof', rng);
+  const door = log ? shade(walls, 0.7) : pick(def, 'door', rng);
   const glass = pick(def, 'glass', rng);
   const stone = pick(def, 'stone', rng);
 
@@ -171,6 +173,16 @@ export function building(b: Building, def: ObjectDef, seed: number, ground: Grou
     out.solids.push({ key: n === 0 ? `b${b.id}` : `b${b.id}.${n}`, x: wing.cx, y: (base + top) / 2, z: wing.cz, hx: wing.hl, hy: (top - base) / 2, hz: wing.hw, yaw });
     out.box(at(0, (base + floor) / 2, 0), wing.hl, (floor - base) / 2, wing.hw, yaw, stone);
     out.box(at(0, (floor + top) / 2, 0), wing.hl, wall / 2, wing.hw, yaw, walls, false, walls);
+    if (log) {
+      // The courses of logs: a dark seam every 22 cm, the log ends crossing out at the corners.
+      const seam = shade(walls, 0.62);
+      for (let y = floor + 0.22; y < top - 0.05; y += 0.22) {
+        out.box(at(0, y, 0), wing.hl + 0.012, 0.018, wing.hw + 0.012, yaw, seam);
+        for (const [u, v] of [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const) {
+          out.box(at(u * (wing.hl + 0.06), y - 0.11, v * (wing.hw + 0.06)), 0.09, 0.1, 0.09, yaw, shade(walls, 0.9));
+        }
+      }
+    }
 
     // Gable roof along the long side, overhanging at the eaves and the gables.
     const hl = wing.hl + eaves * 0.8, hw = wing.hw + eaves;
