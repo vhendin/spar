@@ -15,10 +15,16 @@ export interface SightRasters {
   canopy: Uint8Array | Float32Array;
   /** Metres per canopy unit (the mask stores quarter metres). */
   canopyScale: number;
+  /** 1 where there is open water (a lake, a river), same layout; none: no water. */
+  water?: Uint8Array;
 }
 
 /** Metres of trees that still let sight through; beyond that the forest is a wall. */
 export const FOREST_DEPTH = 80;
+/** How far sight reaches out over open water, when a look's own range runs out on a lake. */
+export const OVER_WATER = 4000;
+/** Metres of the far shore seen past the water, once out beyond a look's own range. */
+const SHORE = 150;
 /** Trees lower than this are not counted as forest (scrub, a clear-cut growing back). */
 const TREES = 2;
 /** Height over the ground that has to be in sight for a cell to count: a road, a person. */
@@ -166,6 +172,8 @@ export function rayCount(range: number): number {
  * calls `seen` for each point in sight.
  * A point is in sight when the ground there (or the treetops, in forest) stands above every
  * hill between, and when fewer than FOREST_DEPTH metres of trees stand above the line to it.
+ * A ray that is out on open water where `range` runs out goes on over the water, up to
+ * OVER_WATER metres, and sees SHORE metres of the land beyond: a lake opens up its far side.
  */
 export function viewshed(r: SightRasters, x: number, z: number, eye: number, range: number, from: number, to: number, seen: (x: number, z: number) => void): void {
   const { n, spacing, heights, canopy, canopyScale } = r;
@@ -178,6 +186,9 @@ export function viewshed(r: SightRasters, x: number, z: number, eye: number, ran
   const woods = new Float64Array(woodCells);
   // The highest anything could stand: the top of the region with tall trees on it.
   const roof = highestOf(heights) + 40;
+  const { water } = r;
+  const far = water ? Math.max(range, OVER_WATER) : range;
+  const sample = (px: number, pz: number): number => Math.round(pz / spacing) * n + Math.round(px / spacing);
   const ground = (px: number, pz: number): number => {
     const u = px / spacing, v = pz / spacing;
     const i = Math.min(n - 2, Math.floor(u)), j = Math.min(n - 2, Math.floor(v));
@@ -191,15 +202,39 @@ export function viewshed(r: SightRasters, x: number, z: number, eye: number, ran
     const dx = Math.cos(angle), dz = Math.sin(angle);
     let hill = -Infinity;
     woods.fill(-Infinity);
-    for (let d = step; d <= range; d += step) {
+    // Out past the range: where the land beyond the water stops being seen.
+    let ashore = Infinity;
+    for (let d = step; d <= far; d += step) {
       const px = x + dx * d, pz = z + dz * d;
       if (px < 0 || pz < 0 || px > extent || pz > extent) break;
+      const k = sample(px, pz);
+      const beyond = d > range;
+      if (beyond) {
+        if (!water![k]) {
+          // Back on land: past the range only from the water, and then only the shore.
+          if (ashore === Infinity) {
+            if (d - step <= range) break;
+            ashore = d + SHORE;
+          }
+          if (d > ashore) break;
+        }
+      }
       const g = ground(px, pz);
-      const tree = canopy[Math.round(pz / spacing) * n + Math.round(px / spacing)]! * canopyScale;
+      const tree = canopy[k]! * canopyScale;
       const top = tree >= TREES ? tree : 0;
       const target = (g + Math.max(TARGET, top) - eye) / d;
       const wall = woods[woodCells - 1]!;
-      if (target >= hill && target >= wall) seen(px, pz);
+      if (target >= hill && target >= wall) {
+        seen(px, pz);
+        // Past the range the rays spread wider than a cell: fill across to the next.
+        if (beyond) {
+          const gap = (Math.PI * d) / rays;
+          for (let o = SEEN_CELL * 0.9; o < gap; o += SEEN_CELL * 0.9) {
+            seen(px - dz * o, pz + dx * o);
+            seen(px + dz * o, pz - dx * o);
+          }
+        }
+      }
       // What stands here hides what is beyond: the ground always, trees once deep enough.
       const ga = (g - eye) / d;
       if (ga > hill) hill = ga;

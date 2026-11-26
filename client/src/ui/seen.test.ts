@@ -2,17 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { SeenGrid, type SightRasters } from './seen';
 
 /** A square region of `n` samples 8 m apart, flat at 500 m unless `shape` says otherwise. */
-function rasters(n: number, shape: (x: number, z: number) => { h?: number; tree?: number } = () => ({})): SightRasters {
+function rasters(n: number, shape: (x: number, z: number) => { h?: number; tree?: number; wet?: boolean } = () => ({})): SightRasters {
   const heights = new Float32Array(n * n);
   const canopy = new Uint8Array(n * n);
+  const water = new Uint8Array(n * n);
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const s = shape(i * 8, j * 8);
       heights[j * n + i] = s.h ?? 500;
       canopy[j * n + i] = Math.round((s.tree ?? 0) * 4);
+      water[j * n + i] = s.wet ? 1 : 0;
     }
   }
-  return { n, spacing: 8, heights, canopy, canopyScale: 0.25 };
+  return { n, spacing: 8, heights, canopy, canopyScale: 0.25, water };
 }
 
 const SIZE = 2048;
@@ -25,6 +27,21 @@ describe('seeing', () => {
     expect(g.has(1024 + 480, 1024)).toBe(true);
     expect(g.has(1024, 1024 - 480)).toBe(true);
     expect(g.has(1024 + 600, 1024)).toBe(false);
+  });
+
+  it('over a lake sight goes on past the range, and sees the far shore', () => {
+    // A lake from 300 m east of the eye to 2200 m; land beyond it.
+    const size = 4096, n = size / 8 + 1;
+    const r = rasters(n, (x) => ({ wet: x > 300 && x < 2200 }));
+    const g = new SeenGrid(size);
+    g.look(r, 100, 2048, 502.5, 1000);
+    expect(g.has(1900, 2048)).toBe(true);
+    expect(g.has(1900, 2048 + 300)).toBe(true);
+    // The far shore, and no more than a little of it.
+    expect(g.has(2240, 2048)).toBe(true);
+    expect(g.has(2500, 2048)).toBe(false);
+    // Over land the range holds: west and north are as before.
+    expect(g.has(100, 2048 - 1200)).toBe(false);
   });
 
   it('a ridge hides what lies behind it', () => {

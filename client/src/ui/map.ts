@@ -633,8 +633,11 @@ export class MapScreen {
   private async load(): Promise<void> {
     this.loading ??= (async () => {
       const r = await loadRasters(this.index);
-      this.rasters = r;
       const ids = Object.fromEntries(this.index.masks.biomes.map((b) => [b.name, b.id]));
+      // Open water, for sight to carry over lakes.
+      const lake = ids.water ?? -1;
+      r.water = r.biome.map((b) => (b === lake ? 1 : 0));
+      this.rasters = r;
       const pixels = paintGround(r, ids);
       const image = document.createElement('canvas');
       image.width = image.height = r.n;

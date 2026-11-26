@@ -14,6 +14,8 @@ export interface MapRasters {
   /** Height of the trees from the canopy mask, in units of `canopyScale` metres (0 if none). */
   canopy: Uint8Array;
   canopyScale: number;
+  /** 1 where there is open water, filled in once loaded (for seeing over lakes). */
+  water?: Uint8Array;
 }
 
 /** Biome ids in the region index, by name. */

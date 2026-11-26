@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### The map fills in as you drive (this commit)
+### The map fills in as you drive (5f6c679; over lakes this commit)
 
 - **Asked:** idea 1 of `docs/OVERTHEHILL.md`. Decided before building: unseen ground pale (the
   relief, contours and lakes still faintly there), roads, paths, buildings and places hidden
@@ -15,7 +15,10 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Every 25 m driven (at most once a second) the game looks round 1.5 km from the driver's
     eyes (2.5 m up) over the map's 8 m heights and the tree heights from the canopy mask. Hills
     hide what is behind them; trees let sight through for about 80 m, then are a wall. In a wood
-    you see some 100 m, on the open fjäll and over lakes the full 1.5 km.
+    you see some 100 m, on the open fjäll the full 1.5 km.
+  - Over open water sight goes further: a ray still out on a lake at 1.5 km goes on over the
+    water, up to 4 km, and sees 150 m of the far shore. From Ottsjö the whole of the lake and
+    its south shore open up (7 % of Vålådalen after 40 s of driving, against 3 % before).
   - Standing within 30 m of a summit, viewpoint or lift top looks 5 km round, once per visit.
   - The drone sees from where it flies; the fly camera (F) does not.
   - Huts and lodges always show. Places already in the logbook show 300 m round them the first
@@ -26,13 +29,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Seen share in the F3 read-out and the logbook; the map's trip list says how many are found.
   - `?seen=none` forgets a region, `?seen=all` sees all of it.
   - A look takes about 4 ms (33 ms from a summit) and is spread over frames, at most 2 ms each.
+- **Decided:** sight reaches further over lakes (the user, 2026-11-26).
 - **To try:** drive from Ottsjö along the lake, then up to a summit or a viewpoint, and open the
   map (M). Do it twice, with a reload between.
 - **Open:**
   - Are 1.5 km and 5 km right, and the 80 m into a wood?
   - Is the pale too pale or not pale enough?
   - The edge of what is seen is soft but a little speckled along forest edges. Fine?
-  - Over a lake the seen area ends in a sharp arc at 1.5 km. Should open water reach further?
+  - Over water: are 4 km and 150 m of far shore right? A long lake is cut straight at 4 km.
   - Should the summits that the map finds itself (the spot heights) count as lookouts too? Now
     only summits from the map data do.
 
