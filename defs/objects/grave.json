@@ -1,0 +1,9 @@
+{
+  "name": "grave",
+  "title": "Old grave cairn (gravröse)",
+  "generator": "poi",
+  "params": { "shape": "cairn", "radius": [1.6, 2.2], "height": [0.5, 0.8] },
+  "colors": { "stone": ["#77756f", "#6a6964", "#85827a", "#5f5e5a", "#6f6a60"] },
+  "range": 700,
+  "collider": true
+}

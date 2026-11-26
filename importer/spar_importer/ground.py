@@ -178,3 +178,36 @@ def destination_for(tags: dict) -> str | None:
                 return None
             return kind
     return None
+
+
+# Small things to find, by tag: kind -> what marks it. Quieter than destinations: no trips to
+# them, only a mark on the map and a line in the logbook once reached. The tag's value is kept
+# as `what` for the historic ones, so a boundary stone and a memorial look different.
+FINDS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("farm", "place", ("isolated_dwelling",)),
+    ("waterfall", "waterway", ("waterfall",)),
+    ("waterfall", "natural", ("waterfall",)),
+    ("rapids", "waterway", ("rapids",)),
+    ("spring", "natural", ("spring",)),
+    ("historic", "historic", ("boundary_stone", "memorial", "monument", "aircraft_wreck", "mine", "ruins", "tomb", "wayside_cross")),
+    ("historic", "man_made", ("cairn",)),
+    ("pass", "mountain_pass", ("yes",)),
+    ("pass", "natural", ("saddle",)),
+]
+
+
+def find_for(tags: dict) -> tuple[str, str | None] | None:
+    """(kind, what) of a small thing to find, or None. A summer farm needs a name to be one;
+    fords are found from the roads instead (`ford_of`)."""
+    for kind, key, values in FINDS:
+        value = tags.get(key)
+        if value in values:
+            if kind == "farm" and not tags.get("name"):
+                return None
+            return kind, (value if kind == "historic" else None)
+    return None
+
+
+def ford_of(tags: dict) -> bool:
+    """Whether a point or way is a ford: where a road or path goes through the water."""
+    return tags.get("ford") not in (None, "no")

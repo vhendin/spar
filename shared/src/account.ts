@@ -1,8 +1,9 @@
 // What follows a logged-in driver from browser to browser: the browser's own stored values
 // under these keys, kept on the server per account. The logbook is merged rather than
-// replaced, so arrivals made on two devices are all kept; so is what has been seen of each
-// region.
+// replaced, so arrivals made on two devices are all kept; so are what has been seen of each
+// region, what has been found and the highest point reached.
 
+import { FINDS_KEY, HIGHEST_KEY, mergeFinds, mergeHighest } from './finds';
 import { mergeSeen } from './seen';
 
 /** The browser storage keys kept per account, besides one per region for what has been seen. */
@@ -17,6 +18,8 @@ export const ACCOUNT_KEYS = [
   'spar.settings',
   'spar.minimap',
   'spar.gamepad',
+  'spar.finds',
+  'spar.highest',
 ] as const;
 
 export type AccountKey = (typeof ACCOUNT_KEYS)[number];
@@ -40,6 +43,8 @@ export function isAccountKey(key: string): boolean {
  */
 export function mergeAccountValue(key: string, kept: string | null | undefined, incoming: string | null | undefined): string | null {
   if (key === LOGBOOK_KEY) return mergeLogbooks(kept, incoming);
+  if (key === FINDS_KEY) return mergeFinds(kept, incoming);
+  if (key === HIGHEST_KEY) return mergeHighest(kept, incoming);
   if (SEEN_KEY.test(key)) return mergeSeen(kept, incoming);
   return null;
 }

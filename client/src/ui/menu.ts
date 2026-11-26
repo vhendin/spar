@@ -2,12 +2,13 @@
 // and the way back to the start.
 
 import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../vehicle/gamepad';
+import { KIND_WORDS, type FindsSummary } from '../finds';
 import { formatDuration, type LogEntry } from '../trips';
 import { formatDistance } from './map';
 import { fillPlayers, type PlayerLine } from './players';
 import { canFullscreen, isFullscreen, isIPhoneBrowser, onFullscreenChange, toggleFullscreen } from '../fullscreen';
 import { CHOICES, NEEDS_RESTART, PERSONAL, PRESET_NAMES, PRESETS, presetOf, type Settings } from '../settings';
-import { backButton, builder, closeButton, coarsePointer } from './dom';
+import { backButton, builder, closeButton, coarsePointer, type Builder } from './dom';
 
 export interface MenuActions {
   resume(): void;
@@ -34,7 +35,7 @@ export interface MenuActions {
    * The logbook for this area: its title, the arrivals there, how many places there are to
    * reach, and the share of it seen (null when the whole map is shown).
    */
-  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null };
+  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null; finds: FindsSummary | null };
   /** Everyone connected, and the title of the region we drive in. */
   players(): { list: PlayerLine[]; region: string; titleOf(name: string): string };
   /** Set off just behind another driver, wherever they are. */
@@ -252,7 +253,7 @@ export class Menu {
     }
 
     if (this.page === 'logbook') {
-      const { title, entries, places, seen } = this.actions.logbook();
+      const { title, entries, places, seen, finds } = this.actions.logbook();
       const names = new Set(entries.map((e) => e.destination));
       add('h2', 'Logbook');
       const share = seen === null ? '' : ` ${seen > 0 && seen < 0.01 ? 'Under 1' : Math.round(seen * 100)} % of it seen.`;
@@ -278,6 +279,7 @@ export class Menu {
           add('td', formatDistance(e.metres), tr, 'num');
         }
       }
+      if (finds) foundHere(finds, box, add);
       return;
     }
 
@@ -367,4 +369,29 @@ export class Menu {
 /** "Bo", "Bo and Cilla", "Bo, Cilla and Dan". */
 export function listNames(names: string[]): string {
   return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** The logbook's line of what has been found here, the highest point, and the finds folded away. */
+function foundHere(f: FindsSummary, box: HTMLElement, add: Builder['add']): void {
+  add('h3', 'Found on the way', box);
+  const parts = f.kinds.map((k) => `${k.words[1]} ${k.found} of ${k.total}`);
+  if (parts.length) add('p', `${parts[0]![0]!.toUpperCase()}${parts.join(' · ').slice(1)}.`, box, 'sub');
+  else add('p', 'Nothing small to find in this area.', box, 'hint');
+  if (f.highest) add('p', `Highest point reached: ${Math.round(f.highest.ele)} m, in the ${f.highest.vehicle}, ${f.highest.date}.`, box, 'sub');
+  if (!f.found.length) {
+    if (parts.length) add('p', 'Summer farms, waterfalls, springs, old stones, fords, passes and the shores of named lakes are found by driving to them. Once seen, they show on the map as small hollow diamonds, filled in when found.', box, 'hint');
+    return;
+  }
+  const fold = add('details', '', box, 'found');
+  add('summary', `${f.found.length} found`, fold);
+  const table = add('table', '', fold, 'log');
+  const head = add('tr', '', table);
+  for (const h of ['Place', 'What', 'When', 'Vehicle']) add('th', h, head);
+  for (const e of [...f.found].reverse()) {
+    const tr = add('tr', '', table);
+    add('td', e.name, tr);
+    add('td', KIND_WORDS[e.kind][0], tr);
+    add('td', e.date, tr);
+    add('td', e.vehicle, tr);
+  }
 }

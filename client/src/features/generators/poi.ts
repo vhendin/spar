@@ -4,7 +4,9 @@ import { objectRng, param, pick, shade, type FeatureMesh, type GroundFn, type Rg
 /**
  * What stands at a place worth driving to (features/poi.ts places them): a lean-to shelter of
  * logs with a fire ring in front, a summit cairn, a bench at a viewpoint, a camp site with a
- * tent and tables, or an information board. Each faces its heading, or downhill when it has
+ * tent and tables, or an information board. And at the small things to find: a boundary
+ * stone, a memorial stone, an aircraft wreck, the mouth of an old mine, ruined walls, or a
+ * spring with a log trough. Each faces its heading, or downhill when it has
  * none (heading below 0).
  */
 export function poi(o: PlacedObject, def: ObjectDef, seed: number, ground: GroundFn, out: FeatureMesh): void {
@@ -16,6 +18,12 @@ export function poi(o: PlacedObject, def: ObjectDef, seed: number, ground: Groun
     case 'viewpoint': return viewpoint(o, def, rng, out, f);
     case 'camp': return camp(o, def, rng, out, f);
     case 'board': return board(o, def, rng, out, f);
+    case 'boundary_stone': return boundaryStone(o, def, rng, out, f);
+    case 'memorial': return memorial(o, def, rng, out, f);
+    case 'wreck': return wreck(o, def, rng, out, f);
+    case 'mine': return mine(o, def, rng, out, f);
+    case 'ruins': return ruins(o, def, rng, out, f);
+    case 'spring': return spring(o, def, rng, out, f);
   }
 }
 
@@ -241,4 +249,141 @@ function board(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: F
   out.face([a(hx, ridge - 0.02, 0), a(hx, eave - 0.02, d), a(-hx, eave - 0.02, d), a(-hx, ridge - 0.02, 0)], under);
   out.face([a(-hx, ridge - 0.02, 0), a(-hx, eave - 0.02, -d), a(hx, eave - 0.02, -d), a(hx, ridge - 0.02, 0)], under);
   solid(o, out, f, '', 0, 0, 0.9, 0.15, g, ridge);
+}
+
+/** A boundary stone (rå): a squared granite post with a cross cut in its top, leaning a little. */
+function boundaryStone(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const g = f.groundAt(0, 0);
+  const hx = rng.range(0.13, 0.18), hz = rng.range(0.11, 0.16), high = param(def, 'height', 0.7, rng);
+  const stone = pick(def, 'stone', rng);
+  const yaw = f.yaw + rng.range(-0.3, 0.3);
+  out.box(f.at(0, g + high / 2 - 0.1, 0), hx, high / 2 + 0.1, hz, yaw, stone, false, shade(stone, 1.1));
+  const cut = pick(def, 'cut', rng), top = g + high + 0.002;
+  out.box(f.at(0, top, 0), hx * 0.75, 0.004, 0.012, yaw, cut);
+  out.box(f.at(0, top, 0), 0.012, 0.004, hz * 0.75, yaw, cut);
+  // Small stones round its foot, as round a real one.
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + rng.range(-0.4, 0.4), r = rng.range(0.3, 0.45);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    out.box(f.at(x, f.groundAt(x, z) + 0.04, z), rng.range(0.07, 0.11), 0.07, rng.range(0.06, 0.1), rng.float() * Math.PI, shade(stone, rng.range(0.85, 1)));
+  }
+  solid(o, out, f, '', 0, 0, hx, hz, g - 0.1, g + high);
+}
+
+/** A memorial: a rough standing stone with a dark plaque facing the way. */
+function memorial(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const [low] = span(f, [[-0.6, -0.3], [0.6, -0.3], [0.6, 0.3], [-0.6, 0.3]]);
+  const g = low - 0.1;
+  const stone = pick(def, 'stone', rng);
+  const w = rng.range(0.5, 0.65), high = param(def, 'height', 1.3, rng);
+  // Three blocks, narrowing upwards, so it is not a box.
+  out.box(f.at(0, g + high * 0.25, 0), w, high * 0.25, 0.3, f.yaw, shade(stone, 0.95));
+  out.box(f.at(rng.range(-0.05, 0.05), g + high * 0.62, 0), w * 0.85, high * 0.13, 0.26, f.yaw + rng.range(-0.06, 0.06), stone);
+  out.box(f.at(rng.range(-0.08, 0.08), g + high * 0.86, -0.02), w * 0.6, high * 0.12, 0.22, f.yaw + rng.range(-0.1, 0.1), shade(stone, 1.06));
+  out.box(f.at(0, g + high * 0.6, 0.27), w * 0.55, 0.16, 0.01, f.yaw, pick(def, 'plaque', rng));
+  out.box(f.at(0, g + high * 0.6, 0.282), w * 0.4, 0.09, 0.004, f.yaw, pick(def, 'letters', rng));
+  solid(o, out, f, '', 0, 0, w, 0.3, g, g + high);
+}
+
+/** An aircraft wreck: a broken piece of fuselage, a wing and bent plates in the heather. */
+function wreck(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const metal = (): Rgb => shade(pick(def, 'metal', rng), rng.range(0.8, 1.1));
+  // The fuselage, half sunk, its nose lost.
+  const r = rng.range(0.6, 0.8), length = rng.range(3, 4);
+  const g0 = f.groundAt(0, -length / 2), g1 = f.groundAt(0.3, length / 2);
+  out.rod(f.at(0, g0 + r * 0.45, -length / 2), f.at(0.3, g1 + r * 0.6, length / 2), r, 9, metal(), pick(def, 'dark', rng));
+  solid(o, out, f, 'body', 0.15, 0, r, length / 2, Math.min(g0, g1) - 0.2, Math.max(g0, g1) + r * 1.4);
+  // A wing on its own, at a slant into the ground.
+  const wx = rng.range(2.6, 3.4), wz = rng.range(-1, 1), turn = rng.range(-0.6, 0.6);
+  const wg = f.groundAt(wx, wz);
+  out.box(f.at(wx, wg + 0.12, wz), rng.range(2.2, 2.8), 0.05, rng.range(0.6, 0.8), f.yaw + turn, metal(), true);
+  out.box(f.at(wx + 0.3, wg + 0.2, wz + 0.1), 0.35, 0.02, 0.5, f.yaw + turn, pick(def, 'paint', rng));
+  solid(o, out, f, 'wing', wx, wz, 2.4, 0.7, wg - 0.1, wg + 0.3);
+  // Plates and pieces strewn about.
+  for (let k = 0; k < 7; k++) {
+    const a = rng.float() * Math.PI * 2, d = rng.range(2, 6);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    out.box(f.at(x, f.groundAt(x, z) + 0.03, z), rng.range(0.15, 0.5), 0.02, rng.range(0.1, 0.4), rng.float() * Math.PI, metal(), true);
+  }
+}
+
+/** The mouth of an old mine: a timber frame round a dark opening in a bank of earth, and a spoil heap. */
+function mine(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const [low, high] = span(f, [[-2.4, -0.2], [2.4, -0.2], [0, -1.5]]);
+  const g = low - 0.1, top = high + 2.3;
+  const wood = pick(def, 'wood', rng), earth = pick(def, 'earth', rng);
+  // The bank the adit goes into: a slope of earth rising to the frame, steep in front.
+  const hx = 2.4, zf = -0.2, zb = -5;
+  const gb = f.groundAt(0, zb) - 0.1;
+  const a = (x: number, y: number, z: number): Vec3 => f.at(x, y, z);
+  out.face([a(-hx, g, zf), a(hx, g, zf), a(hx, top, zf), a(-hx, top, zf)], shade(earth, 0.85));
+  out.face([a(-hx, top, zf), a(hx, top, zf), a(hx, gb, zb), a(-hx, gb, zb)], shade(earth, 1.1));
+  out.face([a(hx, g, zf), a(hx, gb, zb), a(hx, top, zf)], earth);
+  out.face([a(-hx, g, zf), a(-hx, top, zf), a(-hx, gb, zb)], earth);
+  out.box(f.at(0, g + 1.0, -0.21), 0.7, 1.0, 0.02, f.yaw, pick(def, 'dark', rng));
+  for (const x of [-0.8, 0.8]) out.box(f.at(x, g + 1.05, -0.12), 0.09, 1.05, 0.09, f.yaw, shade(wood, rng.range(0.85, 1)));
+  out.box(f.at(0, g + 2.15, -0.12), 1.05, 0.1, 0.11, f.yaw, wood);
+  solid(o, out, f, 'bank', 0, -1.6, 2.4, 1.4, g, (top + gb) / 2 + 0.5);
+  // The spoil heap off to one side: grey stones in a low mound.
+  const sx = rng.float() < 0.5 ? -3.5 : 3.5, sz = rng.range(0.5, 2);
+  const stone = pick(def, 'stone', rng);
+  for (let k = 0; k < 24; k++) {
+    const a = rng.float() * Math.PI * 2, d = Math.sqrt(rng.float()) * 1.6;
+    const x = sx + Math.cos(a) * d, z = sz + Math.sin(a) * d;
+    const h = (1 - d / 1.6) * 0.6;
+    out.box(f.at(x, f.groundAt(x, z) + h * 0.5 + 0.05, z), rng.range(0.15, 0.3), h * 0.5 + 0.08, rng.range(0.15, 0.3), rng.float() * Math.PI, shade(stone, rng.range(0.8, 1.1)));
+  }
+}
+
+/** Ruins: the low, broken stone walls of a small house, with a gap for the door. */
+function ruins(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const hx = rng.range(2.4, 3.2), hz = rng.range(1.8, 2.4);
+  const stone = pick(def, 'stone', rng);
+  const walls: [number, number, number, number][] = [[-hx, -hz, hx, -hz], [hx, -hz, hx, hz], [hx, hz, -hx, hz], [-hx, hz, -hx, -hz]];
+  walls.forEach(([ax, az, bx, bz], w) => {
+    const length = Math.hypot(bx - ax, bz - az);
+    const n = Math.round(length / 0.5);
+    const yaw = f.yaw + (w % 2 ? Math.PI / 2 : 0);
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n;
+      // The door in the front wall.
+      if (w === 2 && Math.abs(t - 0.5) < 0.12) continue;
+      const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      const g = f.groundAt(x, z);
+      // Higher at the corners, crumbled between.
+      const corner = Math.min(t, 1 - t);
+      const h = Math.max(0.15, rng.range(0.4, 1.1) * (1 - corner) - (rng.float() < 0.2 ? 0.4 : 0));
+      out.box(f.at(x, g + h / 2 - 0.05, z), 0.26, h / 2 + 0.05, 0.3, yaw + rng.range(-0.05, 0.05), shade(stone, rng.range(0.85, 1.1)));
+    }
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, g = f.groundAt(mx, mz);
+    solid(o, out, f, `w${w}`, mx, mz, w % 2 ? 0.3 : length / 2, w % 2 ? length / 2 : 0.3, g - 0.1, g + 0.6);
+  });
+  // A fallen stone or two inside.
+  for (let k = 0; k < 4; k++) {
+    const x = rng.range(-hx + 0.6, hx - 0.6), z = rng.range(-hz + 0.6, hz - 0.6);
+    out.box(f.at(x, f.groundAt(x, z) + 0.1, z), rng.range(0.15, 0.3), 0.12, rng.range(0.15, 0.25), rng.float() * Math.PI, shade(stone, 0.9));
+  }
+}
+
+/** A spring: water led out of the slope in a wooden pipe into a hollowed log, and a dark pool below. */
+function spring(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const [low] = span(f, [[-0.9, -0.3], [0.9, -0.3], [0.9, 0.3], [-0.9, 0.3]]);
+  const g = low - 0.05;
+  const wood = pick(def, 'wood', rng), water = pick(def, 'water', rng);
+  // The trough: a log with its top hollowed, water standing in it.
+  out.box(f.at(0, g + 0.22, 0), 0.9, 0.22, 0.25, f.yaw, wood, false, shade(wood, 0.7));
+  out.box(f.at(0, g + 0.4, 0), 0.8, 0.005, 0.17, f.yaw, water);
+  // The pipe from the bank behind, on a forked stick.
+  const pg = f.groundAt(-0.6, -1.4);
+  out.rod(f.at(-0.6, pg + 0.25, -1.4), f.at(-0.6, g + 0.6, -0.05), 0.05, 6, shade(wood, 0.8));
+  out.rod(f.at(-0.6, f.groundAt(-0.6, -0.7) - 0.05, -0.7), f.at(-0.6, g + 0.58, -0.7), 0.025, 5, shade(wood, 0.7));
+  // The pool where it runs over.
+  const pz = 0.75, pr = rng.range(0.5, 0.7), pgr = f.groundAt(0.4, pz) + 0.02;
+  const ring: Vec3[] = [];
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    ring.push(f.at(0.4 + Math.cos(a) * pr, pgr, pz + Math.sin(a) * pr * 0.7));
+  }
+  out.face([...ring].reverse(), water);
+  solid(o, out, f, '', 0, 0, 0.9, 0.25, g, g + 0.45);
 }

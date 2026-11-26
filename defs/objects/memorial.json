@@ -1,0 +1,9 @@
+{
+  "name": "memorial",
+  "title": "Memorial stone (minnessten)",
+  "generator": "poi",
+  "params": { "shape": "memorial", "height": [1.1, 1.6] },
+  "colors": { "stone": ["#77756f", "#6a6964", "#85827a"], "plaque": ["#2d2b27", "#3a3226"], "letters": ["#b59b5a"] },
+  "range": 600,
+  "collider": true
+}

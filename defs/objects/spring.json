@@ -1,0 +1,9 @@
+{
+  "name": "spring",
+  "title": "Spring with a log trough (källa)",
+  "generator": "poi",
+  "params": { "shape": "spring" },
+  "colors": { "wood": ["#6e5f4c", "#5a4a3a", "#7a6a55"], "water": ["#1f2c30", "#24343a"] },
+  "range": 400,
+  "collider": true
+}

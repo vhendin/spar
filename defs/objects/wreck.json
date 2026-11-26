@@ -1,0 +1,9 @@
+{
+  "name": "wreck",
+  "title": "Aircraft wreck (flygplansvrak)",
+  "generator": "poi",
+  "params": { "shape": "wreck" },
+  "colors": { "metal": ["#a7aaa8", "#8f9391", "#9c9a92"], "paint": ["#5d6b5a", "#6b2a24"], "dark": ["#1e1f1f"] },
+  "range": 700,
+  "collider": true
+}

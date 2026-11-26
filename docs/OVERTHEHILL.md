@@ -133,6 +133,9 @@ game has to place by hand. **Fit** says how it sits with our pillars.
 
 ### 2. More kinds of places to find
 
+*Built 2026-11-26, without summit registers: see "More kinds of places to find" in
+`QUESTIONS.md`.*
+
 **They:** cabins, crates, scenic points; each first visit gives something.
 
 **Spår:** OpenStreetMap is full of small things worth driving to in the mountains, more than we

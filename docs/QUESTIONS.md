@@ -5,7 +5,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### The map fills in as you drive (5f6c679; over lakes this commit)
+### The map fills in as you drive (5f6c679; over lakes 0af2341)
 
 - **Asked:** idea 1 of `docs/OVERTHEHILL.md`. Decided before building: unseen ground pale (the
   relief, contours and lakes still faintly there), roads, paths, buildings and places hidden
@@ -26,7 +26,7 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - The proving ground is always whole. Settings → Map: "Fills in as you go" or "Whole".
   - Kept per region in the browser (`spar.seen.<region>`, about 2 kB for 3 % of Vålådalen)
     and with the account, merged across devices.
-  - Seen share in the F3 read-out and the logbook; the map's trip list says how many are found.
+  - Seen share in the F3 read-out and the logbook; the map's trip list says how many are seen.
   - `?seen=none` forgets a region, `?seen=all` sees all of it.
   - A look takes about 4 ms (33 ms from a summit) and is spread over frames, at most 2 ms each.
 - **Decided:** sight reaches further over lakes (the user, 2026-11-26).
@@ -40,14 +40,57 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Should the summits that the map finds itself (the spot heights) count as lookouts too? Now
     only summits from the map data do.
 
+### More kinds of places to find (this commit)
+
+- **Asked:** idea 2 of `docs/OVERTHEHILL.md`. Decided before building (the user, 2026-11-26):
+  all four groups (summer farms; waterfalls, rapids and springs; historic places and cairns;
+  fords and passes); quiet finds rather than destinations; a small model at each; and also the
+  highest point per region and the shores of named lakes. Fords thinned, not all of them.
+- **Done:**
+  - The importer writes a `finds` list from OpenStreetMap: named summer farms
+    (`place=isolated_dwelling`), waterfalls, rapids, springs, historic places (boundary stones,
+    memorials, monuments, aircraft wrecks, mines, ruins, graves, wayside crosses), cairns,
+    passes and saddles, and fords. Unnamed ones are named like destinations ("Ford 1.1 km W of
+    Ottsjö"). One within 25 m of a destination is left to the destination (Vålåforsen stays a
+    sight).
+  - Fords: on a track you may drive first, then in an order from a hash of their id, keeping
+    only one per 1 km. 23 in Åre (of over 300), 6 in Vålådalen.
+  - What there is now: Vålådalen 2 waterfalls, 6 fords, the aircraft wreck on Ottfjället and
+    Yngves grav, and 7 named lakes; Åre 5 waterfalls, 23 fords, 2 passes and 13 lakes; Järvsö
+    2 summer farms. The 14 summer farms counted round Vålådalen lie outside its 10 km.
+  - Found by driving within 30 m (a ford within 10 m, so you drive through it; a pass within
+    60 m; a named lake within 15 m of its shore or out on it). Not from the drone or the fly
+    camera. A card says "Found · boundary stone" and the like; nothing else happens.
+  - On the map: a small diamond once seen, hollow until found, filled after; a found lake gets
+    its name. Not in the destination list. The map's "N found" for destinations now says "N seen".
+  - Models: a boundary stone with a cross cut in it, a memorial stone with a plaque, an aircraft
+    wreck (fuselage, wing, plates), the timber mouth of a mine in a bank with a spoil heap, low
+    ruined walls, a grave cairn, a log trough and pipe at a spring, a cairn at a pass, and two or
+    three small barns at a summer farm with no mapped buildings. Waterfalls, rapids and fords
+    keep their water.
+  - The highest ground reached in each region, with vehicle and date.
+  - Logbook: "Found on the way: springs 1 of 1 · historic places 0 of 7 …", the highest point,
+    and the finds folded away. Kept in the browser (`spar.finds`, `spar.highest`) and with the
+    account, merged across devices.
+  - The proving ground has one of each by the road south of the clear-cuts, a waterfall on the
+    stream into the lake and a ford on the forest track.
+- **To try:** the proving ground's row of finds; in Vålådalen a ford (1.1 km W of Ottsjö) and a
+  lake shore; the logbook (Esc → Logbook).
+- **Open:**
+  - Is 1 km between fords right? Too few in Vålådalen, too many in Åre?
+  - The reach: 30 m, 10 m for a ford, 60 m for a pass, 15 m from a shore. Right?
+  - The models are simple. Which need more (the wreck, the mine)?
+  - Should unnamed lakes and tarns count too? Only named ones do now.
+  - The summer farms' barns are the usual red with white trim. Grey, unpainted log instead?
+
 ### Ideas from Over the Hill (`docs/OVERTHEHILL.md`)
 
 - **Asked:** explore overthehill.app (the fan wiki for Over the Hill) and write down what Spår
   could take from it, thinking broader since our world is real map data.
 - **Done:** `docs/OVERTHEHILL.md`: what they do with numbers, 17 ideas turned to Spår, a list
   only real data allows (weight-limited bridges, gates, ice roads, midnight sun), and an order.
-- **Decided:** the map that fills in first (built, above).
-- **Open:** what next? Suggested: more kinds of places, then camping at a shelter until dawn.
+- **Decided:** the map that fills in first, then more kinds of places (both built, above).
+- **Open:** what next? Suggested: camping at a shelter until dawn.
   Upgrades: earned by doing, or simply free choices in the garage (no money, by the pillars)?
 
 ### Trees that hold (this commit)
@@ -541,8 +584,8 @@ same as the Terrängkombi.
 
 - **Destinations.** 30 in Vålådalen from OpenStreetMap: 5 summits, 3 lodges, 2 camp sites,
   Vålåforsen, 8 viewpoints and 11 shelters. Unnamed ones are called "Viewpoint 2.4 km W of
-  Ottsjö" and the like. The mountain huts are all outside the area. Worth adding lakes (reach
-  the shore), or leaving out the many shelters?
+  Ottsjö" and the like. The mountain huts are all outside the area. Leaving out the many
+  shelters? (Lakes: answered, see below.)
 - **What counts.** The clock runs only while driving (not paused, not on the map, not flying).
   Jumping to a start point or back to the start voids the trip; swapping vehicle on the way
   does not, and the arrival is logged with the vehicle you arrive in. Fair?
@@ -594,6 +637,10 @@ same as the Terrängkombi.
 - **A third truck.** The Tgb 20 (C306): 6×6, 6.05 m long, 3390 kg, bigger and taller. Wanted?
 
 ## Answered
+
+- Lakes as places to reach (asked under "Trips and the logbook"), decided 2026-11-26 (done):
+  yes, as finds rather than destinations. Reaching the shore of a named lake is logged; see
+  "More kinds of places to find".
 
 - Scouting drone, decided 2026-11-23 (done):
   - The driver flies it, launched from the roof with the vehicle stopped; the driving keys or

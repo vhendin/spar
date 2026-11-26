@@ -10,7 +10,7 @@ from pathlib import Path
 
 from osgeo import ogr, osr
 
-from .ground import WATERWAYS, biome_for, destination_for, road_for
+from .ground import WATERWAYS, biome_for, destination_for, find_for, ford_of, road_for
 from .region import CRS
 
 ogr.UseExceptions()
@@ -65,6 +65,22 @@ class Poi:
 
 
 @dataclass
+class Find:
+    """A small thing to find: a summer farm, waterfall, spring, historic place, ford or pass.
+    `what` is the historic tag's value; `drivable` says, for a ford on a way, whether a
+    vehicle may take that way (None for a ford on a point: the importer looks for its road)."""
+
+    id: str
+    kind: str
+    what: str | None
+    name: str | None
+    ele: float | None
+    easting: float
+    northing: float
+    drivable: bool | None = None
+
+
+@dataclass
 class Feature:
     """A building outline, power line, lift, ski run or barrier line: kept with its tags."""
 
@@ -88,6 +104,7 @@ class OsmData:
     waterways: list[Waterway] = field(default_factory=list)
     places: list[Place] = field(default_factory=list)
     pois: list[Poi] = field(default_factory=list)
+    finds: list[Find] = field(default_factory=list)
     buildings: list[Feature] = field(default_factory=list)
     power: list[Feature] = field(default_factory=list)
     barriers: list[Feature] = field(default_factory=list)
@@ -127,6 +144,18 @@ def load_osm(path: Path) -> OsmData:
                 if destination and kind in ("Point", "Polygon", "MultiPolygon"):
                     point = _geometry(feature, to_metres).Centroid()
                     data.pois.append(Poi(fid, destination, tags.get("name") or None, _elevation(tags.get("ele")), point.GetX(), point.GetY()))
+                found = find_for(tags)
+                if found and kind in ("Point", "Polygon", "MultiPolygon"):
+                    point = _geometry(feature, to_metres).Centroid()
+                    data.finds.append(Find(fid, found[0], found[1], tags.get("name") or None, _elevation(tags.get("ele")), point.GetX(), point.GetY()))
+                if ford_of(tags) and kind == "Point":
+                    x, y, _ = to_metres.TransformPoint(*feature["geometry"]["coordinates"][:2])
+                    data.finds.append(Find(fid, "ford", None, tags.get("name") or None, None, x, y))
+                elif ford_of(tags) and kind == "LineString" and tags.get("highway"):
+                    line = _geometry(feature, to_metres)
+                    middle = line.GetPoint_2D(line.GetPointCount() // 2)
+                    road = road_for(tags)
+                    data.finds.append(Find(fid, "ford", None, tags.get("name") or None, None, middle[0], middle[1], bool(road and road[2])))
                 if tags.get("piste:type") in PISTES and kind in ("LineString", "Polygon", "MultiPolygon"):
                     data.pistes.append(Feature(fid, _geometry(feature, to_metres), tags))
                 if kind in ("Polygon", "MultiPolygon"):

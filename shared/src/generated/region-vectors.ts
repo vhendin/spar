@@ -30,6 +30,10 @@ export interface RegionVectors {
    */
   destinations?: DestinationPoint[];
   /**
+   * Small things to find, quieter than destinations: summer farms, waterfalls, rapids, springs, historic places, fords and passes from OpenStreetMap. Logged once reached; no trips to them. Fords are thinned to one every few hundred metres. Unnamed ones are named by kind and position. Optional: older regions have none.
+   */
+  finds?: FindPoint[];
+  /**
    * Points on drivable roads where a vehicle can start; the first is the default.
    */
   spawns: SpawnPoint[];
@@ -114,6 +118,24 @@ export interface DestinationPoint {
   z: number;
   /**
    * Height above sea level from the map (for a lift top, from the ground), metres.
+   */
+  ele?: number;
+}
+export interface FindPoint {
+  /**
+   * OpenStreetMap id, such as n123 or w456.
+   */
+  id: string;
+  kind: 'farm' | 'waterfall' | 'rapids' | 'spring' | 'historic' | 'ford' | 'pass';
+  /**
+   * For a historic place, what it is: the historic tag's value (boundary_stone, memorial, monument, aircraft_wreck, mine, ruins, tomb, wayside_cross), or cairn.
+   */
+  what?: string;
+  name: string;
+  x: number;
+  z: number;
+  /**
+   * Height above sea level from the map, metres.
    */
   ele?: number;
 }

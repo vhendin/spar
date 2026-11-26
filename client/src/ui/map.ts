@@ -9,6 +9,7 @@
 import type { RegionIndex, RegionVectors } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { paintGround, summits, type MapRasters, type Summit } from './mapImage';
+import type { Finds } from '../finds';
 import { SeenGrid } from './seen';
 import { headingAt, type StartStore } from './starts';
 import { builder, closeButton, coarsePointer } from './dom';
@@ -27,6 +28,10 @@ const PIN = { own: { fill: '#8e3b2d', line: 'rgba(142,59,45,0.85)' }, shared: { 
 /** Colours of the destination markers by kind. */
 const DESTINATION_COLORS: Record<string, string> = {
   peak: '#5a3c26', hut: '#b0472c', shelter: '#8a5a2b', viewpoint: '#2c6fb0', lodge: '#7a3d8f', camp: '#2f6f4f', sight: '#c28a12', lift: '#3a3f47',
+};
+/** Marks of the things to find, by kind. */
+const FIND_COLORS: Record<string, string> = {
+  farm: '#8b6b3e', waterfall: '#2a7fa8', rapids: '#2a7fa8', spring: '#2f9a94', historic: '#6b5b4b', pass: '#5a3c26', ford: '#3b6f8f',
 };
 /** Kinds of destination always on the map, seen or not: the huts and lodges people walk to. */
 const LANDMARKS = new Set(['hut', 'lodge']);
@@ -47,6 +52,8 @@ export interface MapActions {
   setDestination(d: Destination | null): void;
   /** Names of the places already reached here, from the logbook. */
   reached(): Set<string>;
+  /** The small things to find here, and which have been found. */
+  found?(): Pick<Finds, 'points' | 'has'>;
   /**
    * Sharing the destination with the other drivers in the region; left out when playing alone.
    * `shared` is what is shared now, with who shared it (null for this driver).
@@ -769,7 +776,7 @@ export class MapScreen {
     const reached = this.actions.reached();
     const all = this.vectors.destinations ?? [];
     if (all.length) {
-      const found = this.whole ? '' : ` · ${all.filter((p) => this.showsDestination(p)).length} found`;
+      const found = this.whole ? '' : ` · ${all.filter((p) => this.showsDestination(p)).length} seen`;
       add('div', `Trips · ${all.filter((p) => reached.has(p.name)).length} of ${all.length} reached${found}`, box, 'label');
       for (const [title, kinds] of DESTINATION_GROUPS) {
         const group = all.filter((p) => kinds.includes(p.kind) && this.showsDestination(p));
@@ -1040,6 +1047,35 @@ export class MapScreen {
         c.stroke();
       }
       if (s >= 0.25 || (s >= 0.08 && !/ (of|at) /.test(p.name))) label(p.name, sx, sy + 13, '11px Inter, system-ui, sans-serif');
+    }
+    // Things to find: a small diamond, hollow until found; a lake found gets its name.
+    const finds = this.actions.found?.();
+    for (const p of finds?.points ?? []) {
+      if (!this.shows(p.x, p.z)) continue;
+      const found = finds!.has(p.id);
+      const [sx, sy] = this.toScreen(p.x, p.z);
+      if (p.kind === 'lake') {
+        if (found && s >= 0.06) {
+          c.font = 'italic 600 12px Inter, system-ui, sans-serif';
+          c.fillStyle = '#2a6f9a';
+          c.fillText(p.name, sx, sy);
+        }
+        continue;
+      }
+      const color = FIND_COLORS[p.kind] ?? '#555';
+      c.beginPath();
+      c.moveTo(sx, sy - 5);
+      c.lineTo(sx + 5, sy);
+      c.lineTo(sx, sy + 5);
+      c.lineTo(sx - 5, sy);
+      c.closePath();
+      c.fillStyle = found ? color : '#fff';
+      c.strokeStyle = found ? '#fff' : color;
+      c.lineWidth = found ? 1.2 : 1.8;
+      c.fill();
+      c.stroke();
+      // A summer farm is named by its place label already.
+      if (s >= 0.25 && !(p.kind === 'farm' && this.vectors.places.some((q) => q.name === p.name))) label(p.name, sx, sy + 13, '10px Inter, system-ui, sans-serif');
     }
     for (const p of this.vectors.places) {
       if (!this.shows(p.x, p.z)) continue;

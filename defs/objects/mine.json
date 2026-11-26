@@ -1,0 +1,9 @@
+{
+  "name": "mine",
+  "title": "Old mine opening (gruvort)",
+  "generator": "poi",
+  "params": { "shape": "mine" },
+  "colors": { "wood": ["#5a4a3a", "#4e4034", "#63503c"], "earth": ["#6b6250", "#5f5a4a"], "dark": ["#0d0d0c"], "stone": ["#7a7870", "#6c6962", "#88847a"] },
+  "range": 800,
+  "collider": true
+}

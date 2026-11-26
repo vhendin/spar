@@ -45,6 +45,7 @@ import { bearing, Compass } from './ui/compass';
 import { Guide, SHARED } from './ui/guide';
 import { formatDistance, MapScreen, type Destination, type MapState } from './ui/map';
 import { EYE, Explorer } from './explore';
+import { Finds } from './finds';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { signIn } from './account';
@@ -177,6 +178,8 @@ interface World {
   map: MapScreen;
   /** Looks round as the vehicle goes, filling in the map. */
   explorer: Explorer;
+  /** Small things found on the way, and the highest point reached. */
+  finds: Finds;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
@@ -824,7 +827,7 @@ async function start(): Promise<void> {
 
     // What stands at the places worth driving to (a shelter, a cairn, a hut), which the map has
     // only as points: built with the other objects, and kept clear of trees.
-    const pois = poiFeatures(vectors.destinations ?? [], vectors.buildings ?? [], vectors.roads ?? [], welcome.seed);
+    const pois = poiFeatures(vectors.destinations ?? [], vectors.buildings ?? [], vectors.roads ?? [], welcome.seed, vectors.finds ?? []);
 
     // ?plants=0 leaves the ground bare, for looking at the terrain alone.
     let vegetation: Vegetation | null = null;
@@ -897,12 +900,15 @@ async function start(): Promise<void> {
     const winchView = new WinchView();
     scene.add(winchView.group);
     const sound = new VehicleAudio(audio);
+    // Small things to find on the way, and the highest point reached.
+    const finds = new Finds(index.name, vectors.finds ?? [], vectors.lakes);
     const map = new MapScreen(document.body, index, vectors, {
       setDestination: (d) => {
         guide.destination = d;
         trips.begin(d);
       },
       reached: () => trips.reached(index.name),
+      found: () => finds,
       sharing: {
         available: () => others.players.length > 1,
         shared: () => shared && { destination: shared.destination, by: shared.by === null ? null : playerName(shared.by) },
@@ -993,7 +999,7 @@ async function start(): Promise<void> {
     start.setPlayers(others.list());
     start.setAddresses(welcome.addresses ?? []);
     start.setAccount(account?.email ?? null);
-    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
     ground.onBreak = (x, z) => connection?.send({ type: 'ice_hole', region: index.name, hole: { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 } });
@@ -1231,6 +1237,7 @@ async function start(): Promise<void> {
         entries: trips.entries.filter((e) => e.region === world?.index.name),
         places: placesToReach,
         seen: world && !world.map.whole ? world.map.seen.share : null,
+        finds: world?.finds.summary() ?? null,
       }),
       players: () => ({ list: others.list(), region: world?.index.title ?? '', titleOf: (name) => regionTitles.get(name) ?? name }),
       join: (id) => joinFriend(id),
@@ -1296,10 +1303,14 @@ async function start(): Promise<void> {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && world) {
       world.explorer.save();
+      world.finds.save();
       pause();
     }
   });
-  window.addEventListener('pagehide', () => world?.explorer.save());
+  window.addEventListener('pagehide', () => {
+    world?.explorer.save();
+    world?.finds.save();
+  });
 
   window.addEventListener('keyup', (e) => {
     if (e.code === 'Tab') minimap.expand(false);
@@ -2145,6 +2156,18 @@ async function start(): Promise<void> {
       if (!w.unplaced && !flying && !paused && !w.map.open && !starting) {
         trips.tick(dt, tripFrom ? Math.min(50, Math.hypot(where.x - tripFrom.x, where.z - tripFrom.z)) : 0, now);
         tripFrom = { x: where.x, z: where.z };
+        // Something found on the way: a quiet card, and it is marked on the map.
+        if (!drone.flown) {
+          const found = w.finds.update(now, where.x, where.z, w.terrain.heightAt(where.x, where.z) ?? w.map.heightAt(where.x, where.z), () => {
+            const day = w.environment.dayOfYear();
+            return { vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(seasonAt(CALENDAR, day), day) };
+          });
+          const last = found[found.length - 1];
+          if (last) {
+            chapter(last.name, `Found · ${last.what}`);
+            w.map.refresh();
+          }
+        }
       } else tripFrom = null;
       // Seeing the region, from the driver's seat or from the drone.
       if (!w.unplaced && !flying && !starting) {

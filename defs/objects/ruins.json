@@ -1,0 +1,9 @@
+{
+  "name": "ruins",
+  "title": "Ruined stone walls (ruin)",
+  "generator": "poi",
+  "params": { "shape": "ruins" },
+  "colors": { "stone": ["#77756f", "#6a6964", "#85827a", "#5f5e5a"] },
+  "range": 800,
+  "collider": true
+}

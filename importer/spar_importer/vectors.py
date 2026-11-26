@@ -307,7 +307,8 @@ def build_vectors(
         "waterways": waterways,
         "lakes": lakes,
         "places": places,
-        "destinations": destinations(osm, region, places) + lift_tops(osm, region, places, ground),
+        "destinations": (places_to_go := destinations(osm, region, places) + lift_tops(osm, region, places, ground)),
+        "finds": finds(osm, region, places, places_to_go, roads),
         "spawns": _spawns(places, drivable_points, region),
         "buildings": buildings(osm, region),
         "powerLines": power_lines(osm, region, box),
@@ -383,6 +384,96 @@ def destinations(osm: OsmData, region: Region, places: list[dict]) -> list[dict]
     return out
 
 
+FIND_NAMES = {
+    "farm": "Summer farm",
+    "waterfall": "Waterfall",
+    "rapids": "Rapids",
+    "spring": "Spring",
+    "ford": "Ford",
+    "pass": "Pass",
+}
+HISTORIC_NAMES = {
+    "boundary_stone": "Boundary stone",
+    "memorial": "Memorial",
+    "monument": "Monument",
+    "aircraft_wreck": "Aircraft wreck",
+    "mine": "Old mine",
+    "ruins": "Ruins",
+    "tomb": "Grave",
+    "wayside_cross": "Wayside cross",
+    "cairn": "Cairn",
+}
+# A find this close to a destination is that destination (a named waterfall is a sight).
+FIND_NEAR_DESTINATION = 25.0
+# The same thing mapped twice: as a point and an outline, or two springs side by side.
+FIND_SAME = 25.0
+# Fords are many (over 300 round Åre): only one in this many metres is kept, those on ways a
+# vehicle may take first, then by a hash of the id, so everyone has the same ones. Leaves 23 in
+# Åre and 6 in Vålådalen.
+FORD_SPACING = 1000.0
+# A ford point on a road or path closer than this belongs to it.
+FORD_ON_ROAD = 6.0
+
+
+def finds(osm: OsmData, region: Region, places: list[dict], destinations: list[dict], roads: list[dict]) -> list[dict]:
+    """Small things to find inside the area: summer farms, waterfalls, rapids, springs,
+    historic places, fords and passes. Unnamed ones are named like destinations."""
+    candidates = []
+    for f in osm.finds:
+        if not (region.west <= f.easting <= region.east and region.south <= f.northing <= region.north):
+            continue
+        x, z = round(f.easting - region.west, 1), round(region.north - f.northing, 1)
+        if any(math.hypot(d["x"] - x, d["z"] - z) < FIND_NEAR_DESTINATION for d in destinations):
+            continue
+        drivable = f.drivable
+        if f.kind == "ford" and drivable is None:
+            drivable = _drivable_at(x, z, roads)
+        candidates.append((f, x, z, bool(drivable)))
+
+    kept: list[tuple] = []
+    # Fords: driveable ones first, then in an order that looks random but stays put.
+    fords = sorted((c for c in candidates if c[0].kind == "ford"), key=lambda c: (not c[3], _hash(c[0].id)))
+    for c in fords:
+        if all(math.hypot(k[1] - c[1], k[2] - c[2]) >= FORD_SPACING for k in kept):
+            kept.append(c)
+    others: list[tuple] = []
+    for c in candidates:
+        if c[0].kind == "ford":
+            continue
+        if any(o[0].kind == c[0].kind and math.hypot(o[1] - c[1], o[2] - c[2]) < FIND_SAME for o in others):
+            continue
+        others.append(c)
+
+    out = []
+    for f, x, z, _ in others + kept:
+        label = HISTORIC_NAMES.get(f.what or "", "Historic place") if f.kind == "historic" else FIND_NAMES[f.kind]
+        entry = {"id": f.id, "kind": f.kind, "name": f.name or _unnamed(f.kind, f.ele, x, z, places, label), "x": x, "z": z}
+        if f.what:
+            entry["what"] = f.what
+        if f.ele is not None:
+            entry["ele"] = round(f.ele)
+        out.append(entry)
+    out.sort(key=lambda d: (list(FIND_NAMES).index(d["kind"]) if d["kind"] in FIND_NAMES else len(FIND_NAMES), d["name"], d["id"]))
+    return out
+
+
+def _drivable_at(x: float, z: float, roads: list[dict]) -> bool:
+    """Whether the nearest road or path within FORD_ON_ROAD of a point may be driven."""
+    best, drivable = FORD_ON_ROAD, False
+    for road in roads:
+        p = road["points"]
+        for a, b in zip(p, p[1:]):
+            if x < min(a[0], b[0]) - best or x > max(a[0], b[0]) + best or z < min(a[1], b[1]) - best or z > max(a[1], b[1]) + best:
+                continue
+            dx, dz = b[0] - a[0], b[1] - a[1]
+            length2 = dx * dx + dz * dz
+            t = 0.0 if length2 == 0 else min(1.0, max(0.0, ((x - a[0]) * dx + (z - a[1]) * dz) / length2))
+            d = math.hypot(a[0] + dx * t - x, a[1] + dz * t - z)
+            if d < best:
+                best, drivable = d, road["drivable"]
+    return drivable
+
+
 # Which lift names a top shared by several: the big ones first.
 LIFT_RANK = ("cable_car", "gondola", "mixed_lift", "chair_lift")
 # Lift tops closer than this are one place: several lifts ending on the same shoulder.
@@ -432,8 +523,8 @@ def lift_tops(osm: OsmData, region: Region, places: list[dict], ground: Callable
     return out
 
 
-def _unnamed(kind: str, ele: float | None, x: float, z: float, places: list[dict]) -> str:
-    what = KIND_NAMES[kind]
+def _unnamed(kind: str, ele: float | None, x: float, z: float, places: list[dict], label: str | None = None) -> str:
+    what = label or KIND_NAMES[kind]
     if kind == "peak" and ele is not None:
         return f"{what} {round(ele)} m"
     named = [p for p in places if p["kind"] != "locality"] or places

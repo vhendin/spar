@@ -13,6 +13,10 @@ the gravel road down the middle:
 - Bog: a mire with a muddy track across it and forest beside it to winch from.
 - Lake: a gentle beach to wade out from, a stream in, a river out (thin ice in winter).
 
+East of the road, from the forest track south: one of each thing to find (a summer farm, a
+spring, the historic places, a cairn and a pass); a waterfall on the stream into the lake and a
+ford on the forest track.
+
 East of the road: a fell rising 320 m with a track spiralling to the top (snow deepens with
 height), and a forest with a track through it. A cabin, a fence and a power line stand by the
 road. The land around is a ring of made-up fells for the horizon.
@@ -80,6 +84,20 @@ STILL = (220.0, 465.0, 910.0, 1005.0)
 
 LAKE = (250.0, 1670.0, 850.0, 1930.0)
 LAKE_LEVEL = BASE - FALL * LAKE[1] - WEST_FALL * (FIELD_EAST - LAKE[0]) - 1.2
+
+# Things to find by the road: (z, tags).
+FINDS: list[tuple[float, dict]] = [
+    (1140, {"place": "isolated_dwelling", "name": "Proving fäbod"}),
+    (1250, {"natural": "spring"}),
+    (1330, {"historic": "boundary_stone"}),
+    (1400, {"historic": "memorial", "name": "Proving memorial"}),
+    (1480, {"historic": "aircraft_wreck"}),
+    (1560, {"historic": "mine"}),
+    (1640, {"historic": "ruins"}),
+    (1710, {"historic": "tomb"}),
+    (1770, {"man_made": "cairn"}),
+    (1840, {"mountain_pass": "yes", "name": "Proving pass"}),
+]
 
 FELL_X, FELL_Z, FELL_R, FELL_H = 1540.0, 540.0, 480.0, 320.0
 FOREST = (1150.0, 1100.0, 2000.0, 1990.0)
@@ -277,6 +295,12 @@ def map_features() -> tuple[list[tuple[list, dict]], list[tuple[list[list], dict
         ("Lake shore", LAKE[2] + 30, 1800),
     ):
         nodes.append((x, z, {"tourism": "viewpoint", "name": name}))
+    # Things to find, one of each, in a row east of the road between it and the forest; a
+    # waterfall on the stream into the lake, and a ford on the forest track.
+    for z, tags in FINDS:
+        nodes.append((ROAD_X + 24, z, tags))
+    nodes.append((503, 1610, {"waterway": "waterfall"}))
+    nodes.append((1300, 1300, {"ford": "yes"}))
 
     field = ogr.CreateGeometryFromWkt(_wkt(_rect(FIELD)))
     for box in holes:

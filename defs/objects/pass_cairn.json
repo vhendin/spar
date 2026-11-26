@@ -1,0 +1,9 @@
+{
+  "name": "pass_cairn",
+  "title": "Cairn at a pass (rös)",
+  "generator": "poi",
+  "params": { "shape": "cairn", "radius": [0.6, 0.8], "height": [0.9, 1.2] },
+  "colors": { "stone": ["#77756f", "#6a6964", "#85827a", "#5f5e5a", "#8d8a80"] },
+  "range": 700,
+  "collider": true
+}

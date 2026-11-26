@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Building, DestinationPoint, RoadLine } from '@spar/shared';
+import type { Building, DestinationPoint, FindPoint, RoadLine } from '@spar/shared';
 import { buildTile } from './build';
 import { OBJECTS } from './defs';
 import { poiFeatures } from './poi';
 
 const place = (id: string, kind: DestinationPoint['kind'], x: number, z: number): DestinationPoint => ({ id, kind, name: id, x, z });
+const find = (id: string, kind: FindPoint['kind'], x: number, z: number, what?: string): FindPoint => ({ id, kind, name: id, x, z, ...(what ? { what } : {}) });
 const road: RoadLine = { id: 'w1', kind: 'track', surface: 'gravel', width: 3, drivable: true, points: [[0, 100], [400, 100]] } as RoadLine;
 const hilly = (x: number, z: number): number => 500 + 0.2 * x + 2 * Math.cos(z / 9);
 
@@ -50,5 +51,47 @@ describe('poi generator', () => {
     const s = tile.solids[0]!;
     expect(s.y - s.hy).toBeLessThan(hilly(50, 80));
     expect(s.hy * 2).toBeGreaterThan(2);
+  });
+});
+
+describe('finds', () => {
+  const finds = [
+    find('n1', 'spring', 50, 50),
+    find('n2', 'pass', 100, 50),
+    find('n3', 'historic', 150, 50, 'boundary_stone'),
+    find('n4', 'historic', 200, 50, 'memorial'),
+    find('n5', 'historic', 250, 50, 'aircraft_wreck'),
+    find('n6', 'historic', 300, 50, 'mine'),
+    find('n7', 'historic', 350, 50, 'ruins'),
+    find('n8', 'historic', 400, 50, 'tomb'),
+    find('n9', 'historic', 450, 50, 'cairn'),
+    find('n10', 'waterfall', 500, 50),
+    find('n11', 'ford', 550, 50),
+    find('n12', 'farm', 300, 300),
+  ];
+
+  it('puts a model at each, barns at a summer farm, and nothing at water', () => {
+    const f = poiFeatures([], [], [road], 1, finds);
+    expect(f.objects.map((o) => o.kind)).toEqual(['spring', 'pass_cairn', 'boundary_stone', 'memorial', 'wreck', 'mine', 'ruins', 'grave', 'cairn']);
+    expect(f.buildings.length).toBeGreaterThanOrEqual(2);
+    expect(f.buildings.every((b) => b.kind === 'hut' && b.id.startsWith('findn12.'))).toBe(true);
+    for (const o of f.objects) expect(OBJECTS[o.kind]?.generator).toBe('poi');
+  });
+
+  it('builds no barns at a summer farm with mapped buildings', () => {
+    const barn: Building = { id: 'w9', kind: 'barn', outline: [[320, 300], [326, 300], [326, 306], [320, 306]] };
+    expect(poiFeatures([], [barn], [], 1, [find('n12', 'farm', 300, 300)]).buildings).toEqual([]);
+  });
+
+  it('builds every model with something to hit', () => {
+    const f = poiFeatures([], [], [road], 1, finds);
+    const tile = buildTile({ buildings: [], power: [], fences: [], objects: f.objects, lifts: [] }, OBJECTS, 7, hilly);
+    expect(new Set(tile.parts.map((p) => p.kind))).toEqual(new Set(f.objects.map((o) => o.kind)));
+    for (const p of tile.parts) {
+      expect(p.indices.length).toBeGreaterThan(0);
+      for (const v of p.positions) expect(Number.isFinite(v)).toBe(true);
+    }
+    // Every model can be hit: at least one solid each.
+    for (const o of f.objects) expect(tile.solids.some((s) => s.key.startsWith(`o${o.id}`))).toBe(true);
   });
 });

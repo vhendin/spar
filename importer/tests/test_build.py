@@ -2,6 +2,7 @@
 
 import datetime
 import json
+import math
 
 import jsonschema
 import numpy as np
@@ -129,6 +130,16 @@ def write_osm(data, region=REGION):
     node(2100, 1500, {"tourism": "viewpoint"})
     node(2150, 2950, {"amenity": "shelter"})
     node(900, 900, {"tourism": "attraction"})  # unnamed sight: left out
+    # Things to find.
+    node(3800, 1800, {"place": "isolated_dwelling", "name": "Testvallen"})
+    node(2500, 2000, {"natural": "spring"})
+    node(600, 1500, {"historic": "boundary_stone", "name": "Teststenen"})
+    node(3000, 3700, {"mountain_pass": "yes", "name": "Testpasset", "ele": "700"})
+    node(2160, 2950, {"waterway": "waterfall"})  # at the shelter: the shelter's
+    node(3700, 1700, {"place": "isolated_dwelling"})  # unnamed: no summer farm
+    # Fords: three on the track, two of them too close together to keep both; one on the path.
+    for x, z in ((2000, 1000), (2000, 1300), (2000, 2600), (600, 600)):
+        node(x, z, {"ford": "yes"})
     path = data / "raw/osm" / f"{region.name}.osm"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('<?xml version="1.0" encoding="UTF-8"?><osm version="0.6">' + "".join(nodes) + "".join(ways) + "</osm>")
@@ -378,7 +389,10 @@ def test_vectors(data):
     assert lake["name"] == "Testsjön"
     centre = ground(REGION.west + 1200.0, REGION.north - 1200.0)
     assert abs(lake["level"] - centre) < 15
-    assert vectors["places"] == [{"name": "Testby", "kind": "hamlet", "x": 2100.0, "z": 2900.0}]
+    assert vectors["places"] == [
+        {"name": "Testby", "kind": "hamlet", "x": 2100.0, "z": 2900.0},
+        {"name": "Testvallen", "kind": "isolated_dwelling", "x": 3800.0, "z": 1800.0},
+    ]
 
     names = {d["name"]: d for d in vectors["destinations"]}
     assert set(names) == {
@@ -397,6 +411,25 @@ def test_vectors(data):
     assert (top["x"], top["z"], top["id"]) == (500.0, 2100.0, "w12")
     assert abs(top["ele"] - ground(REGION.west + 500, REGION.north - 2100)) <= 1
     assert (names["Lift top 0.7 km SW of Testby"]["x"], names["Lift top 0.7 km SW of Testby"]["z"]) == (1500.0, 3300.0)
+
+    finds = vectors["finds"]
+    by_kind: dict[str, list] = {}
+    for f in finds:
+        by_kind.setdefault(f["kind"], []).append(f)
+    assert sorted(by_kind) == ["farm", "ford", "historic", "pass", "spring"], finds
+    assert [f["name"] for f in by_kind["farm"]] == ["Testvallen"]
+    (spring,) = by_kind["spring"]
+    assert spring["name"] == "Spring 1.0 km NE of Testby", spring
+    (stone,) = by_kind["historic"]
+    assert stone["name"] == "Teststenen" and stone["what"] == "boundary_stone"
+    (gap,) = by_kind["pass"]
+    assert gap["name"] == "Testpasset" and gap["ele"] == 700
+    # Fords are thinned: none closer than the spacing; the path's ford is kept too.
+    fords = by_kind["ford"]
+    assert len(fords) == 3, fords
+    assert all(math.hypot(a["x"] - b["x"], a["z"] - b["z"]) >= 1000 for a in fords for b in fords if a is not b)
+    assert any(f["x"] == 600.0 for f in fords)
+    assert all(f["name"].startswith("Ford") for f in fords)
 
     (house,) = vectors["buildings"]
     assert house["kind"] == "house" and house["levels"] == 2 and len(house["outline"]) == 4

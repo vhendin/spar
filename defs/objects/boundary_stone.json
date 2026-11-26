@@ -1,0 +1,9 @@
+{
+  "name": "boundary_stone",
+  "title": "Boundary stone (rå, gränssten)",
+  "generator": "poi",
+  "params": { "shape": "boundary_stone", "height": [0.55, 0.85] },
+  "colors": { "stone": ["#8c8a84", "#7d7b76", "#96918a"], "cut": ["#3b3a37"] },
+  "range": 400,
+  "collider": true
+}

@@ -20,3 +20,4 @@ export * from './season';
 export * from './sweref';
 export * from './account';
 export * from './seen';
+export * from './finds';
