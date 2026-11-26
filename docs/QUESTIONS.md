@@ -40,6 +40,29 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - Should the summits that the map finds itself (the spot heights) count as lookouts too? Now
     only summits from the map data do.
 
+### Camp at a shelter (planned)
+
+- **Asked:** idea 7 of `docs/OVERTHEHILL.md`, next in its suggested order. Decided before
+  building (the user, 2026-11-26, one question at a time):
+  - Camping always rests until the **next dawn**. Where the sun neither rises nor sets in the
+    next 24 hours (midnight sun, polar night) it rests **8 hours**, and the card says "The sun
+    never set" or "The sun never rose".
+  - The night is **watched**: the camera settles on the fire, the clock runs fast for about
+    15–20 s through dusk, stars and moon to dawn, and the fire burns down to embers. Any key
+    ends it early at dawn.
+  - **Where:** shelters, camp sites, huts and lodges, the real places with somewhere to sleep.
+    No tent anywhere.
+  - **Starting:** a quiet prompt when stopped within about 30 m ("Camp at Stensdalsstugan: C",
+    a button on touch). Nothing happens without pressing it.
+  - **Multiplayer:** everyone within about 50 m of the fire must press Camp; others see a line
+    that someone is camping. When all near have agreed, the night passes for everyone; those
+    further off just see it go by.
+  - **Kept:** each night in the logbook (place, date, season, vehicle), "Nights out: 4, at 3
+    places", the list folded away, and a small mark on the map at a place camped. No score.
+  - **At huts and lodges:** windows glow and smoke rises from the chimney. At shelters and camp
+    sites the fire in the ring is lit, with flickering light and sparks.
+- **Open:** none yet.
+
 ### More kinds of places to find (this commit)
 
 - **Asked:** idea 2 of `docs/OVERTHEHILL.md`. Decided before building (the user, 2026-11-26):
