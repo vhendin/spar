@@ -4,6 +4,7 @@
 import { buttonName, PAD_ACTIONS, type PadAction, type PadControls } from '../vehicle/gamepad';
 import { KIND_WORDS, type FindsSummary } from '../finds';
 import type { NightsSummary } from '../camp';
+import { TRAIL_WORDS, type TrailsSummary } from '../trails';
 import { formatDuration, type LogEntry } from '../trips';
 import { formatDistance } from './map';
 import { fillPlayers, type PlayerLine } from './players';
@@ -36,7 +37,7 @@ export interface MenuActions {
    * The logbook for this area: its title, the arrivals there, how many places there are to
    * reach, and the share of it seen (null when the whole map is shown).
    */
-  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null; finds: FindsSummary | null; nights: NightsSummary | null };
+  logbook(): { title: string; entries: LogEntry[]; places: number; seen: number | null; finds: FindsSummary | null; nights: NightsSummary | null; trails: TrailsSummary | null };
   /** Everyone connected, and the title of the region we drive in. */
   players(): { list: PlayerLine[]; region: string; titleOf(name: string): string };
   /** Set off just behind another driver, wherever they are. */
@@ -67,6 +68,7 @@ const CONTROLS: [string, string][] = [
   ['T', 'Time and weather'],
   ['Enter', 'Chat with the others'],
   ['C', 'Camp, when stopped by a shelter, camp site, hut or lodge'],
+  ['J', 'Drive a trail, when stopped at its start; again to give it up'],
   ['P', 'Fullscreen'],
   ['Esc', 'Menu and pause'],
 ];
@@ -87,6 +89,7 @@ const TOUCH: [string, string][] = [
   ['Drone', 'The stick flies forward, back and sideways, the pedals are Up and Down, a swipe turns and tilts'],
   ['Say something', 'In this menu: a line to the others'],
   ['Camp', 'Stopped by a shelter, camp site, hut or lodge: tap the line at the bottom to rest there until dawn'],
+  ['Trail', 'Stopped at the start of a trail (a small flag on the map): tap the line at the bottom to drive it'],
 ];
 
 export class Menu {
@@ -255,7 +258,7 @@ export class Menu {
     }
 
     if (this.page === 'logbook') {
-      const { title, entries, places, seen, finds, nights } = this.actions.logbook();
+      const { title, entries, places, seen, finds, nights, trails } = this.actions.logbook();
       const names = new Set(entries.map((e) => e.destination));
       add('h2', 'Logbook');
       const share = seen === null ? '' : ` ${seen > 0 && seen < 0.01 ? 'Under 1' : Math.round(seen * 100)} % of it seen.`;
@@ -282,6 +285,7 @@ export class Menu {
         }
       }
       if (finds) foundHere(finds, box, add);
+      if (trails) trailsDriven(trails, box, add);
       if (nights) nightsOut(nights, box, add);
       return;
     }
@@ -375,6 +379,31 @@ export function listNames(names: string[]): string {
 }
 
 /** The logbook's line of what has been found here, the highest point, and the finds folded away. */
+/** The trails driven here: how many of each kind, and each with its best time. */
+function trailsDriven(t: TrailsSummary, box: HTMLElement, add: Builder['add']): void {
+  if (!t.total) return;
+  add('h3', 'Trails', box);
+  const parts = t.kinds.map((k) => `${k.words[1]} ${k.driven} of ${k.total}`);
+  add('p', `${parts[0]![0]!.toUpperCase()}${parts.join(' · ').slice(1)}.`, box, 'sub');
+  if (!t.list.length) {
+    add('p', 'Hiking routes, snowmobile trails (in winter), power-line corridors and ascents to the summits. Stop at the start of one, marked on the map with a small flag once seen, and press J to drive it. Each one driven to the end is written down here, with the time it took.', box, 'hint');
+    return;
+  }
+  const fold = add('details', '', box, 'found');
+  add('summary', `${t.driven} driven`, fold);
+  const table = add('table', '', fold, 'log');
+  const head = add('tr', '', table);
+  for (const h of ['Trail', 'Best', 'When', 'Vehicle']) add('th', h, head);
+  for (const e of [...t.list].reverse()) {
+    const tr = add('tr', '', table);
+    const name = add('td', e.name, tr);
+    add('span', ` · ${TRAIL_WORDS[e.kind][0]}${e.runs > 1 ? ` · driven ${e.runs} times` : ''}`, name, 'note');
+    add('td', formatDuration(e.best), tr);
+    add('td', e.date, tr);
+    add('td', e.vehicle, tr);
+  }
+}
+
 /** The nights spent at shelters, camp sites, huts and lodges here. */
 function nightsOut(n: NightsSummary, box: HTMLElement, add: Builder['add']): void {
   add('h3', 'Nights out', box);

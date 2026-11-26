@@ -7,7 +7,9 @@ import { hexColor } from '../../vegetation/generators/mesh';
  * logs with a fire ring in front, a summit cairn, a bench at a viewpoint, a camp site with a
  * tent and tables, or an information board. And at the small things to find: a boundary
  * stone, a memorial stone, an aircraft wreck, the mouth of an old mine, ruined walls, or a
- * spring with a log trough. Each faces its heading, or downhill when it has
+ * spring with a log trough. And the marks along the trails: a red cross on a pole for a
+ * snowmobile trail, a small cairn with an orange top for a hiking route, a thin wand for an
+ * ascent. Each faces its heading, or downhill when it has
  * none (heading below 0).
  */
 export function poi(o: PlacedObject, def: ObjectDef, seed: number, ground: GroundFn, out: FeatureMesh): void {
@@ -25,6 +27,9 @@ export function poi(o: PlacedObject, def: ObjectDef, seed: number, ground: Groun
     case 'mine': return mine(o, def, rng, out, f);
     case 'ruins': return ruins(o, def, rng, out, f);
     case 'spring': return spring(o, def, rng, out, f);
+    case 'trail_cross': return trailCross(o, def, rng, out, f);
+    case 'trail_cairn': return trailCairn(o, def, rng, ground, out);
+    case 'trail_wand': return trailWand(def, rng, out, f);
   }
 }
 
@@ -542,4 +547,43 @@ function lichens(def: ObjectDef): Rgb[] {
 /** One of a list, at random. */
 function pick1<T>(list: readonly T[], rng: Rng): T {
   return list[Math.floor(rng.float() * list.length)]!;
+}
+
+/** A snowmobile trail's mark: a tall grey pole with a red cross at the top, facing along the trail. */
+function trailCross(o: PlacedObject, def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const g = f.groundAt(0, 0);
+  const height = param(def, 'height', 2.6, rng);
+  out.rod(f.at(0, g - 0.2, 0), f.at(0, g + height, 0), 0.035, 6, pick(def, 'pole', rng), pick(def, 'pole', rng));
+  // Two bars crossed at 45°, across the trail, on both faces.
+  const red = pick(def, 'cross', rng), arm = 0.3, half = 0.05, y = g + height - 0.32;
+  for (const sign of [1, -1]) {
+    const c = Math.SQRT1_2;
+    // Along the bar (across the trail, tilted) and across it, in the plane facing +z.
+    const ax = c * arm, ay = sign * c * arm, bx = -sign * c * half, by = c * half;
+    const corners = (lz: number): Vec3[] => [f.at(-ax - bx, y - ay - by, lz), f.at(ax - bx, y + ay - by, lz), f.at(ax + bx, y + ay + by, lz), f.at(-ax + bx, y - ay + by, lz)];
+    const front = corners(0.045), back = corners(0.04);
+    out.face(front, red);
+    out.face([...back].reverse(), shade(red, 0.8));
+  }
+  solid(o, out, f, '', 0, 0, 0.06, 0.06, g - 0.2, g + height);
+}
+
+/** A hiking route's mark: a small cairn, its top stone painted orange. */
+function trailCairn(o: PlacedObject, def: ObjectDef, rng: Rng, ground: GroundFn, out: FeatureMesh): void {
+  cairn(o, def, rng, ground, out);
+  const height = param(def, 'height', 0.8, rng);
+  let low = ground(o.x, o.z);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    low = Math.min(low, ground(o.x + Math.cos(a) * 0.5, o.z + Math.sin(a) * 0.5));
+  }
+  out.box([o.x, low - 0.1 + height + 0.07, o.z], 0.13, 0.08, 0.12, rng.float() * Math.PI, pick(def, 'paint', rng), true);
+}
+
+/** An ascent's mark: a thin birch wand, its top painted orange. */
+function trailWand(def: ObjectDef, rng: Rng, out: FeatureMesh, f: Frame): void {
+  const g = f.groundAt(0, 0), height = param(def, 'height', 1.6, rng);
+  const lean = rng.range(-0.06, 0.06);
+  out.rod(f.at(0, g - 0.1, 0), f.at(lean, g + height - 0.3, lean / 2), 0.018, 4, pick(def, 'wood', rng));
+  out.rod(f.at(lean, g + height - 0.3, lean / 2), f.at(lean * 1.2, g + height, lean * 0.6), 0.02, 4, pick(def, 'paint', rng), pick(def, 'paint', rng));
 }

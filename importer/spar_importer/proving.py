@@ -21,6 +21,9 @@ and a hut.
 East of the road: a fell rising 320 m with a track spiralling to the top (snow deepens with
 height), and a forest with a track through it. A cabin, a fence and a power line stand by the
 road. The land around is a ring of made-up fells for the horizon.
+
+Trails: a hiking route ("Proving round", 2.4 km round the east side of the forest), a
+snowmobile trail down the west edge, the power line along the road, and an ascent of the fell.
 """
 
 from __future__ import annotations
@@ -106,6 +109,14 @@ CAMPS: list[tuple[float, dict]] = [
     (1450, {"tourism": "camp_site", "name": "Proving camp site"}),
     (1700, {"tourism": "wilderness_hut", "name": "Proving hut"}),
 ]
+
+# Trails: a hiking route of two ways round the east side of the forest, and a snowmobile trail
+# down the west edge. The power line by the road and an ascent of the fell are trails too.
+HIKING_ROUTE: tuple[list[list[tuple[float, float]]], dict] = (
+    [[(1150.0, 1060.0), (1980.0, 1060.0)], [(1300.0, 1980.0), (1980.0, 1980.0), (1980.0, 1060.0)]],
+    {"type": "route", "route": "hiking", "name": "Proving round"},
+)
+SNOWMOBILE_TRAIL = [(30.0, 40.0), (30.0, 1990.0), (200.0, 2020.0)]
 
 FELL_X, FELL_Z, FELL_R, FELL_H = 1540.0, 540.0, 480.0, 320.0
 FOREST = (1150.0, 1100.0, 2000.0, 1990.0)
@@ -278,6 +289,7 @@ def map_features() -> tuple[list[tuple[list, dict]], list[tuple[list[list], dict
     track = fell_track()
     ways.append((track, {"highway": "track", "tracktype": "grade3", "name": "Fell track"}))
     ways.append(([(ROAD_X + 15, 40), (ROAD_X + 15, 2008)], {"power": "minor_line", "voltage": "20000"}))
+    ways.append((SNOWMOBILE_TRAIL, {"snowmobile": "designated", "name": "Proving snowmobile trail"}))
     ways.append((_rect((ROAD_X - 50, 170, ROAD_X - 40, 178)), {"building": "cabin"}))
     ways.append(([(ROAD_X - 20, 150), (ROAD_X - 70, 150), (ROAD_X - 70, 200), (ROAD_X - 20, 200)], {"barrier": "fence", "fence_type": "split_rail"}))
 
@@ -360,6 +372,10 @@ def write_osm(path: Path, region: Region) -> None:
     for rings, tags in multis:
         members = "".join(f'<member type="way" ref="{way(ring, {})}" role="{"outer" if k == 0 else "inner"}"/>' for k, ring in enumerate(rings))
         relations.append(f'<relation id="{len(relations) + 1}" version="1">{members}{tag_xml({**tags, "type": "multipolygon"})}</relation>')
+    # The hiking route: a relation of its ways, the second drawn backwards.
+    lines, tags = HIKING_ROUTE
+    members = "".join(f'<member type="way" ref="{way(pts, {"highway": "path"})}" role=""/>' for pts in lines)
+    relations.append(f'<relation id="{len(relations) + 1}" version="1">{members}{tag_xml(tags)}</relation>')
     for x, z, tags in points:
         node(x, z, tags)
     path.parent.mkdir(parents=True, exist_ok=True)

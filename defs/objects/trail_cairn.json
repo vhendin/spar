@@ -1,0 +1,9 @@
+{
+  "name": "trail_cairn",
+  "title": "Hiking route mark: small cairn with an orange top (rös)",
+  "generator": "poi",
+  "params": { "shape": "trail_cairn", "radius": [0.45, 0.6], "height": [0.7, 0.95] },
+  "colors": { "stone": ["#77756f", "#6a6964", "#85827a", "#5f5e5a", "#8d8a80"], "paint": ["#e0701f", "#d9651a"] },
+  "range": 450,
+  "collider": true
+}

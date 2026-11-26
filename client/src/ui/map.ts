@@ -6,10 +6,11 @@
 // It fills in as the region is seen (`seen.ts`): ground not yet seen is pale, and the lines and
 // places on it are left out, unless the whole map is asked for.
 
-import type { RegionIndex, RegionVectors } from '@spar/shared';
+import type { RegionIndex, RegionVectors, TrailLine } from '@spar/shared';
 import { fetchBytes, fetchUint16, heightFileUrl, maskFileUrl } from '../terrain/region';
 import { paintGround, summits, type MapRasters, type Summit } from './mapImage';
 import type { Finds } from '../finds';
+import type { Checkpoint, Course } from '../trails';
 import { SeenGrid } from './seen';
 import { headingAt, type StartStore } from './starts';
 import { builder, closeButton, coarsePointer } from './dom';
@@ -33,6 +34,8 @@ const DESTINATION_COLORS: Record<string, string> = {
 const FIND_COLORS: Record<string, string> = {
   farm: '#8b6b3e', waterfall: '#2a7fa8', rapids: '#2a7fa8', spring: '#2f9a94', historic: '#6b5b4b', pass: '#5a3c26', ford: '#3b6f8f',
 };
+/** Trails by kind: hiking routes orange as their paint, snowmobile trails red as their crosses. */
+const TRAIL_COLORS: Record<TrailLine['kind'], string> = { hiking: '#d0621c', snowmobile: '#c4261d', power: '#4f5358', ascent: '#7b4fa0' };
 /** Kinds of destination always on the map, seen or not: the huts and lodges people walk to. */
 const LANDMARKS = new Set(['hut', 'lodge']);
 /** The pale over ground not yet seen: birch, most of the way. */
@@ -56,6 +59,8 @@ export interface MapActions {
   found?(): Pick<Finds, 'points' | 'has'>;
   /** The ids of the places a night has been spent at here. */
   camped?(): Set<string>;
+  /** The trails here, those driven, the one on the way and its next checkpoint; `winter` opens the snowmobile trails. */
+  trails?(): { lines: readonly TrailLine[]; driven: Set<string>; current: Course | null; next: Checkpoint | null; winter: boolean };
   /**
    * Sharing the destination with the other drivers in the region; left out when playing alone.
    * `shared` is what is shared now, with who shared it (null for this driver).
@@ -465,6 +470,7 @@ export class MapScreen {
     this.drawFog(c);
     c.lineCap = c.lineJoin = 'round';
     const boxes = this.boxes();
+    const trails = this.actions.trails?.();
     this.masked(c, c.getTransform(), (c) => {
       const line = (points: number[][], close = false): void => {
         c.beginPath();
@@ -503,7 +509,23 @@ export class MapScreen {
         c.stroke();
       });
     }
+    if (trails) {
+      const tb = boxes.trails;
+      trails.lines.forEach((t, i) => {
+        const done = trails.driven.has(t.id);
+        if ((t.kind === 'snowmobile' && !trails.winter && !done) || !near(tb[i]!) || t === trails.current?.trail) return;
+        c.strokeStyle = TRAIL_COLORS[t.kind];
+        c.globalAlpha = done ? 0.9 : 0.7;
+        c.lineWidth = (done ? 2.5 : 2) / s;
+        c.setLineDash(done ? [] : [1 / s, 4 / s]);
+        line(t.points);
+        c.stroke();
+      });
+      c.setLineDash([]);
+      c.globalAlpha = 1;
+    }
     });
+    if (trails?.current) this.drawCourse(c, trails.current, trails.next, (x, z) => [x, z], s);
     // Where the vehicle has been.
     const t = this.trail;
     if (t.length >= 4) {
@@ -617,10 +639,44 @@ export class MapScreen {
     c.stroke();
   }
 
-  private boxCache: { roads: Box[]; buildings: Box[]; water: Box[] } | null = null;
+  private boxCache: { roads: Box[]; buildings: Box[]; water: Box[]; trails: Box[] } | null = null;
+
+  /**
+   * The trail on the way, cased so it stands out from everything, and a ring at the next
+   * checkpoint. `to` gives where a point is drawn; `s` is pixels per unit drawn in (1 on screen).
+   */
+  private drawCourse(c: CanvasRenderingContext2D, course: Course, next: Checkpoint | null, to: (x: number, z: number) => [number, number], s: number): void {
+    const path = (): void => {
+      c.beginPath();
+      course.points.forEach(([x, z], i) => {
+        const [px, py] = to(x!, z!);
+        if (i === 0) c.moveTo(px, py);
+        else c.lineTo(px, py);
+      });
+    };
+    c.lineCap = c.lineJoin = 'round';
+    c.strokeStyle = 'rgba(255,255,255,0.9)';
+    c.lineWidth = 6 / s;
+    path();
+    c.stroke();
+    c.strokeStyle = TRAIL_COLORS[course.trail.kind];
+    c.lineWidth = 3.2 / s;
+    path();
+    c.stroke();
+    if (next) {
+      const [px, py] = to(next.x, next.z);
+      c.strokeStyle = '#ff5a2a';
+      c.fillStyle = 'rgba(255,255,255,0.9)';
+      c.lineWidth = 2.5 / s;
+      c.beginPath();
+      c.arc(px, py, 6 / s, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+    }
+  }
 
   /** Bounding boxes of the lines, so the minimap skips what is far away. */
-  private boxes(): { roads: Box[]; buildings: Box[]; water: Box[] } {
+  private boxes(): { roads: Box[]; buildings: Box[]; water: Box[]; trails: Box[] } {
     const box = (points: number[][]): Box => {
       const b: Box = [Infinity, Infinity, -Infinity, -Infinity];
       for (const [x, z] of points) {
@@ -635,6 +691,7 @@ export class MapScreen {
       roads: this.vectors.roads.map((r) => box(r.points)),
       buildings: this.vectors.buildings.map((b) => box(b.outline)),
       water: this.vectors.waterways.map((w) => box(w.points)),
+      trails: (this.actions.trails?.().lines ?? []).map((t) => box(t.points)),
     };
     return this.boxCache;
   }
@@ -908,6 +965,7 @@ export class MapScreen {
     c.strokeRect(x0, y0, size, size);
 
     c.lineCap = c.lineJoin = 'round';
+    const trails = this.actions.trails?.();
     this.masked(c, world, (c) => {
       const line = (points: number[][], close = false): void => {
         c.beginPath();
@@ -984,7 +1042,24 @@ export class MapScreen {
           c.stroke();
         }
       }
+      // Trails, dotted in their colour; those driven in full ink. Snowmobile trails only in winter.
+      if (trails && s > 0.03) {
+        for (const t of trails.lines) {
+          const done = trails.driven.has(t.id);
+          if (t.kind === 'snowmobile' && !trails.winter && !done) continue;
+          c.strokeStyle = TRAIL_COLORS[t.kind];
+          c.globalAlpha = done ? 0.95 : 0.7;
+          c.lineWidth = done ? 2.6 : 1.6;
+          c.setLineDash(done ? [] : [1, 4]);
+          line(t.points);
+          c.stroke();
+        }
+        c.setLineDash([]);
+        c.globalAlpha = 1;
+      }
     });
+    // The trail on the way, whether seen or not, and the checkpoint next.
+    if (trails?.current) this.drawCourse(c, trails.current, trails.next, (x, z) => this.toScreen(x, z), 1);
 
     // Where the vehicle has been.
     const t = this.trail;
@@ -1092,6 +1167,18 @@ export class MapScreen {
       c.stroke();
       // A summer farm is named by its place label already.
       if (s >= 0.25 && !(p.kind === 'farm' && this.vectors.places.some((q) => q.name === p.name))) label(p.name, sx, sy + 13, '10px Inter, system-ui, sans-serif');
+    }
+    // Where each trail can be started: a small flag, filled once driven.
+    for (const t of trails?.lines ?? []) {
+      const done = trails!.driven.has(t.id);
+      if (t.kind === 'snowmobile' && !trails!.winter && !done) continue;
+      const ends = t.kind === 'ascent' ? [t.points[0]!] : [t.points[0]!, t.points[t.points.length - 1]!];
+      for (const [x, z] of ends) {
+        if (!this.shows(x!, z!)) continue;
+        const [sx, sy] = this.toScreen(x!, z!);
+        flag(c, sx, sy, TRAIL_COLORS[t.kind], done);
+        if (s >= 0.4) label(t.name, sx + 4, sy + 10, '10px Inter, system-ui, sans-serif');
+      }
     }
     for (const p of this.vectors.places) {
       if (!this.shows(p.x, p.z)) continue;
@@ -1243,4 +1330,29 @@ async function loadRasters(index: RegionIndex): Promise<MapRasters> {
   }
   await Promise.all(jobs);
   return { n, spacing, heights, biome, surface, canopy, canopyScale };
+}
+
+/** A trail's start: a small pennant on a pole, hollow until the trail has been driven. */
+function flag(c: CanvasRenderingContext2D, x: number, y: number, color: string, filled: boolean): void {
+  c.strokeStyle = '#fff';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.moveTo(x, y);
+  c.lineTo(x, y - 12);
+  c.stroke();
+  c.strokeStyle = color;
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(x, y);
+  c.lineTo(x, y - 12);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(x, y - 12);
+  c.lineTo(x + 8, y - 9);
+  c.lineTo(x, y - 6);
+  c.closePath();
+  c.fillStyle = filled ? color : '#fff';
+  c.lineWidth = 1.4;
+  c.fill();
+  c.stroke();
 }

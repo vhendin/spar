@@ -1,0 +1,9 @@
+{
+  "name": "trail_wand",
+  "title": "Ascent mark: a thin wand with an orange top (spö)",
+  "generator": "poi",
+  "params": { "shape": "trail_wand", "height": [1.4, 1.8] },
+  "colors": { "wood": ["#cfc9bb", "#bdb6a6"], "paint": ["#e0701f", "#e3601c"] },
+  "range": 300,
+  "collider": false
+}

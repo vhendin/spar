@@ -28,8 +28,46 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   - **Length:** long routes cut at huts, shelters, roads or crossings into stretches of
     2–8 km, each its own trail ("Kungsleden: Sälka – Tjäktja").
   - **Multiplayer:** each on their own; no server changes.
-- **Data per region:** 5–34 hiking route relations, 90–270 snowmobile-trail ways, 1–42
-  power-line ways.
+- **Done:**
+  - The importer (`trails.py`) joins the ways of each named hiking route, the snowmobile ways
+    and the power lines into paths, clipped to the area, and cuts them into 2–8 km
+    stretches, at huts, shelters, lodges and camp sites or where a drivable road is crossed.
+    A stretch lying mostly on one already kept (E1 and Södra Kungsleden) is left out.
+  - Ascents: from each named summit, the shortest way down on a 15 m grid with no step steeper
+    than 27° and none through water, to a drivable road at least 500 m off and 80 m lower.
+  - Names: "Route: A – B" from named places within 200 m of the ends, else a village within
+    1.5 km, else a bearing ("2.1 km NE of Ottsjö"); "Ascent of Ottfjället Östertoppen".
+  - Trails per region: Vålådalen 32 (17 hiking, 8 snowmobile, 3 power, 4 ascents), Åre 31,
+    Tandådalen 10, Kebnekaise 2, the proving ground one of each. Järvsö and Björnrike none:
+    their areas are too small for any 1.5 km stretch. About 30 kB more per big region.
+  - Snowmobile ways now have a 5 m strip cleared of trees, as power lines have theirs.
+  - Stopped within 20 m of either end (an ascent only at its foot), the line at the bottom
+    offers "Drive Proving round · 2.4 km hiking route · J". A card names the trail, its length,
+    climb and checkpoints. A checkpoint about every 300 m, passed within 25 m; the line shows
+    "checkpoint 3 of 8". More than 100 m off the line for 5 s: back at the last checkpoint,
+    facing on. J again gives it up; being put somewhere else (the map, a start) does too.
+  - At the end: "Trail driven · 23 min · written in the logbook" ("your best" when quicker).
+    Kept per region (`spar.trails`: first, last, runs, best time) and with the account.
+  - Marks: a red cross on a 2.6 m pole every 70 m along snowmobile trails, a small cairn with
+    an orange top every 110 m along hiking routes, a thin wand every 50 m up an ascent; none on
+    roads or in lakes. The next checkpoint has a white pole with orange tape in the wind.
+  - Map: trails dotted in their colour (hiking orange, snowmobile red, power grey, ascents
+    purple), those driven in full ink, a small flag at each start once seen; snowmobile trails
+    only in winter. The trail on the way is drawn bold on the map and minimap, with a ring at the
+    next checkpoint. The logbook: "Hiking routes 2 of 17 · …" and each trail with its best time.
+- **To try:** on the proving ground, stop at the power line's north end by the road and press
+  J, then drive south; the ascent starts at the road's bend below the fell. In Vålådalen, the
+  map shows the flags once seen.
+- **Open:**
+  - J starts a trail (C is camping). Another key?
+  - The packed winter lane along a snowmobile trail is not drawn yet: the ground shader has no
+    room for another surface. In winter only the crosses and the map mark the trail. Needed?
+  - 300 m between checkpoints, 25 m to pass one, 100 m and 5 s before being put back: right?
+  - Names from bearings read stiffly ("Snowmobile trail: 3.9 km S of Vikböle – 3.6 km SW of
+    Vikböle"), and some come out as "… by Åre kommun" or with "(2)". Better ideas?
+  - Ascents: 27° the steepest step. Kebnekaise has none (no drivable road); Tandådalen's two
+    climb only 80–90 m. Steeper, or allow starting from tracks and paths?
+  - Should ski runs, lift lines or streams make trails too (left out for now)?
 
 ### The map fills in as you drive (5f6c679; over lakes 0af2341)
 

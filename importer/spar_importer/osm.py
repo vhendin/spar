@@ -89,7 +89,20 @@ class Feature:
     tags: dict
 
 
+@dataclass
+class Route:
+    """A named hiking or walking route: its ways ("w123") in the relation's order."""
+
+    id: str
+    name: str
+    ways: list[str]
+
+
 POWER_LINES = ("line", "minor_line")
+# Route relations made into trails.
+ROUTES = ("hiking", "foot")
+# Ways marked for snowmobiles: the skoterleder, many with no highway tag at all.
+SNOWMOBILE = ("designated", "yes")
 # Lifts by aerialway value; zip lines and goods ropes are left out.
 LIFTS = ("cable_car", "gondola", "mixed_lift", "chair_lift", "drag_lift", "t-bar", "j-bar", "platter", "rope_tow", "magic_carpet")
 # Ski runs kept clear of trees: by piste:type.
@@ -110,6 +123,10 @@ class OsmData:
     barriers: list[Feature] = field(default_factory=list)
     lifts: list[Feature] = field(default_factory=list)
     pistes: list[Feature] = field(default_factory=list)
+    routes: list[Route] = field(default_factory=list)
+    # The lines of the ways the routes are made of, by id ("w123").
+    route_ways: dict[str, ogr.Geometry] = field(default_factory=dict)
+    snowmobile: list[Feature] = field(default_factory=list)
 
 
 def load_osm(path: Path) -> OsmData:
@@ -123,6 +140,14 @@ def load_osm(path: Path) -> OsmData:
 
     data = OsmData()
     with tempfile.TemporaryDirectory() as tmp:
+        relations = Path(tmp) / "routes.opl"
+        subprocess.run(
+            ["osmium", "tags-filter", "-R", "-O", "-f", "opl", "-o", str(relations), str(path), *(f"r/route={r}" for r in ROUTES)],
+            check=True,
+            stderr=subprocess.DEVNULL,
+        )
+        data.routes = read_routes(relations.read_text(encoding="utf-8"))
+        members = {w for r in data.routes for w in r.ways}
         out = Path(tmp) / "features.geojsonseq"
         subprocess.run(
             ["osmium", "export", "--overwrite", "--add-unique-id=type_id", "-f", "geojsonseq", "-o", str(out), str(path)],
@@ -140,6 +165,10 @@ def load_osm(path: Path) -> OsmData:
                 # A closed way comes out both as a line and as a polygon; take each feature
                 # only in the shape its tags are about.
                 fid = str(feature.get("id", ""))
+                if kind == "LineString" and fid in members:
+                    data.route_ways[fid] = _geometry(feature, to_metres)
+                if kind == "LineString" and tags.get("snowmobile") in SNOWMOBILE:
+                    data.snowmobile.append(Feature(fid, _geometry(feature, to_metres), tags))
                 destination = destination_for(tags)
                 if destination and kind in ("Point", "Polygon", "MultiPolygon"):
                     point = _geometry(feature, to_metres).Centroid()
@@ -184,6 +213,46 @@ def load_osm(path: Path) -> OsmData:
                     x, y, _ = to_metres.TransformPoint(*feature["geometry"]["coordinates"][:2])
                     data.places.append(Place(tags["name"], tags["place"], x, y))
     return data
+
+
+def opl_unescape(text: str) -> str:
+    """An OPL string as written: "%20%" and the like are the code points of the characters
+    OPL keeps for itself (space, comma, equals sign, at sign, percent and the rest)."""
+    out, i = [], 0
+    while i < len(text):
+        if text[i] == "%":
+            end = text.find("%", i + 1)
+            if end > i:
+                try:
+                    out.append(chr(int(text[i + 1 : end], 16)))
+                    i = end + 1
+                    continue
+                except ValueError:
+                    pass
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+def read_routes(opl: str) -> list[Route]:
+    """The named route relations in an OPL file, with their member ways in order."""
+    routes = []
+    for line in opl.splitlines():
+        if not line.startswith("r"):
+            continue
+        fields = {f[0]: f[1:] for f in line.split(" ") if f}
+        tags = {}
+        for pair in fields.get("T", "").split(","):
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                tags[opl_unescape(k)] = opl_unescape(v)
+        name = tags.get("name") or tags.get("ref")
+        if not name:
+            continue
+        ways = [m.split("@", 1)[0] for m in fields.get("M", "").split(",") if m.startswith("w")]
+        if ways:
+            routes.append(Route(line.split(" ", 1)[0], name, ways))
+    return routes
 
 
 def _elevation(text: str | None) -> float | None:

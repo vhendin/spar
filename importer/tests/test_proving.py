@@ -71,3 +71,12 @@ def test_map_reads_back(tmp_path):
     assert len(field) == 1 and field[0].geom.GetGeometryRef(0).GetGeometryCount() > 1
     assert len([p for p in osm.places if p.kind == "hamlet"]) == 10
     assert {p.kind for p in osm.pois} == {"peak", "viewpoint", "shelter", "camp", "hut"}
+
+
+def test_trails_read_back(tmp_path):
+    path = tmp_path / "proving.osm"
+    pg.write_osm(path, REGION)
+    osm = load_osm(path)
+    assert [r.name for r in osm.routes] == ["Proving round"]
+    assert len(osm.routes[0].ways) == 2 and all(w in osm.route_ways for w in osm.routes[0].ways)
+    assert [f.tags.get("name") for f in osm.snowmobile] == ["Proving snowmobile trail"]

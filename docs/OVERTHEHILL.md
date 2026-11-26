@@ -157,6 +157,10 @@ use now:
 
 ### 3. Trails to drive: generated challenge routes
 
+*Built 2026-11-26 from hiking routes, snowmobile trails, power lines and ascents, without ski runs,
+lift lines or river runs, and without the packed winter lane: see "Trails to drive" in
+`QUESTIONS.md`.*
+
 **They:** 23 hand-drawn routes through checkpoints; leave the line by 100–120 m and it resets;
 the first finish gives a vehicle.
 

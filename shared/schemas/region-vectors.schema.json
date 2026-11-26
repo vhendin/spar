@@ -248,6 +248,52 @@
         }
       }
     },
+    "trails": {
+      "description": "Trails to drive, made from the map: stretches of 2–8 km of the named hiking routes and the snowmobile trails, power-line corridors, and ascents (the shortest line a vehicle can climb from a road to a named summit). Driven from either end. Optional: older regions have none.",
+      "type": "array",
+      "items": {
+        "title": "TrailLine",
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "points",
+          "length"
+        ],
+        "properties": {
+          "id": {
+            "description": "Stable from the map data: the kind, the first OpenStreetMap id and the stretch's number.",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "hiking",
+              "snowmobile",
+              "power",
+              "ascent"
+            ]
+          },
+          "name": {
+            "description": "Such as \"Kungsleden: Sälka – Tjäktja\" or \"Ascent of Ottfjället\".",
+            "type": "string"
+          },
+          "points": {
+            "$ref": "#/definitions/Line"
+          },
+          "length": {
+            "description": "Along the line, metres.",
+            "type": "number"
+          },
+          "climb": {
+            "description": "Height gained from the first point to the last, metres (for an ascent).",
+            "type": "number"
+          }
+        }
+      }
+    },
     "spawns": {
       "description": "Points on drivable roads where a vehicle can start; the first is the default.",
       "type": "array",

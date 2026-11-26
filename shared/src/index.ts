@@ -22,3 +22,4 @@ export * from './account';
 export * from './seen';
 export * from './finds';
 export * from './camp';
+export * from './trails';

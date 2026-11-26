@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 import zlib
 
+import numpy as np
+
 from collections.abc import Callable
 
 from osgeo import ogr
@@ -12,6 +14,7 @@ from osgeo import ogr
 from .clearcuts import Clearcut
 from .osm import OsmData
 from .region import Region
+from .trails import build_trails
 
 SPAWN_PLACES = ("village", "hamlet", "town", "suburb")
 
@@ -240,9 +243,14 @@ def build_vectors(
     levels: dict[str, float],
     clearcuts: list[Clearcut] | None = None,
     ground: Callable[[float, float], float] | None = None,
+    heights: np.ndarray | None = None,
+    spacing: float = 2.0,
+    water: np.ndarray | None = None,
 ) -> dict:
     """`ground(x, z)` gives the height at a point of the area; without it lifts are taken to be
-    drawn from the bottom up, as OpenStreetMap asks."""
+    drawn from the bottom up, as OpenStreetMap asks. `heights` (rows north to south, `spacing`
+    metres apart) and `water` (the same grid) are for finding the ascents; without them there
+    are none."""
     box = _box(region)
     roads, drivable_points = [], []
     for road in osm.roads:
@@ -309,6 +317,7 @@ def build_vectors(
         "places": places,
         "destinations": (places_to_go := destinations(osm, region, places) + lift_tops(osm, region, places, ground)),
         "finds": finds(osm, region, places, places_to_go, roads),
+        "trails": build_trails(osm, region, box, places, places_to_go, roads, ground, heights, spacing, water),
         "spawns": _spawns(places, drivable_points, region),
         "buildings": buildings(osm, region),
         "powerLines": power_lines(osm, region, box),

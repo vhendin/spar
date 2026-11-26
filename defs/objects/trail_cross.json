@@ -1,0 +1,9 @@
+{
+  "name": "trail_cross",
+  "title": "Snowmobile trail mark: red cross on a pole (ledkryss)",
+  "generator": "poi",
+  "params": { "shape": "trail_cross", "height": [2.4, 2.8] },
+  "colors": { "pole": ["#8b8d8a", "#7d7f7c", "#9a9b97"], "cross": ["#c4261d", "#b8231b"] },
+  "range": 450,
+  "collider": true
+}

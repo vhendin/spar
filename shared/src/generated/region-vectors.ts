@@ -34,6 +34,10 @@ export interface RegionVectors {
    */
   finds?: FindPoint[];
   /**
+   * Trails to drive, made from the map: stretches of 2–8 km of the named hiking routes and the snowmobile trails, power-line corridors, and ascents (the shortest line a vehicle can climb from a road to a named summit). Driven from either end. Optional: older regions have none.
+   */
+  trails?: TrailLine[];
+  /**
    * Points on drivable roads where a vehicle can start; the first is the default.
    */
   spawns: SpawnPoint[];
@@ -138,6 +142,26 @@ export interface FindPoint {
    * Height above sea level from the map, metres.
    */
   ele?: number;
+}
+export interface TrailLine {
+  /**
+   * Stable from the map data: the kind, the first OpenStreetMap id and the stretch's number.
+   */
+  id: string;
+  kind: 'hiking' | 'snowmobile' | 'power' | 'ascent';
+  /**
+   * Such as "Kungsleden: Sälka – Tjäktja" or "Ascent of Ottfjället".
+   */
+  name: string;
+  points: Line;
+  /**
+   * Along the line, metres.
+   */
+  length: number;
+  /**
+   * Height gained from the first point to the last, metres (for an ascent).
+   */
+  climb?: number;
 }
 export interface SpawnPoint {
   name: string;

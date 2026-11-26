@@ -474,12 +474,20 @@ def clear_verges(osm: OsmData, canopy: np.ndarray, **grid) -> int:
 POWER_CORRIDOR = {"line": 14.0, "minor_line": 5.0}
 
 
+# Half width in metres of the strip cleared along a snowmobile trail (skoterled) through forest.
+SNOWMOBILE_CORRIDOR = 2.5
+
+
 def clear_corridors(osm: OsmData, canopy: np.ndarray, **grid) -> int:
-    """Power lines run through cleared strips (ledningsgator): only low scrub grows there."""
+    """Power lines run through cleared strips (ledningsgator): only low scrub grows there. So do
+    the snowmobile trails, narrower, with only the lowest scrub left."""
     shapes = [(f.geom.Buffer(POWER_CORRIDOR.get(f.tags.get("power", ""), 5.0)), 1) for f in osm.power]
     corridor = rasterize(shapes, **grid) > 0
     canopy[corridor] = np.minimum(canopy[corridor], 1.2)
-    return int(corridor.sum())
+    trails = [(f.geom.Buffer(SNOWMOBILE_CORRIDOR), 1) for f in osm.snowmobile]
+    lane = rasterize(trails, **grid) > 0
+    canopy[lane] = np.minimum(canopy[lane], 0.5)
+    return int((corridor | lane).sum())
 
 
 # Ski runs drawn as a line have rarely a width mapped: a typical Swedish run is about this wide.

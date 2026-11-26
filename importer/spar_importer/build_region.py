@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import shutil
+import time
 from pathlib import Path
 
 import jsonschema
@@ -14,7 +15,7 @@ from osgeo import gdal
 from .clearcuts import ATTRIBUTION as CLEARCUT_ATTRIBUTION
 from .clearcuts import find_clearcuts
 from .fetch import find_osm
-from .ground import ground_classes
+from .ground import biome_id, ground_classes
 from .masks import CHANNELS, MASK_LEVELS, MASK_SPACING, build_planes, halve, horizon_biome, level_info, resize_bilinear, to_bytes
 from .osm import load_osm
 from .region import (
@@ -261,13 +262,22 @@ def build_region(region: Region, *, offline: bool = False, source_name: str | No
     def ground(x: float, z: float) -> float:
         return float(heights2[min(last, max(0, round(z / MASK_SPACING))), min(last, max(0, round(x / MASK_SPACING)))])
 
-    vectors = build_vectors(osm, region, lake_levels, clearcuts, ground)
+    started = time.perf_counter()
+    water = planes["biome"] == biome_id("water")
+    vectors = build_vectors(osm, region, lake_levels, clearcuts, ground, heights2, MASK_SPACING, water)
+    del water
     jsonschema.validate(vectors, load_schema("region-vectors"))
     (out / VECTORS_PATH).write_text(json.dumps(vectors, ensure_ascii=False, separators=(",", ":")) + "\n")
     print(f"  {len(vectors['roads'])} road part(s), {len(vectors['lakes'])} lake(s), {len(vectors['spawns'])} spawn point(s), treeline {treeline:.0f} m")
     print(
         f"  {len(vectors['buildings'])} building(s), {len(vectors['powerLines'])} power line(s), "
         f"{len(vectors['fences'])} fence line(s), {len(vectors['lifts'])} lift(s), {len(vectors['objects'])} other object(s)"
+    )
+    kinds = {k: [t for t in vectors["trails"] if t["kind"] == k] for k in ("hiking", "snowmobile", "power", "ascent")}
+    print(
+        "  trails: "
+        + ", ".join(f"{len(v)} {k} ({sum(t['length'] for t in v) / 1000:.0f} km)" for k, v in kinds.items())
+        + f"; vectors in {time.perf_counter() - started:.1f} s"
     )
 
     latitude, longitude = region.center_wgs84()

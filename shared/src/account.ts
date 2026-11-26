@@ -1,10 +1,11 @@
 // What follows a logged-in driver from browser to browser: the browser's own stored values
 // under these keys, kept on the server per account. The logbook is merged rather than
 // replaced, so arrivals made on two devices are all kept; so are what has been seen of each
-// region, what has been found and the highest point reached.
+// region, what has been found, the highest point reached, the nights out and the trails driven.
 
 import { FINDS_KEY, HIGHEST_KEY, mergeFinds, mergeHighest } from './finds';
 import { NIGHTS_KEY, mergeNights } from './camp';
+import { TRAILS_KEY, mergeTrails } from './trails';
 import { mergeSeen } from './seen';
 
 /** The browser storage keys kept per account, besides one per region for what has been seen. */
@@ -22,6 +23,7 @@ export const ACCOUNT_KEYS = [
   'spar.finds',
   'spar.highest',
   'spar.nights',
+  'spar.trails',
 ] as const;
 
 export type AccountKey = (typeof ACCOUNT_KEYS)[number];
@@ -48,6 +50,7 @@ export function mergeAccountValue(key: string, kept: string | null | undefined, 
   if (key === FINDS_KEY) return mergeFinds(kept, incoming);
   if (key === HIGHEST_KEY) return mergeHighest(kept, incoming);
   if (key === NIGHTS_KEY) return mergeNights(kept, incoming);
+  if (key === TRAILS_KEY) return mergeTrails(kept, incoming);
   if (SEEN_KEY.test(key)) return mergeSeen(kept, incoming);
   return null;
 }

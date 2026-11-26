@@ -48,6 +48,9 @@ import { EYE, Explorer } from './explore';
 import { Finds } from './finds';
 import { Camp, type CampOffer } from './camp';
 import { Campfire } from './campfire';
+import { Trails, type TrailOffer, TRAIL_WORDS } from './trails';
+import { TrailFlag } from './trailFlag';
+import { trailMarks } from './features/trailMarks';
 import { Minimap } from './ui/minimap';
 import { AreaMaker, areasInfo, removeArea } from './ui/areaMaker';
 import { signIn } from './account';
@@ -87,6 +90,8 @@ const STEP = 1 / 60;
 const CALENDAR = seasonDefs as SeasonCalendar;
 /** Plants are recoloured when the season has moved on this many days; the ground follows smoothly. */
 const SEASON_STEP = 3;
+/** Snow on the ground deeper than this (metres) opens the snowmobile trails. */
+const SNOW_TRAILS = 0.05;
 const seasonStep = (day: number): number => Math.round(day / SEASON_STEP) * SEASON_STEP;
 const VEHICLES = import.meta.glob<VehicleDef>('../../defs/vehicles/*.json', { eager: true, import: 'default' });
 
@@ -187,6 +192,10 @@ interface World {
   /** Each camp place's object or building id (by place id), whose fire and windows are lit. */
   campKeys: Record<string, string>;
   campfire: Campfire;
+  /** Trails to drive, and the one on the way. */
+  trails: Trails;
+  /** The next checkpoint's pole and tape. */
+  trailFlag: TrailFlag;
   /** Where the vehicle starts and returns to: position and heading in degrees. */
   spawn: { x: number; z: number; heading: number; name: string };
   /** Where the vehicle is set down first: the spawn, or where it was before a rebuild. */
@@ -529,6 +538,7 @@ async function start(): Promise<void> {
     } else if (o.kind === 'night') {
       parts = [['Resting at '], [o.place.name, 'place'], [o.with.length ? ` with ${o.with.join(' and ')}` : ''], [touchShown ? ' · tap to wake at dawn' : ' · any key to wake at dawn']];
     }
+    if (!parts.length) parts = trailParts(trailOffer, touchShown);
     const text = parts.map((p) => p.join('|')).join('/');
     if (text !== campShown) {
       campShown = text;
@@ -549,7 +559,37 @@ async function start(): Promise<void> {
     if (campOffer.kind === 'offer') campHere(w);
     else if (campOffer.kind === 'waiting') campLeave(w);
     else if (campOffer.kind === 'night') connection?.send({ type: 'camp', region: w.index.name, action: 'wake' });
+    else trailAction(w);
   });
+
+  // Trails: offered when stopped at either end of one; on the way the line shows how far, and
+  // straying too far puts the vehicle back at the last checkpoint. Shares the prompt line.
+  let trailOffer: TrailOffer = { kind: 'none' };
+  const trailParts = (o: TrailOffer, touchShown: boolean): [string, string?][] => {
+    if (o.kind === 'offer') {
+      return [['Drive '], [o.trail.name, 'place'], [` · ${formatDistance(o.trail.length)} ${TRAIL_WORDS[o.trail.kind][0]}${touchShown ? ' · tap here' : ' · J'}`]];
+    }
+    if (o.kind === 'running') {
+      if (o.astray !== null) return [['Off the trail · back to the line, or back at the last checkpoint in '], [`${Math.ceil(o.astray)} s`, 'place']];
+      return [[o.trail.name, 'place'], [` · checkpoint ${o.next} of ${o.of}${touchShown ? ' · tap to give up' : ' · J to give up'}`]];
+    }
+    return [];
+  };
+  /** Sets off on the trail offered, or gives up the one on the way. */
+  const trailAction = (w: World): void => {
+    const o = trailOffer;
+    const p = w.view.group.position;
+    if (o.kind === 'offer') {
+      const c = w.trails.start(o.trail, o.reversed, p.x, p.z);
+      const climb = o.trail.climb ? ` · ${Math.round(o.trail.climb)} m up` : '';
+      chapter(o.trail.name, `${TRAIL_WORDS[o.trail.kind][0][0]!.toUpperCase()}${TRAIL_WORDS[o.trail.kind][0].slice(1)} · ${formatDistance(o.trail.length)}${climb} · ${c.checkpoints.length - 1} checkpoints`);
+    } else if (o.kind === 'running') {
+      w.trails.giveUp(p.x, p.z);
+      w.trailFlag.place(null);
+      chat.add(`Gave up ${o.trail.name}`);
+    }
+    trailOffer = { kind: 'none' };
+  };
 
   // ?ghosts=4 brings made-up drivers along behind our vehicle, for trying the game with company.
   const ghosts = params.has('ghosts') ? new Ghosts(Number(params.get('ghosts')) || 4, params.get('region') ?? stored(REGION_KEY) ?? '') : null;
@@ -1019,7 +1059,9 @@ async function start(): Promise<void> {
     // ?objects=0 leaves out buildings, power lines, fences, log piles and what stands at places.
     let features: Features | null = null;
     if (params.get('objects') !== '0') {
-      const withPois = { ...vectors, buildings: [...(vectors.buildings ?? []), ...pois.buildings], objects: [...(vectors.objects ?? []), ...pois.objects] };
+      // The marks along the trails stand too: red crosses, small cairns, wands.
+      const marks = trailMarks(vectors.trails ?? [], vectors.roads ?? [], vectors.lakes ?? []);
+      const withPois = { ...vectors, buildings: [...(vectors.buildings ?? []), ...pois.buildings], objects: [...(vectors.objects ?? []), ...pois.objects, ...marks] };
       features = new Features(index, withPois, welcome.seed, seeThrough, pois.glow);
       features.rangeScale = settings.objectRange;
       scene.add(features.group);
@@ -1079,6 +1121,10 @@ async function start(): Promise<void> {
     const camp = new Camp(index.name, vectors.destinations ?? []);
     const campfire = new Campfire();
     scene.add(campfire.group);
+    // Trails to drive, and the tape at the next checkpoint.
+    const trails = new Trails(index.name, vectors.trails ?? []);
+    const trailFlag = new TrailFlag();
+    scene.add(trailFlag.group);
     const map = new MapScreen(document.body, index, vectors, {
       setDestination: (d) => {
         guide.destination = d;
@@ -1087,6 +1133,7 @@ async function start(): Promise<void> {
       reached: () => trips.reached(index.name),
       found: () => finds,
       camped: () => camp.campedAt(),
+      trails: () => ({ lines: trails.lines, driven: trails.driven(), current: trails.current, next: trails.nextCheckpoint, winter: (world?.ground.snow ?? 0) > SNOW_TRAILS }),
       sharing: {
         available: () => others.players.length > 1,
         shared: () => shared && { destination: shared.destination, by: shared.by === null ? null : playerName(shared.by) },
@@ -1177,7 +1224,7 @@ async function start(): Promise<void> {
     start.setPlayers(others.list());
     start.setAddresses(welcome.addresses ?? []);
     start.setAccount(account?.email ?? null);
-    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, camp, campKeys: pois.camps, campfire, spawn, arrival, obstacles, unplaced: true, start };
+    world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, camp, campKeys: pois.camps, campfire, trails, trailFlag, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
     ground.onBreak = (x, z) => connection?.send({ type: 'ice_hole', region: index.name, hole: { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100 } });
@@ -1417,6 +1464,7 @@ async function start(): Promise<void> {
         seen: world && !world.map.whole ? world.map.seen.share : null,
         finds: world?.finds.summary() ?? null,
         nights: world?.camp.summary() ?? null,
+        trails: world?.trails.summary() ?? null,
       }),
       players: () => ({ list: others.list(), region: world?.index.title ?? '', titleOf: (name) => regionTitles.get(name) ?? name }),
       join: (id) => joinFriend(id),
@@ -1576,6 +1624,10 @@ async function start(): Promise<void> {
       case 'KeyC':
         // Camp, when stopped by a place to. The credits are in the menu.
         if (w && campOffer.kind === 'offer') campHere(w);
+        break;
+      case 'KeyJ':
+        // Drive the trail offered, or give up the one on the way.
+        if (w && !flying) trailAction(w);
         break;
       case 'KeyT':
         panel.toggle();
@@ -2256,6 +2308,7 @@ async function start(): Promise<void> {
       env.update(now, dt, camera.position, flying || drone.flown ? camera.position : w.view.group.position);
       const windSpeed = env.weather.wind * 4;
       w.campfire.update(paused ? 0 : dt, camera, 1 - Math.min(1, env.daylight * 1.5), env.windVector.x * windSpeed, env.windVector.y * windSpeed);
+      w.trailFlag.update(paused ? 0 : dt, env.windVector.x * windSpeed, env.windVector.y * windSpeed);
       w.shading.wet.value = env.weather.wetness;
       // One pixel's angle, for the road edges' anti-aliasing (the view and window change).
       w.shading.pixelAngle.value = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, renderer.domElement.height);
@@ -2354,12 +2407,30 @@ async function start(): Promise<void> {
         campOffer = drone.flown ? { kind: 'none' } : w.camp.offer(towing.me, where.x, where.z, w.sim.speed, playerName);
         if (campOffer.kind === 'waiting' && w.camp.drivenOff(where.x, where.z)) campLeave(w);
         if (night && (night.t > NIGHT_LONGEST || (link.status !== 'online' && night.t > 3))) endNight(w);
+        const runInfo = () => {
+          const day = w.environment.dayOfYear();
+          return { vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(seasonAt(CALENDAR, day), day) };
+        };
+        // On a trail: checkpoints, put back when strayed, and the time kept at the end.
+        if (!drone.flown && !night) {
+          const e = w.trails.update(dt, where.x, where.z, runInfo);
+          if (e?.kind === 'finished') {
+            chapter(e.trail.name, `Trail driven · ${formatDuration(e.seconds)}${e.best ? ' · your best' : ''} · written in the logbook`);
+            w.map.refresh();
+          } else if (e?.kind === 'putBack') {
+            setDown(w, e.x, e.z, e.heading);
+          } else if (e?.kind === 'lost') {
+            chat.add('Trail given up: the vehicle was put somewhere else');
+          }
+          trailOffer = campOffer.kind === 'none' ? w.trails.offer(now, where.x, where.z, w.sim.speed, w.ground.snow > SNOW_TRAILS) : { kind: 'none' };
+          const next = w.trails.nextCheckpoint;
+          w.trailFlag.place(next, next ? (w.terrain.heightAt(next.x, next.z) ?? w.map.heightAt(next.x, next.z) ?? 0) : 0);
+        } else {
+          trailOffer = { kind: 'none' };
+        }
         // Something found on the way: a quiet card, and it is marked on the map.
         if (!drone.flown && !night) {
-          const found = w.finds.update(now, where.x, where.z, w.terrain.heightAt(where.x, where.z) ?? w.map.heightAt(where.x, where.z), () => {
-            const day = w.environment.dayOfYear();
-            return { vehicle: w.sim.def.title, date: dateOfYear(day), season: seasonName(seasonAt(CALENDAR, day), day) };
-          });
+          const found = w.finds.update(now, where.x, where.z, w.terrain.heightAt(where.x, where.z) ?? w.map.heightAt(where.x, where.z), runInfo);
           const last = found[found.length - 1];
           if (last) {
             chapter(last.name, `Found · ${last.what}`);
@@ -2369,6 +2440,7 @@ async function start(): Promise<void> {
       } else {
         tripFrom = null;
         campOffer = { kind: 'none' };
+        trailOffer = { kind: 'none' };
       }
       showCampPrompt(campOffer, touch.shown);
       // Seeing the region, from the driver's seat or from the drone.
