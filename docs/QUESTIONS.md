@@ -74,14 +74,12 @@ ones move to the bottom with the answer, so the reasoning stays findable.
     account, merged across devices.
   - The proving ground has one of each by the road south of the clear-cuts, a waterfall on the
     stream into the lake and a ford on the forest track.
+- **Decided (the user, 2026-11-26):** 1 km between fords; the reach as it is; named lakes
+  only. To do: more work on the aircraft wreck (a clearer plane), the mine (set into the slope,
+  rails or a cart, a sagging frame) and the memorial and boundary stones (rounder, natural
+  stones, lichen); the summer farms' barns in grey, unpainted log.
 - **To try:** the proving ground's row of finds; in Vålådalen a ford (1.1 km W of Ottsjö) and a
   lake shore; the logbook (Esc → Logbook).
-- **Open:**
-  - Is 1 km between fords right? Too few in Vålådalen, too many in Åre?
-  - The reach: 30 m, 10 m for a ford, 60 m for a pass, 15 m from a shore. Right?
-  - The models are simple. Which need more (the wreck, the mine)?
-  - Should unnamed lakes and tarns count too? Only named ones do now.
-  - The summer farms' barns are the usual red with white trim. Grey, unpainted log instead?
 
 ### Ideas from Over the Hill (`docs/OVERTHEHILL.md`)
 
