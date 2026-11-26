@@ -29,7 +29,8 @@ import { VehicleSim } from './vehicle/sim';
 import { Spray } from './vehicle/spray';
 import { airTemperature, Exhaust } from './vehicle/exhaust';
 import { Tracks } from './vehicle/tracks';
-import { VehicleView } from './vehicle/view';
+import { Beams, VehicleView } from './vehicle/view';
+import { standIns, WarmUp } from './warmUp';
 import { Winch, type WinchControls } from './vehicle/winch';
 import { WinchView } from './vehicle/winchView';
 import { Drone, type DroneControls, type Obstacle, type P3 } from './vehicle/drone';
@@ -240,6 +241,10 @@ async function start(): Promise<void> {
 
   // World axes: X east, Y up, Z south, in metres from the region's north-west corner at sea level.
   const scene = new THREE.Scene();
+  // Our own headlight beams, made once: lights that come and go rebuild every material.
+  const ownBeams = new Beams(scene);
+  /** Stand-ins drawn for the first frames of a region, to build shaders while loading. */
+  let warmUp: WarmUp | null = null;
   // ?shadows=0 turns sun shadows off whatever the quality.
   const shadows = settings.shadows > 0 && params.get('shadows') !== '0';
   renderer.shadowMap.enabled = shadows;
@@ -1090,7 +1095,7 @@ async function start(): Promise<void> {
     const sim = new VehicleSim(RAPIER, physics, def, ground);
     others.attach(RAPIER, physics);
     const color = storedProfile().color ?? '';
-    const view = new VehicleView(sim, { color });
+    const view = new VehicleView(sim, { color, beams: ownBeams });
     chase.eye.set(...driverEye(def));
     const spray = new Spray();
     const exhaust = new Exhaust();
@@ -1224,6 +1229,12 @@ async function start(): Promise<void> {
     start.setPlayers(others.list());
     start.setAddresses(welcome.addresses ?? []);
     start.setAccount(account?.email ?? null);
+    // Whatever may first show up while driving (plants met further on, buildings, the first mud
+    // thrown) is drawn once by stand-ins now, so its shaders are built while loading.
+    const warm = new WarmUp();
+    warm.add([...(vegetation?.standIns() ?? []), ...(features?.standIns() ?? []), ...standIns(spray.group), ...standIns(exhaust.group)]);
+    scene.add(warm.group);
+    warmUp = warm;
     world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, camp, campKeys: pois.camps, campfire, trails, trailFlag, spawn, arrival, obstacles, unplaced: true, start };
     // What we change in the world goes to the others in this region; what they changed is asked for.
     if (obstacles) obstacles.onFelled = (tree) => connection?.send({ type: 'felled', region: index.name, tree });
@@ -1285,7 +1296,7 @@ async function start(): Promise<void> {
     w.view.dispose();
     w.sim.dispose();
     w.sim = new VehicleSim(RAPIER, w.physics, def, w.ground);
-    w.view = new VehicleView(w.sim, { color });
+    w.view = new VehicleView(w.sim, { color, beams: ownBeams });
     w.color = color;
     jumps++;
     w.view.group.visible = visible;
@@ -2492,6 +2503,7 @@ async function start(): Promise<void> {
     hidePart();
     if (plain || partNow === 'finish') renderer.render(scene, camera);
     else look.render(world?.environment.grade ?? NEUTRAL);
+    warmUp?.drawn();
     showPart();
     if (world && drone.flown && !flying && !starting && !world.unplaced && !world.map.open && !paused) drawInset(world);
     else droneInset.style.display = 'none';

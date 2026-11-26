@@ -15,7 +15,7 @@ import { bumpShare, GROUP_VEHICLE, groups, type WheelTelemetry } from '../vehicl
 import { Spray } from '../vehicle/spray';
 import type { VehicleState } from '../vehicle/state';
 import { Tracks } from '../vehicle/tracks';
-import { aimBeam, HEADLIGHT, newBeam, VehicleView } from '../vehicle/view';
+import { Beams, VehicleView } from '../vehicle/view';
 import type { Anchor } from '../vehicle/obstacles';
 import { WinchView, type CableView } from '../vehicle/winchView';
 import type { PlayerLine } from '../ui/players';
@@ -33,7 +33,8 @@ const FADE_TO = 600;
 /**
  * How many of the others get real headlight beams, the nearest with their lights on. The
  * beams are made once, when the first other vehicle shows, and handed between vehicles after:
- * every light costs all materials on screen, and adding or removing one rebuilds them all.
+ * every light costs all materials on screen, and adding, removing or hiding one rebuilds them
+ * all (see Beams).
  */
 const BEAM_CARS = 2;
 /** Metres between vehicles set down at the same start point. */
@@ -258,7 +259,7 @@ export class Others {
   private readonly ray = new THREE.Ray();
   private readonly inverse = new THREE.Matrix4();
   /** Pairs of beams lent to the nearest others; made with the first other vehicle. */
-  private beams: [THREE.SpotLight, THREE.SpotLight][] = [];
+  private beams: Beams[] = [];
   private physics: { R: Rapier; world: RAPIER.World } | null = null;
   /** Collider handles of the others' bodies, and whose they are. */
   private readonly owners = new Map<number, Other>();
@@ -280,6 +281,9 @@ export class Others {
       if (o) o.player = p;
     }
     for (const [id, o] of this.others) if (!players.some((p) => p.id === id)) this.remove(id, o);
+    // The beams as soon as anyone else is about: the rebuild they cause then mostly comes while
+    // loading, rather than when the other vehicle first shows.
+    if (this.me !== '' && players.some((p) => p.id !== this.me)) this.makeBeams();
   }
 
   /** The physics world our vehicle drives in; the others' bodies are made in it. */
@@ -568,11 +572,10 @@ export class Others {
       // A new vehicle or new paint: build it again.
       const built = `${def.name} ${o.player.color ?? ''}`;
       if (!o.view || !o.vehicle || o.built !== built) {
-        this.release(o);
         o.view?.dispose();
         o.vehicle = new RemoteVehicle(def);
-        // Lamps glow, but their beams are left out: each extra light costs every material on screen.
-        o.view = new VehicleView(o.vehicle, { color: o.player.color, beams: false });
+        // Lamps glow; the nearest few get beams lent from the shared pairs (lendBeams).
+        o.view = new VehicleView(o.vehicle, { color: o.player.color });
         o.built = built;
         this.scene.add(o.view.group);
       }
@@ -752,46 +755,24 @@ export class Others {
     o.solidFor = '';
   }
 
+  private makeBeams(): void {
+    if (this.beams.length === 0) for (let k = 0; k < BEAM_CARS; k++) this.beams.push(new Beams(this.scene));
+  }
+
   /** The beams go to the nearest others with their lights on; the rest wait, dark. */
   private lendBeams(lit: { o: Other; distance: number }[]): void {
     if (this.beams.length === 0) {
       if (this.others.size === 0) return;
-      for (let k = 0; k < BEAM_CARS; k++) {
-        const pair: [THREE.SpotLight, THREE.SpotLight] = [newBeam(), newBeam()];
-        for (const beam of pair) this.scene.add(beam, beam.target);
-        this.beams.push(pair);
-      }
+      this.makeBeams();
     }
     lit.sort((a, b) => a.distance - b.distance);
     this.beams.forEach((pair, k) => {
-      const view = lit[k]?.o.view;
-      const lamps = lit[k]?.o.vehicle?.def.body.headlights;
-      pair.forEach((beam, side) => {
-        if (!view || !lamps?.length) {
-          beam.intensity = 0;
-          return;
-        }
-        if (beam.parent !== view.group) view.group.add(beam, beam.target);
-        aimBeam(beam, side === 0 ? lamps[0]! : lamps.at(-1)!);
-        beam.intensity = HEADLIGHT;
-      });
+      const o = lit[k]?.o;
+      pair.follow(o?.view?.group ?? null, o?.vehicle?.def.body.headlights ?? []);
     });
   }
 
-  /** Takes back any beams lent to `o`, before its view goes. */
-  private release(o: Other): void {
-    for (const pair of this.beams) {
-      for (const beam of pair) {
-        if (o.view && beam.parent === o.view.group) {
-          beam.intensity = 0;
-          this.scene.add(beam, beam.target);
-        }
-      }
-    }
-  }
-
   private remove(id: string, o: Other): void {
-    this.release(o);
     o.view?.dispose();
     if (o.effects) {
       for (const obj of [o.effects.spray.group, o.effects.exhaust.group, o.effects.tracks.mesh]) disposeObject(obj);

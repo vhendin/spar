@@ -22,7 +22,7 @@ export interface ViewOptions {
   /** Paint for the body, #rrggbb; the definition's own colours otherwise. */
   color?: string;
   /** Headlight beams that light the ground; without them only the lamps glow (others lend theirs, see Others). */
-  beams?: boolean;
+  beams?: Beams;
 }
 
 /** The definition with its body painted `color`, and the roof a shade darker as on the real ones. */
@@ -35,15 +35,47 @@ export function painted(def: VehicleDef, color: string | undefined): VehicleDef 
 /** Strength of one headlight beam. */
 export const HEADLIGHT = 34;
 
-/** One headlight's beam, dark until switched on. */
-export function newBeam(): THREE.SpotLight {
-  return new THREE.SpotLight(0xfff0d2, 0, 160, 0.62, 0.7, 1);
+/**
+ * A pair of headlight beams that stays in the scene for good and follows a vehicle's outer
+ * lamps. Every material's shaders are built for the lights in the scene, in the order they are
+ * found there, and any change to that rebuilds them all: a freeze of up to seconds. So the
+ * beams hang straight off the scene, are never hidden or moved to another parent, and are only
+ * placed and dimmed.
+ */
+export class Beams {
+  private readonly lights: [THREE.SpotLight, THREE.SpotLight];
+
+  constructor(private readonly scene: THREE.Object3D) {
+    this.lights = [beam(), beam()];
+    for (const light of this.lights) scene.add(light, light.target);
+  }
+
+  /** Shines from the lamps of `group` (`lamps` in its frame), or goes dark when it is null. */
+  follow(group: THREE.Object3D | null, lamps: readonly (readonly number[])[]): void {
+    if (!group || lamps.length === 0) {
+      for (const light of this.lights) light.intensity = 0;
+      return;
+    }
+    group.updateWorldMatrix(true, false);
+    this.lights.forEach((light, side) => {
+      const at = side === 0 ? lamps[0]! : lamps.at(-1)!;
+      light.position.set(at[0]!, at[1]!, at[2]! + 0.05).applyMatrix4(group.matrixWorld);
+      light.target.position.set(at[0]! * 0.6, at[1]! - 1.1, at[2]! + 22).applyMatrix4(group.matrixWorld);
+      light.intensity = HEADLIGHT;
+    });
+  }
+
+  dispose(): void {
+    for (const light of this.lights) {
+      this.scene.remove(light, light.target);
+      light.dispose();
+    }
+  }
 }
 
-/** Places a beam (and its target, in the same parent) at a lamp, `at` in the body's frame. */
-export function aimBeam(beam: THREE.SpotLight, at: readonly number[]): void {
-  beam.position.set(at[0]!, at[1]!, at[2]! + 0.05);
-  beam.target.position.set(at[0]! * 0.6, at[1]! - 1.1, at[2]! + 22);
+/** One headlight's beam, dark until switched on. */
+function beam(): THREE.SpotLight {
+  return new THREE.SpotLight(0xfff0d2, 0, 160, 0.62, 0.7, 1);
 }
 
 /** Draws a simulated vehicle, smoothing between physics steps. */
@@ -55,7 +87,8 @@ export class VehicleView {
   readonly grime: Grime;
   private readonly glass: THREE.Mesh;
   private readonly wheels: THREE.Mesh[] = [];
-  private readonly beams: THREE.SpotLight[] = [];
+  private readonly beams: Beams | null;
+  private lit = false;
   private readonly from = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
   private readonly to = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
 
@@ -71,13 +104,7 @@ export class VehicleView {
     meshes.wheel.material = this.grime.wheel;
     meshes.body.castShadow = meshes.body.receiveShadow = true;
     meshes.interior.receiveShadow = true;
-    for (const at of options.beams === false ? [] : sim.def.body.headlights) {
-      // Present from the start, at zero strength: adding lights later makes every material rebuild.
-      const beam = newBeam();
-      aimBeam(beam, at);
-      this.beams.push(beam);
-      this.group.add(beam, beam.target);
-    }
+    this.beams = options.beams ?? null;
     for (let i = 0; i < sim.wheels.length; i++) {
       const wheel = meshes.wheel.clone();
       wheel.castShadow = true;
@@ -90,7 +117,7 @@ export class VehicleView {
 
   /** Switches the lamps: headlights with their beams, tail lights, and brake lights brighter still. */
   setLights(on: boolean, braking: boolean): void {
-    for (const beam of this.beams) beam.intensity = on ? HEADLIGHT : 0;
+    this.lit = on;
     (this.headlights.material as THREE.MeshStandardMaterial).emissiveIntensity = on ? 3 : 0;
     (this.taillights.material as THREE.MeshStandardMaterial).emissiveIntensity = braking ? 4 : on ? 1.2 : 0;
   }
@@ -102,6 +129,7 @@ export class VehicleView {
 
   /** Frees the meshes' GPU memory, when the vehicle is swapped for another. */
   dispose(): void {
+    this.beams?.follow(null, []);
     this.group.removeFromParent();
     this.group.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
@@ -134,6 +162,7 @@ export class VehicleView {
       mesh.position.set(at.x, at.y, at.z);
       mesh.rotation.set(wheel.rotation, wheel.steer, 0);
     });
+    this.beams?.follow(this.lit && this.group.visible ? this.group : null, this.sim.def.body.headlights);
   }
 
   private read(target: { p: THREE.Vector3; q: THREE.Quaternion }): void {

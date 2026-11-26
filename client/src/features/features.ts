@@ -246,6 +246,21 @@ export class Features {
     }
   }
 
+  /** Stand-ins drawing nothing, to build the shaders while loading (see WarmUp). */
+  standIns(): THREE.Object3D[] {
+    const point = (size: number): THREE.BufferAttribute => new THREE.BufferAttribute(new Float32Array(size), 3);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', point(9));
+    geometry.setAttribute('normal', point(9));
+    geometry.setAttribute('color', point(9));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2]), 1));
+    const mesh = new THREE.Mesh(geometry, this.material);
+    mesh.castShadow = mesh.receiveShadow = true;
+    const lines = new THREE.BufferGeometry();
+    lines.setAttribute('position', point(6));
+    return [mesh, new THREE.LineSegments(lines, this.wireMaterial)];
+  }
+
   private geometry(part: BuiltPart, sphere: THREE.Sphere): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(part.positions, 3));

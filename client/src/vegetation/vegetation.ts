@@ -12,6 +12,8 @@ import { CHUNK, PATCH, type PlacedLayer, type VegetationRequest, type Vegetation
 
 /** Placement jobs running in the worker at once. */
 const MAX_IN_FLIGHT = 4;
+/** The fewest instances a batch makes room for. */
+const MIN_CAPACITY = 64;
 
 export interface VegetationStats {
   /** Instances handed to the GPU as meshes, and those among them drawn in full detail. */
@@ -50,7 +52,7 @@ class Batch {
 
   constructor(
     private readonly source: THREE.BufferGeometry,
-    private readonly material: THREE.Material,
+    readonly material: THREE.Material,
     private readonly variation: number,
     private readonly group: THREE.Group,
     private readonly castShadow: boolean,
@@ -61,20 +63,35 @@ class Batch {
     this.filled = 0;
     if (this.wanted <= this.capacity) return;
     this.dispose();
-    this.capacity = Math.max(64, Math.ceil(this.wanted * 1.5));
+    this.capacity = Math.max(MIN_CAPACITY, Math.ceil(this.wanted * 1.5));
+    this.origins = new Float32Array(this.capacity * 4);
+    this.mesh = this.build(this.origins);
+    this.group.add(this.mesh);
+  }
+
+  /** One plant far out of reach, which the shader shrinks to nothing: drawn while loading to build the shaders (see WarmUp). */
+  standIn(): THREE.InstancedMesh {
+    const origins = new Float32Array(MIN_CAPACITY * 4);
+    origins[1] = -1e6;
+    const mesh = this.build(origins);
+    mesh.count = 1;
+    return mesh;
+  }
+
+  private build(origins: Float32Array): THREE.InstancedMesh {
+    const capacity = origins.length / 4;
     // Each batch needs its own geometry object for its per-instance attribute; the vertex
     // data itself is shared with the source.
     const geometry = new THREE.BufferGeometry();
     for (const name of ['position', 'normal', 'color', 'sway']) geometry.setAttribute(name, this.source.getAttribute(name));
     geometry.setIndex(this.source.getIndex());
-    this.origins = new Float32Array(this.capacity * 4);
-    geometry.setAttribute('iOrigin', new THREE.InstancedBufferAttribute(this.origins, 4));
-    this.mesh = new THREE.InstancedMesh(geometry, this.material, this.capacity);
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.capacity * 3), 3);
-    this.mesh.frustumCulled = false; // instances surround the camera; the shader hides the far ones
-    this.mesh.matrixAutoUpdate = false;
-    this.mesh.castShadow = this.castShadow;
-    this.group.add(this.mesh);
+    geometry.setAttribute('iOrigin', new THREE.InstancedBufferAttribute(origins, 4));
+    const mesh = new THREE.InstancedMesh(geometry, this.material, capacity);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+    mesh.frustumCulled = false; // instances surround the camera; the shader hides the far ones
+    mesh.matrixAutoUpdate = false;
+    mesh.castShadow = this.castShadow;
+    return mesh;
   }
 
   /**
@@ -418,6 +435,17 @@ export class Vegetation {
 
   private static keyOf(placed: PlacedLayer, k: number): string {
     return `${placed.layer}:${placed.cells[k * 2]}:${placed.cells[k * 2 + 1]}`;
+  }
+
+  /** A stand-in for each material plants are drawn with, to build its shaders while loading (see WarmUp). */
+  standIns(): THREE.Object3D[] {
+    const one = new Map<THREE.Material, THREE.Object3D>();
+    for (const perDetail of this.batches) {
+      for (const bySpecies of [perDetail.full, perDetail.low]) {
+        for (const variants of bySpecies) for (const batch of variants ?? []) if (batch && !one.has(batch.material)) one.set(batch.material, batch.standIn());
+      }
+    }
+    return [...one.values()];
   }
 
   /** The sheet of far-tree pictures on a board, for checking how they came out. */

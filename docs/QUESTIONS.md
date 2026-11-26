@@ -5,7 +5,37 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Leafy trees in winter (this commit)
+### Freezes of a few seconds (this commit)
+
+- **Asked:** playing online with a friend, the game froze for a couple of seconds every so
+  often; the user guessed the ground loading in (2026-11-26).
+- **Found:** not the ground (it is built off the main thread). The freezes were the graphics
+  card building shaders, which the frame waits for: up to a few tenths of a second each,
+  seconds for a handful when the driver has not built them before (after an update).
+  - Every material's shaders are built for the lights in the scene. The other drivers'
+    headlight beams hung on their vehicles, so opening the map (which hides the others), a
+    friend going to the start screen, changing vehicle or leaving, or the beams passing to
+    another vehicle, changed the lights, and everything on screen was built again. With a
+    friend's lights on, closing the map froze the game for 3.4 s in the test.
+  - Each plant material, and its shadow, was built the first time that plant came into view:
+    about 20 builds in a minute of driving, each a short stall.
+- **Done:**
+  - Headlight beams stay in the scene for good, never hidden or moved to another parent, and
+    follow their vehicle; ours is one pair made at start, the others' two pairs made as soon
+    as the server says anyone else is online. Opening and closing the map now builds nothing.
+  - Stand-ins for every plant material, the buildings and lines, the spray and the exhaust
+    are drawn for the first three frames, so their shaders are built while loading. A
+    minute of low flight with two players then built nothing and stalled no frame over
+    100 ms (before: about 20 builds and stalls of 160–230 ms).
+- **Costs:** loading takes a little longer (the same builds, moved there). Nothing per frame.
+- **Open:**
+  - A friend who comes online while you are already driving still makes everything build
+    once, when their beams are made. Making the beams always, even alone, would avoid it but
+    cost about 0.3 ms of GPU time per frame (4 more lights on every pixel). Worth it?
+  - Other things first met while driving (the winch, the drone, campfire) may still stall
+    once; not seen in the test.
+
+### Leafy trees in winter (f32cecd)
 
 - **Asked:** the user found the far forest odd while driving in winter (2026-11-26). Not the
   fog of war: the code from before it gives the same trees. Close by, bare broadleaf trees
