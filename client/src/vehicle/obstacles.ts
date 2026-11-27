@@ -31,11 +31,11 @@ const MIN_ANCHOR_TRUNK = 0.1;
 /** Nor are rocks lower than this. */
 const MIN_ANCHOR_ROCK = 0.9;
 
-/** Something a winch cable can be hooked to: a tree, rock or building, or another driver's vehicle. */
+/** Something a winch cable can be hooked to: a tree, rock or building, another driver's vehicle, or a ground anchor. */
 export interface Anchor {
   /** The permanent name it was placed with (`v:<player>` for a vehicle). */
   key: string;
-  kind: SolidKind | 'vehicle';
+  kind: SolidKind | 'vehicle' | 'stake';
   /** Its middle, at the height the cable goes round it. */
   x: number;
   y: number;
@@ -49,6 +49,8 @@ export interface Anchor {
   /** Another driver's vehicle: whose, and where on it the hook goes, in its own frame. */
   vehicle?: string;
   local?: [number, number, number];
+  /** A ground anchor in soft ground: it ploughs under a hard pull. */
+  soft?: boolean;
 }
 
 interface Entry {

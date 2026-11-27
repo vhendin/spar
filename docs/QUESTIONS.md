@@ -5,7 +5,30 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### The next checkpoint easier to find (this commit)
+### Ground anchor (this commit)
+
+- **Asked:** a ground anchor for the winch, always carried, no slots; it comes back when
+  unhooked. Soil only, but would that be a problem on high ground? (2026-11-27)
+- **Found:** no. Where the map has rock (scree, bare rock) it also has boulders to hook to
+  (boulders grow at 0.9 on scree, 0.35 on bare rock). Open high ground is mostly heath:
+  Vålådalen has no rock at all, 96 % of its ground above 1000 m is open heath with nothing to
+  winch to; Kebnekaise is 22–50 % rock, Åre 39 % above 1000 m and 73 % above 1200 m.
+- **Decided (2026-11-27):** soft ground (bog, wet sand, and snow of 40 cm or more over rock)
+  holds about half the winch's pull and beyond that ploughs slowly towards the vehicle; the
+  anchor is always offered, not only when nothing else is in reach.
+- **Done:** choosing what to hook to (E) always lists a ground anchor when the ground takes
+  one: straight ahead at 0.6 of the cable (18 m on the 30 m winches, 24 m on the 40 m ones),
+  else nearer or up to 30° to the side. Never on rock (bare of snow), asphalt or water. Hooked,
+  a red plate anchor and stake stand dug in where the cable ends; in soft ground it ploughs
+  towards the vehicle at up to 0.25 m/s while pulled harder than it holds. Unhooking brings it
+  back. Others see it. Try it on the proving ground's strips: heath and grass hold, the bog
+  ploughs, rock and asphalt offer nothing.
+- **Open:**
+  - Is 0.6 of the cable the right place, or should it follow where you look?
+  - Ploughing: half the pull and 0.25 m/s, too weak or too strong?
+  - Sand only ploughs when wet (rain, or low ground where water gathers): noticeable enough?
+
+### The next checkpoint easier to find (6402022)
 
 - **Asked:** on a trail, the small poles are hard to see; a mark on the compass and/or a light
   in the terrain (2026-11-27).

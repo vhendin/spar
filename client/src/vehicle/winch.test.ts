@@ -6,7 +6,7 @@ import type { VehicleDef } from '@spar/shared';
 import { pushForce } from './felling';
 import type { Anchor } from './obstacles';
 import { GROUP_GROUND, GROUP_OBSTACLE, groups, VehicleSim, type VehicleInput } from './sim';
-import { hookPoint, Winch, type WinchControls } from './winch';
+import { hookPoint, STAKE, Winch, type AnchorSource, type WinchControls } from './winch';
 
 const load = (name: string) => JSON.parse(readFileSync(join(import.meta.dirname, `../../../defs/vehicles/${name}.json`), 'utf8')) as VehicleDef;
 const DT = 1 / 60;
@@ -21,7 +21,7 @@ const rise = (slope: number, z: number) => -z * Math.tan((slope * Math.PI) / 180
 const tree = (key: string, x: number, y: number, z: number, diameter: number): Anchor => ({ key, kind: 'tree', x, y, z, radius: diameter / 2, diameter });
 
 /** A vehicle facing north (-z) on ground rising `slope` degrees that way, with the given anchors around. */
-function setup(anchors: Anchor[], slope = 0) {
+function setup(anchors: Anchor[], slope = 0, holdAt?: AnchorSource['holdAt']) {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   const tilt = (slope * Math.PI) / 360;
@@ -37,6 +37,7 @@ function setup(anchors: Anchor[], slope = 0) {
   const winch = new Winch(car, {
     anchorsNear: (x, z, r) => anchors.filter((a) => !felled.has(a.key) && Math.hypot(a.x - x, a.z - z) <= r),
     standing: (key) => !felled.has(key),
+    ...(holdAt && { holdAt }),
   });
   winch.onGiveWay = (a) => felled.add(a.key);
   const run = (seconds: number, controls: WinchControls = none, input: Partial<VehicleInput> = {}) => {
@@ -143,6 +144,93 @@ describe('winch', () => {
     expect(p.z).toBeCloseTo(0);
     const turned = hookPoint({ key: 'barn', kind: 'object', x: 10, y: 1, z: 0, radius: 0, diameter: 0, box: { hx: 4, hz: 2, yaw: Math.PI / 2 } }, { x: 0, y: 1, z: 0 });
     expect(turned.x).toBeCloseTo(8);
+  });
+});
+
+describe('ground anchor', () => {
+  /** Flat ground that takes a stake everywhere, firm or soft. */
+  const soil = (soft = false) => () => ({ y: 0, soft });
+
+  it('is offered straight ahead, at 0.6 of the cable, besides what else is in reach', () => {
+    const { winch, run } = setup([tree('pine', 6, 0.6, -15, 0.45)], 0, soil());
+    run(1);
+    winch.choose();
+    expect(winch.choices.map((a) => a.key).sort()).toEqual(['pine', STAKE]);
+    const stake = winch.choices.find((a) => a.key === STAKE)!;
+    const o = winch.origin();
+    expect(stake.kind).toBe('stake');
+    expect(o.z - stake.z).toBeCloseTo(0.6 * winch.def.winch!.cable, 0);
+    expect(stake.x - o.x).toBeCloseTo(0, 1);
+    expect(stake.soft).toBeUndefined();
+  });
+
+  it('is not offered where nothing holds it, and goes to the side or nearer where something does', () => {
+    const none = setup([], 0, () => null);
+    none.run(1);
+    none.winch.choose();
+    expect(none.winch.choices).toEqual([]);
+    // Rock straight ahead; soil only to the right of the vehicle (east, +x).
+    const side = setup([], 0, (x) => (x > 3 ? { y: 0, soft: false } : null));
+    side.run(1);
+    side.winch.choose();
+    const stake = side.winch.choices[0]!;
+    expect(stake.key).toBe(STAKE);
+    expect(stake.x).toBeGreaterThan(3);
+  });
+
+  it('holds firm while it pulls the vehicle in, and comes back when unhooked', () => {
+    const { car, winch, run } = setup([], 0, soil());
+    run(1);
+    winch.choose();
+    winch.hookOn();
+    run(2);
+    expect(winch.state).toBe('hooked');
+    const at = { ...winch.anchor! };
+    const z0 = car.body.translation().z;
+    run(5, { pull: true, slack: false });
+    expect(z0 - car.body.translation().z).toBeGreaterThan(4);
+    expect(winch.anchor!.z).toBe(at.z);
+    const info = winch.info()!;
+    expect(info.strap).toBeUndefined();
+    expect(info.stake).toEqual([0, 0.25, expect.closeTo(at.z, 1)].map((v, i) => (i === 0 ? expect.closeTo(at.x, 1) : v)));
+    winch.toggle();
+    run(3);
+    expect(winch.state).toBe('stowed');
+    winch.choose();
+    expect(winch.choices.map((a) => a.key)).toEqual([STAKE]);
+  });
+
+  it('in soft ground holds a light pull but ploughs towards the vehicle under a hard one', () => {
+    const { world, winch, run } = setup([], 0, soil(true));
+    world.createCollider(RAPIER.ColliderDesc.cuboid(3, 1.5, 0.5).setTranslation(0, 1.5, -4).setCollisionGroups(groups(GROUP_OBSTACLE, 0xffff)));
+    run(1);
+    winch.choose();
+    expect(winch.pickedAnchor?.soft).toBe(true);
+    winch.hookOn();
+    run(2);
+    const z0 = winch.anchor!.z;
+    // Paying out and resting: no pull, it stays.
+    run(2, { pull: false, slack: true });
+    expect(winch.anchor!.z).toBe(z0);
+    // Against the wall the winch pulls all it can: the anchor drags towards the vehicle, slowly.
+    run(6, { pull: true, slack: false });
+    const moved = winch.anchor!.z - z0;
+    // The winch winds in as it drags, so it keeps pulling hard and the anchor keeps coming, at
+    // at most its top speed of 0.25 m/s (after the slack is taken up).
+    expect(moved).toBeGreaterThan(0.5);
+    expect(moved).toBeLessThan(6 * 0.25 + 0.01);
+    expect(winch.point.z).toBeCloseTo(winch.anchor!.z);
+  });
+
+  it('shows to others as a stake', () => {
+    const { car, winch, run } = setup([], 0, soil());
+    run(1);
+    winch.choose();
+    winch.hookOn();
+    run(2);
+    const shown = new Winch(car, null);
+    shown.mirror(winch.info());
+    expect(shown.anchor).toMatchObject({ kind: 'stake', key: STAKE });
   });
 });
 

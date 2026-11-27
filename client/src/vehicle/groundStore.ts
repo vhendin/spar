@@ -27,6 +27,11 @@ const DEPTH_CACHE = 4096;
 const MAX_HOLES = 8;
 /** Radius of the hole a vehicle breaks, metres. */
 const HOLE_RADIUS = 3.5;
+/** Ground a stake can be dug into; rock only under this much snow, metres. */
+const HOLDS = new Set(['dirt', 'grass', 'gravel', 'sand', 'bog', 'snow']);
+const SNOW_HOLD = 0.4;
+/** Sand this wet (rain, or ground where water gathers, 0..1) lets a stake plough. */
+const WET_SAND = 0.4;
 
 /** How far a spot `distance` metres from the nearest stream is from the ice's full thickness: 0..1. */
 export function iceShare(distance: number): number {
@@ -175,6 +180,21 @@ export class GroundStore implements GroundProbe {
       if (surface) return surface;
     }
     return this.biomeGround[mask[this.planes.biome * plane + at]!] ?? 'dirt';
+  }
+
+  /**
+   * Whether a ground anchor can be dug in here, and how it holds: firm in soil, soft (it ploughs
+   * under a hard pull) in bog, wet sand and snow lying on rock; null on rock, asphalt and water.
+   */
+  holdAt(x: number, z: number): { y: number; soft: boolean } | null {
+    const y = this.heightAt(x, z);
+    const s = this.sample(x, z);
+    if (y === null || !s || this.waterDepth(x, z) > 0) return null;
+    const ground = this.groundAt(x, z);
+    if (ground === 'rock') return this.snowAt(x, z) >= SNOW_HOLD ? { y, soft: true } : null;
+    if (!HOLDS.has(ground)) return null;
+    const soaked = this.planes.wetness >= 0 ? s.mask[this.planes.wetness * s.plane + s.at]! / 255 : 0;
+    return { y, soft: ground === 'bog' || (ground === 'sand' && Math.max(this.rain, soaked) >= WET_SAND) };
   }
 
   softness(x: number, z: number): number {

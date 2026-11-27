@@ -1,5 +1,5 @@
-// The winch: a cable from the front of the vehicle hooked round a tree, rock or building, or
-// on to another driver's vehicle. Choosing shows what is in reach; hooking on carries the
+// The winch: a cable from the front of the vehicle hooked round a tree, rock or building, on
+// to another driver's vehicle, or to a ground anchor dug in ahead where the ground takes one. Choosing shows what is in reach; hooking on carries the
 // cable there; winching in shortens it, pulling as hard as the winch can until it stalls. A
 // thin tree pulled too hard gives way. Hooked to another vehicle, the cable pulls both ends,
 // once this browser runs that vehicle too (multiplayer/towing.ts).
@@ -53,7 +53,21 @@ export interface AnchorSource {
   standing(key: string): boolean;
   /** Another driver's vehicle by player id, or null when it is not on the road here. */
   vehicle?(id: string): TowedBody | null;
+  /** Whether a ground anchor can be dug in here: the ground's height, and soft where it ploughs. */
+  holdAt?(x: number, z: number): { y: number; soft: boolean } | null;
 }
+
+/** The ground anchor's name: there is one, carried along and got back when unhooked. */
+export const STAKE = 'stake';
+/** Where the ground anchor is offered: this share of the cable ahead, or nearer, or a little to the side. */
+const STAKE_REACH = [1, 0.8, 0.6, 0.4].map((k) => k * 0.6);
+const STAKE_TURN = [0, -15, 15, -30, 30].map((d) => (d * Math.PI) / 180);
+/** The cable meets it this high over the ground. */
+const STAKE_TOP = 0.25;
+/** In soft ground it holds this share of the winch's pull, and beyond it ploughs towards the vehicle. */
+const SOFT_HOLD = 0.5;
+/** How fast it ploughs at most, metres a second (pulled half as hard again as it holds). */
+const PLOUGH_SPEED = 0.25;
 
 /** The cable as a spring: newtons per metre stretched, and per metre a second of stretching. */
 const STIFFNESS = 250_000;
@@ -192,7 +206,7 @@ export class Winch {
     const fl = Math.hypot(f.x, f.z) || 1;
     const fx = f.x / fl, fz = f.z / fl;
     const keep = this.choices[this.picked]?.key;
-    const near = this.world.anchorsNear(o.x, o.z, spec.cable).map((a) => {
+    let near = this.world.anchorsNear(o.x, o.z, spec.cable).map((a) => {
       const p = hookPoint(a, o);
       const dx = p.x - o.x, dz = p.z - o.z;
       const d = Math.hypot(dx, dz, p.y - o.y);
@@ -200,11 +214,34 @@ export class Winch {
       // Bearing from straight ahead: negative to the left.
       const side = fx * (dz / flat) - fz * (dx / flat);
       return { a, d, ahead: (dx * fx + dz * fz) / flat, side };
-    }).filter((c) => c.d >= MIN_REACH && c.d <= spec.cable - 0.5 && c.ahead >= AHEAD);
-    near.sort((a, b) => a.d - b.d);
+    });
+    const stake = this.stakeSpot(o, fx, fz, spec.cable);
+    if (stake) {
+      const dx = stake.x - o.x, dz = stake.z - o.z;
+      const flat = Math.hypot(dx, dz) || 1;
+      near.push({ a: stake, d: Math.hypot(dx, dz, stake.y - o.y), ahead: (dx * fx + dz * fz) / flat, side: fx * (dz / flat) - fz * (dx / flat) });
+    }
+    near = near.filter((c) => c.d >= MIN_REACH && c.d <= spec.cable - 0.5 && c.ahead >= AHEAD);
+    // Nearest first, but the ground anchor always stays among them.
+    near.sort((a, b) => (a.a.kind === 'stake' ? -1 : b.a.kind === 'stake' ? 1 : a.d - b.d));
     this.choices = near.slice(0, MAX_CHOICES).sort((a, b) => a.side - b.side).map((c) => c.a);
     const i = this.choices.findIndex((a) => a.key === keep);
     this.picked = i >= 0 ? i : 0;
+  }
+
+  /** Where the ground anchor could go: straight ahead if the ground takes it there, else nearer or to the side. */
+  private stakeSpot(o: V3, fx: number, fz: number, cable: number): Anchor | null {
+    const holdAt = this.world?.holdAt;
+    if (!holdAt) return null;
+    for (const k of STAKE_REACH) {
+      for (const turn of STAKE_TURN) {
+        const c = Math.cos(turn), s = Math.sin(turn);
+        const x = o.x + (fx * c - fz * s) * k * cable, z = o.z + (fz * c + fx * s) * k * cable;
+        const hold = holdAt.call(this.world, x, z);
+        if (hold) return { key: STAKE, kind: 'stake', x, y: hold.y + STAKE_TOP, z, radius: 0, diameter: 0, ...(hold.soft && { soft: true }) };
+      }
+    }
+    return null;
   }
 
   /**
@@ -339,7 +376,7 @@ export class Winch {
     }
     if (this.state !== 'hooked' || !this.anchor) return;
     // Knocked down by other means (driven into): the cable comes free.
-    if (!towed && this.world && !this.world.standing(this.anchor.key)) {
+    if (!towed && this.anchor.kind !== 'stake' && this.world && !this.world.standing(this.anchor.key)) {
       this.release();
       return;
     }
@@ -387,6 +424,7 @@ export class Winch {
       towed?.dynamic?.applyImpulseAtPoint({ x: -nx * j, y: -ny * j, z: -nz * j }, { ...this.point }, true);
     }
     if (towed && controls.pull) towed.towed?.();
+    if (this.anchor.soft) this.plough(dt, spec.pull, nx, nz);
 
     // A thin tree bends over and goes when pulled on harder than it can take for a moment.
     const a = this.anchor;
@@ -399,6 +437,21 @@ export class Winch {
         this.release();
       }
     }
+  }
+
+  /** A ground anchor in soft ground pulled harder than it holds drags through it towards the vehicle. */
+  private plough(dt: number, pull: number, nx: number, nz: number): void {
+    const a = this.anchor!;
+    const hold = SOFT_HOLD * pull;
+    if (this.tension <= hold) return;
+    const fl = Math.hypot(nx, nz) || 1;
+    const step = PLOUGH_SPEED * Math.min(1, (this.tension - hold) / (0.5 * hold)) * dt;
+    const dx = (-nx / fl) * step, dz = (-nz / fl) * step;
+    a.x += dx;
+    a.z += dz;
+    const ground = this.world?.holdAt?.(a.x, a.z);
+    if (ground) a.y = ground.y + STAKE_TOP;
+    Object.assign(this.point, { x: a.x, y: a.y, z: a.z });
   }
 
   /**
@@ -460,7 +513,8 @@ export class Winch {
       length: r(Math.max(0, this.length)),
       tension: Math.round(this.tension),
       drum: r(this.drum),
-      ...(a && !a.box && a.kind !== 'vehicle' && this.state === 'hooked' && { strap: [r(a.x), r(a.y), r(a.z), r(a.radius)] }),
+      ...(a && !a.box && a.kind !== 'vehicle' && a.kind !== 'stake' && this.state === 'hooked' && { strap: [r(a.x), r(a.y), r(a.z), r(a.radius)] }),
+      ...(a?.kind === 'stake' && this.state === 'hooked' && { stake: [r(a.x), r(a.y), r(a.z)] }),
     };
   }
 
@@ -484,8 +538,10 @@ export class Winch {
     this.length = w.length;
     this.tension = w.tension;
     this.drum = w.drum;
-    const s = w.strap;
-    this.anchor = s ? { key: '', kind: 'tree', x: s[0]!, y: s[1]!, z: s[2]!, radius: s[3]!, diameter: 0 } : null;
+    const s = w.strap, k = w.stake;
+    this.anchor = s
+      ? { key: '', kind: 'tree', x: s[0]!, y: s[1]!, z: s[2]!, radius: s[3]!, diameter: 0 }
+      : k ? { key: STAKE, kind: 'stake', x: k[0]!, y: k[1]!, z: k[2]!, radius: 0, diameter: 0 } : null;
   }
 
   /** The winch's pull as a share of what it can manage, for the gauge. */

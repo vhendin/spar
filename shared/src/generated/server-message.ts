@@ -367,6 +367,13 @@ export interface SnapshotWinch {
    * @maxItems 4
    */
   strap?: [number, number, number, number];
+  /**
+   * On a ground anchor: where it is dug in, its top, metres.
+   *
+   * @minItems 3
+   * @maxItems 3
+   */
+  stake?: [number, number, number];
 }
 /**
  * Another driver's vehicle has left the road.
@@ -611,11 +618,15 @@ export interface DriveControls {
   release?: boolean;
 }
 /**
- * Something a winch is hooked to: a tree, rock or building by its permanent key, or another driver's vehicle.
+ * Something a winch is hooked to: a tree, rock or building by its permanent key, another driver's vehicle, or a ground anchor dug in for it.
  */
 export interface Anchor {
   key: string;
-  kind: 'tree' | 'rock' | 'object' | 'vehicle';
+  kind: 'tree' | 'rock' | 'object' | 'vehicle' | 'stake';
+  /**
+   * A ground anchor in soft ground (bog, wet sand, snow): it ploughs under a hard pull.
+   */
+  soft?: boolean;
   x: number;
   y: number;
   z: number;

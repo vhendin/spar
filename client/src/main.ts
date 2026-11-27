@@ -1115,7 +1115,8 @@ async function start(): Promise<void> {
     // After a rebuild for new settings, the vehicle goes back where it was.
     const arrival = resumeAt ? { name: 'where you were', x: resumeAt.x, z: resumeAt.z, heading: resumeAt.heading } : spawn;
     // The winch hooks on to the same trees, rocks and buildings; thin trees pulled too hard go over.
-    const winch = new Winch(sim, towing.anchors(obstacles));
+    // Where the ground takes one, a ground anchor dug in ahead is offered too.
+    const winch = new Winch(sim, { ...towing.anchors(obstacles), holdAt: (x, z) => ground.holdAt(x, z) });
     winch.onGiveWay = (anchor, dx, dz) => obstacles?.fell(anchor, dx, dz);
     const winchView = new WinchView();
     scene.add(winchView.group);
@@ -1246,7 +1247,7 @@ async function start(): Promise<void> {
     // Whatever may first show up while driving (plants met further on, buildings, the first mud
     // thrown) is drawn once by stand-ins now, so its shaders are built while loading.
     const warm = new WarmUp();
-    warm.add([...(vegetation?.standIns() ?? []), ...(features?.standIns() ?? []), ...standIns(spray.group), ...standIns(exhaust.group), ...standIns(trailFlag.group)]);
+    warm.add([...(vegetation?.standIns() ?? []), ...(features?.standIns() ?? []), ...standIns(spray.group), ...standIns(exhaust.group), ...standIns(trailFlag.group), ...standIns(winchView.group)]);
     scene.add(warm.group);
     warmUp = warm;
     world = { index, terrain, shading, environment, vegetation, seasonDay: seasonStep(environment.dayOfYear()), features, physics, ground, sim, view, color, spray, exhaust, tracks, felling, winch, winchView, sound, map, explorer, finds, camp, campKeys: pois.camps, campfire, trails, trailFlag, spawn, arrival, obstacles, unplaced: true, start };
@@ -2057,17 +2058,20 @@ async function start(): Promise<void> {
     if (!paused && !flying && !drone.flown && !w.unplaced && !w.map.open) {
       if (w.winch.state === 'choosing') {
         const picked = w.winch.pickedAnchor;
-        const on = picked?.kind === 'vehicle' && picked.vehicle ? `${nameOf(picked.vehicle)}'s ${(picked.local?.[2] ?? 0) >= 0 ? 'front' : 'rear'} · ` : '';
+        const on = picked?.kind === 'vehicle' && picked.vehicle
+          ? `${nameOf(picked.vehicle)}'s ${(picked.local?.[2] ?? 0) >= 0 ? 'front' : 'rear'} · `
+          : picked?.kind === 'stake' ? `ground anchor${picked.soft ? ', soft ground' : ''} · ` : '';
         html = touch.shown
           ? w.winch.choices.length ? `Winch · ${on}drag to aim, or Next · Hook on` : 'Nothing to hook the winch to within reach ahead'
           : w.winch.choices.length
           ? `Winch · ${on}${pad ? 'right stick' : 'move the mouse'} to aim · ${key('E', 'winch')} hook on · ${pad ? '' : `<kbd>Tab</kbd> next · `}${key('K', 'winchOut')} cancel`
           : `Nothing to hook the winch to within reach ahead · ${key('K', 'winchOut')} cancel`;
       } else if (w.winch.state === 'hooked') {
-        const on = towing.hookedTo(towing.me);
+        const by = towing.hookedTo(towing.me);
+        const on = by ? ` on ${nameOf(by)}` : w.winch.anchor?.kind === 'stake' ? ' on the ground anchor' : '';
         html = touch.shown
-          ? `Winch${on ? ` on ${nameOf(on)}` : ''} · hold In to winch in, Out to pay out`
-          : `Winch${on ? ` on ${nameOf(on)}` : ''} · hold ${key('I', 'winchIn')} to winch in · ${key('K', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
+          ? `Winch${on} · hold In to winch in, Out to pay out`
+          : `Winch${on} · hold ${key('I', 'winchIn')} to winch in · ${key('K', 'winchOut')} pay out · ${key('E', 'winch')} unhook`;
       } else {
         // Another driver's cable on ours.
         const by = towing.lines.find((c) => c.to === towing.me)?.from;

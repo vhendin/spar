@@ -161,8 +161,8 @@ class RemoteCable implements CableView {
     Object.assign(this.end, { x: w.end[0], y: w.end[1], z: w.end[2] });
     this.length = w.length;
     this.tension = w.tension;
-    const s = w.strap;
-    this.anchor = s ? { kind: 'tree', x: s[0]!, y: s[1]!, z: s[2]!, radius: s[3]! } : null;
+    const s = w.strap, k = w.stake;
+    this.anchor = s ? { kind: 'tree', x: s[0]!, y: s[1]!, z: s[2]!, radius: s[3]! } : k ? { kind: 'stake', x: k[0]!, y: k[1]!, z: k[2]!, radius: 0 } : null;
   }
 
   origin(): { x: number; y: number; z: number } {

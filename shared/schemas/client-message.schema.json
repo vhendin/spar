@@ -378,6 +378,15 @@
           },
           "minItems": 4,
           "maxItems": 4
+        },
+        "stake": {
+          "description": "On a ground anchor: where it is dug in, its top, metres.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
         }
       }
     },
@@ -672,7 +681,7 @@
     },
     "Anchor": {
       "title": "Anchor",
-      "description": "Something a winch is hooked to: a tree, rock or building by its permanent key, or another driver's vehicle.",
+      "description": "Something a winch is hooked to: a tree, rock or building by its permanent key, another driver's vehicle, or a ground anchor dug in for it.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -695,8 +704,13 @@
             "tree",
             "rock",
             "object",
-            "vehicle"
+            "vehicle",
+            "stake"
           ]
+        },
+        "soft": {
+          "description": "A ground anchor in soft ground (bog, wet sand, snow): it ploughs under a hard pull.",
+          "type": "boolean"
         },
         "x": {
           "type": "number"

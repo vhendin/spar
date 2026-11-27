@@ -1,5 +1,5 @@
 // Draws the winch: rings round what can be hooked to while choosing, the cable hanging or
-// pulled straight, and the strap round the anchor.
+// pulled straight, the strap round the anchor, and the ground anchor when it is dug in.
 
 import * as THREE from 'three/webgpu';
 import type { VehicleDef } from '@spar/shared';
@@ -37,7 +37,9 @@ const OTHER = new THREE.Color(0xd8e2e6);
 type HeightFn = (x: number, z: number) => number | null;
 
 /** A ring's radius round an anchor. */
-const ringRadius = (a: Anchor): number => (a.kind === 'vehicle' ? 0.6 : a.box ? 0.35 : Math.min(2, a.radius + 0.18));
+const ringRadius = (a: Anchor): number => (a.kind === 'vehicle' ? 0.6 : a.box || a.kind === 'stake' ? 0.35 : Math.min(2, a.radius + 0.18));
+/** The ground anchor's top is this high over the ground (as in winch.ts). */
+const STAKE_TOP = 0.25;
 
 export class WinchView {
   readonly group = new THREE.Group();
@@ -46,6 +48,8 @@ export class WinchView {
   private readonly pointer: THREE.Mesh;
   private readonly strap: THREE.Mesh;
   private readonly hook: THREE.Mesh;
+  /** The ground anchor: a spade-like plate dug in on its side towards the vehicle, a stake behind it. */
+  private readonly stake = new THREE.Group();
   private readonly from = new THREE.Vector3();
   private readonly to = new THREE.Vector3();
   private readonly points: THREE.Vector3[] = Array.from({ length: SEGMENTS + 1 }, () => new THREE.Vector3());
@@ -85,7 +89,22 @@ export class WinchView {
     this.strap.visible = false;
     this.hook = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.02, 6, 12), steel);
     this.hook.visible = false;
-    this.group.add(this.cable, this.markers, this.pointer, this.strap, this.hook);
+
+    // Built facing +z (towards the vehicle), its foot at the origin, leaning back from the pull.
+    const paint = new THREE.MeshStandardNodeMaterial({ color: 0xc23a1e, roughness: 0.6, metalness: 0.4 });
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.42, 0.02), paint);
+    plate.position.set(0, 0.04, 0);
+    plate.rotation.x = -0.35;
+    const frame = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 8), paint);
+    frame.position.set(0, 0.12, 0.12);
+    frame.rotation.x = 0.9;
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.016, 0.9, 8), steel);
+    pin.position.set(0, 0.05, -0.18);
+    pin.rotation.x = -0.25;
+    for (const m of [plate, frame, pin]) m.castShadow = true;
+    this.stake.add(plate, frame, pin);
+    this.stake.visible = false;
+    this.group.add(this.cable, this.markers, this.pointer, this.strap, this.hook, this.stake);
   }
 
   /**
@@ -98,7 +117,7 @@ export class WinchView {
     this.drawChoices(winch, eye);
     if (!at || winch.state === 'stowed' || winch.state === 'choosing') {
       this.cable.count = 0;
-      this.strap.visible = this.hook.visible = false;
+      this.strap.visible = this.hook.visible = this.stake.visible = false;
       return;
     }
     this.from.set(at[0]!, at[1]!, at[2]!);
@@ -135,7 +154,12 @@ export class WinchView {
     this.cable.instanceMatrix.needsUpdate = true;
 
     const anchor = winch.anchor;
-    this.strap.visible = winch.state === 'hooked' && anchor !== null && !anchor.box && anchor.kind !== 'vehicle';
+    this.strap.visible = winch.state === 'hooked' && anchor !== null && !anchor.box && anchor.kind !== 'vehicle' && anchor.kind !== 'stake';
+    this.stake.visible = winch.state === 'hooked' && anchor?.kind === 'stake';
+    if (anchor && this.stake.visible) {
+      this.stake.position.set(anchor.x, anchor.y - STAKE_TOP, anchor.z);
+      this.stake.rotation.set(0, Math.atan2(this.from.x - anchor.x, this.from.z - anchor.z), 0);
+    }
     if (anchor && this.strap.visible) {
       this.strap.position.set(anchor.x, anchor.y, anchor.z);
       this.strap.scale.setScalar(anchor.radius + 0.03);

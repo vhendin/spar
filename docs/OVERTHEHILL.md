@@ -221,6 +221,9 @@ not only an anchor.
 
 ### 6. Tools in a few slots
 
+*Ground anchor built 2026-11-27, always carried, without slots: see "Ground anchor" in
+`QUESTIONS.md`.*
+
 **They:** repair kit, ground anchor, jack, planks, camp, radar, bell; few slots, refilled at
 cabins.
 
