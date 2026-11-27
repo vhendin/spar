@@ -21,11 +21,14 @@ ones move to the bottom with the answer, so the reasoning stays findable.
   else nearer or up to 30° to the side. Never on rock (bare of snow), asphalt or water. Hooked,
   a red plate anchor and stake stand dug in where the cable ends; in soft ground it ploughs
   towards the vehicle at up to 0.25 m/s while pulled harder than it holds. Unhooking brings it
-  back. Others see it. Try it on the proving ground's strips: heath and grass hold, the bog
+  back. Others see it. A 1.6 m orange marker pole with a flag stands on it, so it can be found
+  from the seat (the plate alone was hard to see at 24 m and hidden by the vehicle close up),
+  drawn larger beyond 35 m. Try it on the proving ground's strips: heath and grass hold, the bog
   ploughs, rock and asphalt offer nothing.
 - **Open:**
   - Is 0.6 of the cable the right place, or should it follow where you look?
   - Ploughing: half the pull and 0.25 m/s, too weak or too strong?
+  - The marker pole: right size, or too much?
   - Sand only ploughs when wet (rain, or low ground where water gathers): noticeable enough?
 
 ### The next checkpoint easier to find (6402022)

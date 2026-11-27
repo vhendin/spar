@@ -40,6 +40,9 @@ type HeightFn = (x: number, z: number) => number | null;
 const ringRadius = (a: Anchor): number => (a.kind === 'vehicle' ? 0.6 : a.box || a.kind === 'stake' ? 0.35 : Math.min(2, a.radius + 0.18));
 /** The ground anchor's top is this high over the ground (as in winch.ts). */
 const STAKE_TOP = 0.25;
+/** Its marker pole, metres; from further than this it is drawn larger, to stay a few pixels wide. */
+const MARKER = 1.6;
+const STAKE_FAR = 35;
 
 export class WinchView {
   readonly group = new THREE.Group();
@@ -101,8 +104,14 @@ export class WinchView {
     const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.016, 0.9, 8), steel);
     pin.position.set(0, 0.05, -0.18);
     pin.rotation.x = -0.25;
-    for (const m of [plate, frame, pin]) m.castShadow = true;
-    this.stake.add(plate, frame, pin);
+    // A marker pole with a flag on the stake, as on a snow stake, so it can be found from the seat.
+    const orange = new THREE.MeshStandardNodeMaterial({ color: 0xff7a1a, roughness: 0.7 });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, MARKER, 6).translate(0, MARKER / 2, 0), orange);
+    pole.position.set(0, 0, -0.2);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.2, 0.01).translate(0.16, 0, 0), orange);
+    flag.position.set(0, MARKER - 0.12, -0.2);
+    for (const m of [plate, frame, pin, pole, flag]) m.castShadow = true;
+    this.stake.add(plate, frame, pin, pole, flag);
     this.stake.visible = false;
     this.group.add(this.cable, this.markers, this.pointer, this.strap, this.hook, this.stake);
   }
@@ -159,6 +168,7 @@ export class WinchView {
     if (anchor && this.stake.visible) {
       this.stake.position.set(anchor.x, anchor.y - STAKE_TOP, anchor.z);
       this.stake.rotation.set(0, Math.atan2(this.from.x - anchor.x, this.from.z - anchor.z), 0);
+      this.stake.scale.setScalar(Math.max(1, this.stake.position.distanceTo(eye) / STAKE_FAR));
     }
     if (anchor && this.strap.visible) {
       this.strap.position.set(anchor.x, anchor.y, anchor.z);
