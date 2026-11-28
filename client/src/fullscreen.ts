@@ -65,6 +65,9 @@ export function cornerButton(): void {
   });
   const show = (): void => {
     b.style.display = isFullscreen() ? 'none' : '';
+    // While it shows, what else sits in the top right corner (the touch buttons, the map's ×)
+    // moves aside for it.
+    document.body.classList.toggle('fs-button', !isFullscreen());
   };
   onFullscreenChange(show);
   show();

@@ -73,7 +73,7 @@ export class Guide {
 
   /** First or second line from the top. */
   set row(row: 0 | 1) {
-    this.el.style.top = row ? '132px' : '';
+    this.el.style.top = row ? 'calc(var(--compass-clear, 44px) + 88px)' : '';
   }
 
   get destination(): Destination | null {

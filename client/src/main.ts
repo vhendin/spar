@@ -877,7 +877,9 @@ async function start(): Promise<void> {
     const width = Math.round(Math.min(320, view.width * 0.3));
     const height = Math.round(width * 0.62);
     // Clear of a phone's island and home bar, as the corners of the page are.
-    const right = 16 + view.safeRight;
+    // On a touch screen the pedals have the bottom right corner; the inset goes to the bottom
+    // middle instead, where the dash is while driving (hidden while the drone is out).
+    const right = touch.shown ? Math.round((view.width - width) / 2) : 16 + view.safeRight;
     const margin = Math.max(16, view.safeBottom);
     const g = w.view.group;
     const yaw = yawOf(w);

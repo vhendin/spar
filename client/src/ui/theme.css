@@ -116,7 +116,7 @@ kbd {
 
 /* The scouting drone: what it reads at the top, its keys at the bottom, the vehicle in a corner. */
 #drone-readout {
-  position: fixed; top: 54px; left: 50%; transform: translateX(-50%); display: none; gap: 14px; align-items: baseline;
+  position: fixed; top: calc(var(--compass-clear, 44px) + 10px); left: 50%; transform: translateX(-50%); display: none; gap: 14px; align-items: baseline;
   padding: 4px 14px; white-space: nowrap; pointer-events: none; font: 13px/1.4 var(--sans); color: var(--on-glass);
   background: var(--glass); border: 1px solid var(--glass-rule); border-radius: 999px; backdrop-filter: blur(4px);
   font-variant-numeric: tabular-nums;
@@ -137,7 +137,7 @@ kbd {
 }
 #camp-prompt.show { opacity: 1; pointer-events: auto; }
 #camp-prompt .place { font-family: var(--serif); font-size: 16px; }
-.guide { top: 96px; display: none; align-items: center; gap: 10px; padding: 5px 16px; font-size: 14px; }
+.guide { top: calc(var(--compass-clear, 44px) + 52px); display: none; align-items: center; gap: 10px; padding: 5px 16px; font-size: 14px; }
 .guide .name { font: 18px/1.2 var(--serif); }
 
 /* The compass along the top: a strip of glass that fades out at both ends. */
@@ -581,6 +581,10 @@ kbd {
 #touch .winch-row .hold { min-width: 72px; }
 #touch .winch-row button.on { background: rgba(201, 164, 74, 0.6); }
 body.touch #hint { display: none; }
+/* The fullscreen button has the top right corner while it shows (fullscreen.ts); the touch buttons
+   and the map's × move left of it. */
+body.fs-button #touch .actions { right: calc(64px + var(--safe-r)); }
+body.fs-button #map button.close { margin-right: 40px; }
 body.touch #compass { width: min(420px, 34vw); }
 /* The instruments: a small readout over one row of lamp buttons, low in the middle, clear of
    the car, the stick and the pedals. */
@@ -609,8 +613,8 @@ body.touch #camp-prompt, body.touch #prompt {
 }
 body.touch:has(#camp-prompt.show) #prompt { bottom: calc(var(--dash-clear, 0px) + 56px); }
 /* The winch's and the drone's words go to the top, clear of the stick, the dash and the pedals. */
-body.touch #winch-help { top: 54px; bottom: auto; }
-body.touch #drone-help { top: 90px; bottom: auto; white-space: normal; width: max-content; max-width: 56vw; text-align: center; }
+body.touch #winch-help { top: calc(var(--compass-clear, 44px) + 10px); bottom: auto; }
+body.touch #drone-help { top: calc(var(--compass-clear, 44px) + 46px); bottom: auto; white-space: normal; width: max-content; max-width: 56vw; text-align: center; }
 
 /* A short screen (a phone on its side, a small window): the panels tighten up and drop what is
    only there for the mood, so more fits without scrolling. */

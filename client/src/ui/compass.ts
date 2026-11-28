@@ -103,7 +103,16 @@ export class Compass {
       dot.classList.toggle('edge', edge);
       label.classList.toggle('edge', edge);
     });
+    // How far down the compass and its labels reach, as --compass-clear, so the lines under it
+    // (the drone's readout, the winch's words, "Arrived at …") start below the last label.
+    const rows = placed.length ? Math.max(...placed.map((p) => p.row)) + 1 : 0;
+    const clear = rows ? 10 + 40 + rows * 24 : 44;
+    if (clear !== this.clear) {
+      this.clear = clear;
+      document.documentElement.style.setProperty('--compass-clear', `${clear}px`);
+    }
   }
+  private clear = 0;
 
   private layout(width: number): void {
     this.width = width;
