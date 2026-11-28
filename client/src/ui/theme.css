@@ -202,13 +202,21 @@ kbd {
 #dash .range { fill: var(--mustard); font: 600 11px var(--sans); text-anchor: middle; letter-spacing: 0.14em; }
 #dash .digits { fill: var(--birch); font: 600 22px var(--sans); text-anchor: middle; font-variant-numeric: tabular-nums; }
 #dash .unit { fill: var(--fog); font: 500 10px var(--sans); text-anchor: middle; letter-spacing: 0.06em; }
-#dash .lamps { display: flex; justify-content: center; gap: 6px; margin-top: 4px; }
+#dash .lamps { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
 #dash .lamps span {
-  padding: 2px 8px; border-radius: 999px; font: 600 10px/1.5 var(--sans); letter-spacing: 0.12em;
+  padding: 2px 8px; border-radius: 999px; font: 600 10px/1.5 var(--sans); letter-spacing: 0.12em; white-space: nowrap;
   color: rgba(236, 235, 230, 0.32); background: var(--glass); border: 1px solid var(--glass-rule);
 }
 #dash .lamps span.on { color: var(--spruce); background: var(--mustard); border-color: var(--mustard); }
 #dash .lamps span.brake.on { color: var(--birch); background: var(--falu); border-color: var(--falu); }
+/* The drone's charge: green when full, yellow while charging (pulsing on the roof), red below
+   what it launches on. The same colours ring the drone button on a touch screen. */
+#dash .lamps span.drone[data-charge="full"] { color: #a9bb84; border-color: rgba(169, 187, 132, 0.55); }
+#dash .lamps span.drone[data-charge="charging"] { color: var(--mustard); border-color: rgba(201, 164, 74, 0.55); }
+#dash .lamps span.drone[data-charge="charging"]:not(.out) { animation: charging 2.4s ease-in-out infinite; }
+#dash .lamps span.drone[data-charge="low"] { color: var(--birch); background: var(--falu); border-color: var(--falu); }
+body.touch #dash .lamps span.drone { display: none !important; }
+@keyframes charging { 50% { opacity: 0.55; } }
 #dash .winch {
   display: flex; align-items: center; gap: 8px; margin: 6px auto 0; width: 82%; padding: 3px 10px; border-radius: 999px;
   font: 600 10px/1.5 var(--sans); letter-spacing: 0.12em; color: var(--birch);
@@ -565,6 +573,17 @@ kbd {
 #touch .pause { top: 10px; left: calc(10px + var(--safe-l)); }
 #touch .actions { position: absolute; top: 10px; right: calc(10px + var(--safe-r)); display: flex; gap: 8px; pointer-events: none; }
 #touch .actions .round { position: static; width: 40px; height: 40px; pointer-events: auto; touch-action: none; }
+#touch .actions .round.drone { position: relative; }
+#touch .round.drone[data-charge]::before {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--ring) var(--charge, 100%), rgba(236, 235, 230, 0.14) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+}
+#touch .round.drone[data-charge="full"] { --ring: #a9bb84; }
+#touch .round.drone[data-charge="charging"] { --ring: var(--mustard); }
+#touch .round.drone[data-charge="low"] { --ring: #c2533f; }
+#touch .round.drone[data-charge="charging"]:not(.out)::before { animation: charging 2.4s ease-in-out infinite; }
 #touch[data-mode="drone"] .vehicle, #touch[data-mode="drone"] .winch-row { display: none; }
 #touch[data-mode="drone"] .handbrake { visibility: hidden; }
 #touch .winch-row {

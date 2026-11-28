@@ -6,6 +6,7 @@
 // On a touch screen the lamps are buttons (a tap switches what they show), and the dials give
 // way to a small digital readout: gear, speed and a rev bar.
 
+import type { ChargeLevel } from '../vehicle/drone';
 import { engineTorque, isElectric, peakPower, type VehicleDef } from '@spar/shared';
 import type { VehicleSim } from '../vehicle/sim';
 
@@ -71,6 +72,8 @@ export interface Lamps {
   autoLights: boolean;
   /** Parking brake held, by the driver or because the vehicle stands still. */
   parked: boolean;
+  /** The drone's charge; left out, no lamp. */
+  drone?: { pct: number; level: ChargeLevel; out: boolean };
 }
 
 /** The winch while hooked on, for its gauge. */
@@ -93,7 +96,7 @@ export class Dashboard {
   private gear!: SVGTextElement;
   private range!: SVGTextElement;
   private speed!: SVGTextElement;
-  private lamps: { range: HTMLSpanElement; crawl: HTMLSpanElement; ride: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement } | null = null;
+  private lamps: { range: HTMLSpanElement; crawl: HTMLSpanElement; ride: HTMLSpanElement; locks: HTMLSpanElement[]; lights: HTMLSpanElement; parked: HTMLSpanElement; drone: HTMLSpanElement } | null = null;
   private def: VehicleDef | null = null;
   private tachMax = 5000;
   /** Electric: the left dial shows the power drawn, kW, up to this. */
@@ -191,7 +194,11 @@ export class Dashboard {
     const lights = lamp('LIGHTS', 'Headlights (H)', { kind: 'lights' });
     const parked = lamp('P', 'Parking brake');
     parked.classList.add('brake');
-    this.lamps = { range, crawl, ride, locks, lights, parked };
+    // The drone's charge: red below what it launches on, yellow (pulsing while it charges on the
+    // roof), green when full. On a touch screen its button shows it instead.
+    const drone = lamp('DRONE', 'Drone charge (Q launches it from 10%)');
+    drone.classList.add('drone');
+    this.lamps = { range, crawl, ride, locks, lights, parked, drone };
     this.winch.root.before(row);
   }
 
@@ -243,6 +250,14 @@ export class Dashboard {
     l.lights.classList.toggle('on', lamps.lights);
     l.lights.textContent = lamps.autoLights ? 'LIGHTS A' : 'LIGHTS';
     l.parked.classList.toggle('on', lamps.parked);
+    const c = lamps.drone;
+    l.drone.style.display = c ? '' : 'none';
+    if (c) {
+      const text = c.level === 'full' ? 'DRONE' : `DRONE ${c.pct}%`;
+      if (l.drone.textContent !== text) l.drone.textContent = text;
+      if (l.drone.dataset.charge !== c.level) l.drone.dataset.charge = c.level;
+      l.drone.classList.toggle('out', c.out);
+    }
 
     const g = this.winch;
     g.root.style.display = winch ? '' : 'none';

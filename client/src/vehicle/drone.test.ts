@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Drone, DRONE, DRONE_RADIUS, pushOut, type DroneControls, type Obstacle } from './drone';
+import { chargeOf, Drone, DRONE, DRONE_RADIUS, pushOut, type DroneControls, type Obstacle } from './drone';
 
 const roof = { x: 100, y: 52.5, z: 200 };
 const flat = (): number => 50;
@@ -22,6 +22,13 @@ describe('scouting drone', () => {
     d.battery = DRONE.battery;
     expect(d.key(roof, 0, 0.2)).toBeNull();
     expect(d.state).toBe('flying');
+  });
+
+  it('shows its charge red below 10 %, yellow while charging, green when full', () => {
+    expect(chargeOf(29.9)).toEqual({ pct: 9, level: 'low' });
+    expect(chargeOf(DRONE.launchAt)).toEqual({ pct: 10, level: 'charging' });
+    expect(chargeOf(DRONE.battery - 0.01)).toEqual({ pct: 99, level: 'charging' });
+    expect(chargeOf(DRONE.battery)).toEqual({ pct: 100, level: 'full' });
   });
 
   it('rises clear of the roof by itself, then flies where it faces', () => {

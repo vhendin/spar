@@ -17,6 +17,7 @@
 // setting says always or never. One-shot buttons are asked for like the gamepad's, as tapped
 // this frame, under the same action names.
 
+import type { ChargeLevel } from '../vehicle/drone';
 import type { PadAction } from '../vehicle/gamepad';
 import type { TouchDrive } from '../vehicle/input';
 import { knob, pedalValue, stickAxis } from './stick';
@@ -33,6 +34,8 @@ export interface TouchScene {
   /** The drone is being flown. */
   drone: boolean;
   winch: 'idle' | 'choosing' | 'hooked';
+  /** The drone's charge, for the ring round its button; left out, no ring. */
+  droneCharge?: { pct: number; level: ChargeLevel; out: boolean };
 }
 
 const ICONS = {
@@ -61,6 +64,9 @@ export class TouchControls implements TouchDrive {
   private stickSteer: number | null = null;
   private readonly tilt = new Tilt();
   private drone = false;
+  private droneButton!: HTMLButtonElement;
+  /** The drone's charge as last shown on its button. */
+  private chargeShown = '';
   throttle = 0;
   brake = 0;
   handbrake = false;
@@ -162,7 +168,8 @@ export class TouchControls implements TouchDrive {
     this.button(this.icon(row, 'round vehicle', 'camera', 'Camera: chase, orbit, cab'), 'camera');
     this.button(this.icon(row, 'round vehicle', 'right', 'Back on the wheels'), 'right');
     this.button(this.icon(row, 'round vehicle', 'winch', 'Winch: choose an anchor'), 'winch');
-    this.button(this.icon(row, 'round', 'drone', 'Drone: launch, back to driving'), 'drone');
+    this.droneButton = this.icon(row, 'round drone', 'drone', 'Drone: launch, back to driving');
+    this.button(this.droneButton, 'drone');
 
     root.style.display = 'none';
   }
@@ -215,6 +222,20 @@ export class TouchControls implements TouchDrive {
       this.brakeLabel.textContent = scene.drone ? 'Down' : 'Brake';
       // A hold button that went away is let go of.
       if (scene.winch !== 'hooked') this.holding.clear();
+    }
+    // The ring round the drone button fills with its charge: red below what it launches on,
+    // yellow (pulsing while it charges on the roof) and green when full.
+    const c = scene.droneCharge;
+    const shown = c ? `${c.pct} ${c.level} ${c.out}` : '';
+    if (shown !== this.chargeShown) {
+      this.chargeShown = shown;
+      const b = this.droneButton;
+      if (c) {
+        b.style.setProperty('--charge', `${c.pct}%`);
+        b.dataset.charge = c.level;
+        b.classList.toggle('out', c.out);
+        b.setAttribute('aria-label', `Drone, ${c.pct}% charged: launch, back to driving`);
+      } else delete b.dataset.charge;
     }
     this.tappedNow = this.taps;
     this.taps = new Set();

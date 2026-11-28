@@ -94,6 +94,15 @@ export function pushOut(p: P3, o: Obstacle, radius = DRONE_RADIUS): P3 | null {
   return { x: mx * c + mz * s, y: 0, z: -mx * s + mz * c };
 }
 
+/** How the charge shows on the drone button and the dash: red, yellow or green. */
+export type ChargeLevel = 'low' | 'charging' | 'full';
+
+/** The battery's charge as a whole percentage (rounded down) and its colour. */
+export function chargeOf(battery: number): { pct: number; level: ChargeLevel } {
+  const pct = Math.floor((Math.max(0, battery) / DRONE.battery) * 100);
+  return { pct, level: battery < DRONE.launchAt ? 'low' : battery >= DRONE.battery ? 'full' : 'charging' };
+}
+
 export type DroneState = 'docked' | 'flying' | 'home';
 /** Why it is flying home. */
 export type HomeReason = 'sent' | 'range' | 'battery';

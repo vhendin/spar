@@ -15,10 +15,15 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 - **Decided (2026-11-28):** a flat battery takes 15 minutes to charge, three times its flight.
 - **Done:** charging takes 15 minutes from flat (half used, 7½). Refused below 10 %, it says
   how long until it flies: "The drone is charging: 6%, it flies from 10% · ready in 1 min".
+- **Then asked (2026-11-28):** the drone stays hidden on the roof (rather than a charge light on
+  it); the charge shows on the drone button, and on desktop as a status lamp.
+- **Then done:** on a touch screen a ring round the drone button fills with the charge; on the
+  dash (desktop) a DRONE lamp says "DRONE 64%". Both are red below 10 %, yellow while charging
+  (pulsing slowly on the roof, steady while out) and green when full. The dash's lamps now
+  wrap to a second row rather than squeezing their words onto two lines.
 - **Open:**
-  - The charge is not shown while the drone is on the roof, only when a launch is refused or
-    once it flies. Show it on the drone button or the dash?
   - A reload starts with a full battery.
+  - On a vehicle with many lamps (the tgb11's two diffs) DRONE takes a second row; fine, or shorter?
 
 ### Ground anchor (56075a4, 87de128)
 

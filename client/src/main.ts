@@ -33,7 +33,7 @@ import { Beams, VehicleView } from './vehicle/view';
 import { standIns, WarmUp } from './warmUp';
 import { Winch, type WinchControls } from './vehicle/winch';
 import { WinchView } from './vehicle/winchView';
-import { Drone, type DroneControls, type Obstacle, type P3 } from './vehicle/drone';
+import { Drone, chargeOf, type DroneControls, type Obstacle, type P3 } from './vehicle/drone';
 import { DroneSound, thrustOf } from './audio/droneSound';
 import { DroneView } from './vehicle/droneView';
 import { Dashboard } from './ui/dashboard';
@@ -2104,6 +2104,7 @@ async function start(): Promise<void> {
     const ws = world?.winch.state;
     touch.poll(!!world && !paused && !starting && !flying && !world.map.open && !garage.open, {
       drone: drone.flown,
+      droneCharge: { ...chargeOf(drone.battery), out: drone.out },
       winch: ws === 'choosing' ? 'choosing' : ws === 'hooked' || ws === 'carrying' ? 'hooked' : 'idle',
     });
     minimap.always = touch.inUse;
@@ -2518,7 +2519,7 @@ async function start(): Promise<void> {
 
       dash.visible = !flying && !drone.flown && !w.unplaced && !night;
       const gauge = w.winch.state === 'hooked' ? { load: w.winch.load, tension: w.winch.tension, length: w.winch.length } : null;
-      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || (!towing.following && w.sim.holding) }, gauge);
+      if (!flying && !w.unplaced) dash.update(dt, w.sim, { lights: lamps ?? env.dark, autoLights: lamps === null, parked: controls.handbrake || (!towing.following && w.sim.holding), drone: { ...chargeOf(drone.battery), out: drone.out } }, gauge);
       hint.style.opacity = now < hintUntil && !paused && winchShown === '' ? '1' : '0';
       timer.lap('hud');
     }
