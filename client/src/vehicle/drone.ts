@@ -26,9 +26,9 @@ export const DRONE = {
   range: 1000,
   /** Seconds of flight on a full battery. */
   battery: 300,
-  /** Seconds to charge a flat battery again on the roof. */
-  charge: 90,
-  /** Seconds of battery needed to launch. */
+  /** Seconds to charge a flat battery again on the roof, driving or not: slower than it flies. */
+  charge: 900,
+  /** Seconds of battery needed to launch (10%): below it a flight risks a crash. */
   launchAt: 30,
   /** Fastest it flies, metres a second. */
   speed: 16,
@@ -152,7 +152,12 @@ export class Drone {
   cannotLaunch(speed: number): string | null {
     if (this.out) return null;
     if (Math.abs(speed) > DRONE.still) return 'Stop the vehicle to launch the drone';
-    if (this.battery < DRONE.launchAt) return `The drone is charging: ${Math.round((this.battery / DRONE.battery) * 100)}%`;
+    if (this.battery < DRONE.launchAt) {
+      const wait = ((DRONE.launchAt - this.battery) * DRONE.charge) / DRONE.battery;
+      // Rounded down, so it never says 10% while still refusing.
+      const pct = (n: number): number => Math.floor((n / DRONE.battery) * 100);
+      return `The drone is charging: ${pct(this.battery)}%, it flies from ${pct(DRONE.launchAt)}% · ready in ${wait < 60 ? `${Math.ceil(wait)} s` : `${Math.ceil(wait / 60)} min`}`;
+    }
     return null;
   }
 

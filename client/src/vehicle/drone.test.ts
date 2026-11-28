@@ -16,7 +16,9 @@ describe('scouting drone', () => {
     expect(d.key(roof, 0, 5)).toMatch(/Stop/);
     expect(d.out).toBe(false);
     d.battery = 10;
-    expect(d.key(roof, 0, 0)).toMatch(/charging/);
+    expect(d.key(roof, 0, 0)).toBe('The drone is charging: 3%, it flies from 10% · ready in 1 min');
+    d.battery = 29.5;
+    expect(d.key(roof, 0, 0)).toBe('The drone is charging: 9%, it flies from 10% · ready in 2 s');
     d.battery = DRONE.battery;
     expect(d.key(roof, 0, 0.2)).toBeNull();
     expect(d.state).toBe('flying');
@@ -121,7 +123,9 @@ describe('scouting drone', () => {
     const left = d.battery;
     expect(left).toBeLessThan(DRONE.battery);
     fly(d, 1, none);
-    expect(d.battery).toBeGreaterThan(left);
+    // Slower than it flies: a second on the roof gives back a third of a second of flight.
+    expect(d.battery - left).toBeCloseTo(DRONE.battery / DRONE.charge, 1);
+    expect(DRONE.charge).toBeGreaterThan(DRONE.battery);
   });
 
   it('is pushed out of a trunk sideways, or up over a low one', () => {

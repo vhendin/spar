@@ -5,7 +5,22 @@ ones move to the bottom with the answer, so the reasoning stays findable.
 
 ## Open
 
-### Ground anchor (this commit)
+### Drone charging (#3, this commit; step 1 of 3 for the drone's recon, #4)
+
+- **Asked:** recharging after a flight, slower than flying; it launches from 10 %, full or
+  not (2026-11-28, issue #3). Steps agreed: #3, then running out of charge and crashing (#5),
+  then sending it out to a spot on the map (#4).
+- **Found:** most of it was there: 5 minutes of flight, launches from 10 %, charges on the
+  roof while driving. Only charging was quicker than flying (90 s from flat).
+- **Decided (2026-11-28):** a flat battery takes 15 minutes to charge, three times its flight.
+- **Done:** charging takes 15 minutes from flat (half used, 7½). Refused below 10 %, it says
+  how long until it flies: "The drone is charging: 6%, it flies from 10% · ready in 1 min".
+- **Open:**
+  - The charge is not shown while the drone is on the roof, only when a launch is refused or
+    once it flies. Show it on the drone button or the dash?
+  - A reload starts with a full battery.
+
+### Ground anchor (56075a4, 87de128)
 
 - **Asked:** a ground anchor for the winch, always carried, no slots; it comes back when
   unhooked. Soil only, but would that be a problem on high ground? (2026-11-27)
