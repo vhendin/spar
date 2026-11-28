@@ -123,6 +123,17 @@ export class Dashboard {
     this.winch = { root: winch, fill: winch.querySelector('.fill')!, text: winch.querySelector('.value')! };
     this.root.append(winch);
     parent.append(this.root);
+    // How far up from the bottom of the screen the dash reaches, as --dash-clear, so the lines
+    // offered over the driving can stand on it rather than behind it on a touch screen. Measured
+    // only when its size changes (lamps wrapping, the winch gauge, shown or hidden, the touch
+    // layout) or the window does.
+    const measure = (): void => {
+      const r = this.root.getBoundingClientRect();
+      const clear = r.height > 0 ? Math.max(0, Math.round(window.innerHeight - r.top)) : 0;
+      document.documentElement.style.setProperty('--dash-clear', `${clear}px`);
+    };
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(measure).observe(this.root);
+    if (typeof window !== 'undefined') window.addEventListener('resize', measure);
   }
 
   /** Draws the faces for a vehicle; again whenever the vehicle changes. */

@@ -599,6 +599,15 @@ body.touch #minimap {
   top: 58px; bottom: auto; left: calc(10px + var(--safe-l)); width: min(110px, 18vw); height: min(110px, 18vw);
   z-index: 9; pointer-events: auto; touch-action: none;
 }
+/* What is offered (a trail, camping) and what has gone wrong (overturned, water in the engine)
+   stand on top of the dash (its height measured as --dash-clear), above it so a tap reaches them,
+   wrapped to fit between the stick and the pedals; the second above the first when both show. */
+body.touch #camp-prompt, body.touch #prompt {
+  top: auto; bottom: calc(var(--dash-clear, 0px) + 8px); z-index: 10;
+  width: max-content; max-width: calc(100vw - 2 * (180px + var(--safe-r))); white-space: normal; text-align: center;
+  border-radius: 18px;
+}
+body.touch:has(#camp-prompt.show) #prompt { bottom: calc(var(--dash-clear, 0px) + 56px); }
 /* The winch's and the drone's words go to the top, clear of the stick, the dash and the pedals. */
 body.touch #winch-help { top: 54px; bottom: auto; }
 body.touch #drone-help { top: 90px; bottom: auto; white-space: normal; width: max-content; max-width: 56vw; text-align: center; }
